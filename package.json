@@ -10,8 +10,10 @@
   },
   "scripts": {
     "build:packages": "pnpm -r --filter \"./packages/*\" run build",
-    "dev:client": "pnpm --filter @comichub/client dev",
-    "dev:reader": "pnpm --filter @comichub/reader dev",
+    "dev:client": "pnpm --filter @comichub/client tauri dev",
+    "dev:reader": "pnpm --filter @comichub/reader tauri dev",
+    "dev:client:web": "pnpm --filter @comichub/client dev",
+    "dev:reader:web": "pnpm --filter @comichub/reader dev",
     "lint": "pnpm -r run lint",
     "typecheck": "pnpm -r run typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,json,md,css}\"",
