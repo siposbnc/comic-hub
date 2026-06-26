@@ -10,6 +10,8 @@
   },
   "scripts": {
     "build:packages": "pnpm -r --filter \"./packages/*\" run build",
+    "codegen": "node tools/codegen/gen-formats.mjs",
+    "codegen:check": "node tools/codegen/gen-formats.mjs --check",
     "dev:client": "pnpm --filter @comichub/client tauri dev",
     "dev:reader": "pnpm --filter @comichub/reader tauri dev",
     "dev:client:web": "pnpm --filter @comichub/client dev",

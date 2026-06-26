@@ -3,6 +3,7 @@
 //! open. Direct archive reading + the connected-mode page stream arrive in Phase 1.
 
 mod formats;
+mod formats_gen;
 
 use std::path::Path;
 

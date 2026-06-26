@@ -1,0 +1,10 @@
+{
+  "$comment": "Canonical list of comic formats ComicHub supports. The single source of truth across all languages. Edit here, then run `pnpm codegen`. See tools/codegen/README.md.",
+  "formats": [
+    { "ext": "cbz", "kind": "archive", "container": "zip", "associate": true },
+    { "ext": "cbr", "kind": "archive", "container": "rar", "associate": true },
+    { "ext": "cb7", "kind": "archive", "container": "sevenzip", "associate": true },
+    { "ext": "cbt", "kind": "archive", "container": "tar", "associate": true },
+    { "ext": "pdf", "kind": "document", "container": "pdf", "associate": false }
+  ]
+}

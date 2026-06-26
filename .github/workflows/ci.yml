@@ -35,6 +35,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm codegen:check
       - run: pnpm typecheck
       - run: pnpm --filter @comichub/client build
       - run: pnpm --filter @comichub/reader build
