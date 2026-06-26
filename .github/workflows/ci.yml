@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Phase 0 builds all three artifacts. Path filters can be added later to skip
+# unaffected jobs; for now every push validates the whole tree.
+jobs:
+  server:
+    name: server (Go)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test ./...
+
+  web:
+    name: web (TypeScript)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm --filter @comichub/client build
+      - run: pnpm --filter @comichub/reader build
+
+  rust:
+    name: tauri cores (Rust)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            apps/client/src-tauri
+            apps/reader/src-tauri
+      - name: cargo check (client)
+        working-directory: apps/client/src-tauri
+        run: cargo check
+      - name: cargo check (reader)
+        working-directory: apps/reader/src-tauri
+        run: cargo check

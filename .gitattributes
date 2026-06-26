@@ -1,0 +1,18 @@
+# Normalize line endings: text is LF in the repo, checked out native on each OS.
+* text=auto eol=lf
+
+# Always LF regardless of platform (tooling-sensitive).
+*.go    text eol=lf
+*.sh    text eol=lf
+*.sql   text eol=lf
+
+# Binary assets — never touch.
+*.png   binary
+*.ico   binary
+*.icns  binary
+*.webp  binary
+*.avif  binary
+
+# Generated lockfiles: keep as-is, mark for linguist.
+pnpm-lock.yaml -diff linguist-generated
+go.sum         -diff linguist-generated

@@ -1,0 +1,24 @@
+{
+  "name": "comic-hub",
+  "version": "0.0.0",
+  "private": true,
+  "description": "ComicHub — a library platform for comics. Monorepo: Go media server + Tauri client + Tauri reader.",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=10"
+  },
+  "scripts": {
+    "build:packages": "pnpm -r --filter \"./packages/*\" run build",
+    "dev:client": "pnpm --filter @comichub/client dev",
+    "dev:reader": "pnpm --filter @comichub/reader dev",
+    "lint": "pnpm -r run lint",
+    "typecheck": "pnpm -r run typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,json,md,css}\""
+  },
+  "devDependencies": {
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.3"
+  }
+}

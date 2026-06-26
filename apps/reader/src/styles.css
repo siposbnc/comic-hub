@@ -1,0 +1,49 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+/* The reader lives in its own dark gallery, independent of app chrome theme. */
+body {
+  background: #000;
+  color: var(--ch-paper-100);
+  font-family: var(--ch-font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+.reader {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  text-align: center;
+}
+
+.reader h1 {
+  font-family: var(--ch-font-display);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  margin: 0 0 0.5rem;
+}
+
+.reader .mode {
+  font-family: var(--ch-font-mono);
+  font-size: var(--ch-text-small);
+  color: var(--ch-cyan-500);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.reader .path {
+  font-family: var(--ch-font-mono);
+  font-size: var(--ch-text-small);
+  color: var(--ch-paper-400);
+  margin-top: 1rem;
+  word-break: break-all;
+}

@@ -38,6 +38,50 @@ build reading lists, and ships with a fast, comfortable reader you can launch in
 | [08 — Roadmap](docs/08-roadmap.md) | Phased delivery plan, MVP definition |
 | [09 — Tech Decisions](docs/09-tech-decisions.md) | ADRs and rationale |
 
+## Repository layout
+
+```
+server/                 Go media server (single binary)
+apps/
+  client/               Tauri + React management app (bundles the server sidecar)
+  reader/               Tauri + React reader (standalone + connected)
+packages/
+  api-client/           typed REST/WS client + wire types (TS)
+  ui/                   "Longbox" design tokens + components (TS/React)
+  reader-core/          shared PageProvider + reading logic (TS)
+docs/                   specs & design (see table above)
+.github/workflows/      CI for all three artifacts
+```
+
+One Go module (`server/`) and one pnpm workspace (`apps/*` + `packages/*`) coexist; Rust
+lives inside each `src-tauri/`. See [ADR-010](docs/09-tech-decisions.md) for why this is a
+single monorepo.
+
+## Development
+
+Prerequisites: **Go 1.23+**, **Node 20+ / pnpm 10+**, **Rust stable** (+ WebView2 on Windows).
+
+```sh
+# 1. Build the server (the client spawns this binary as a sidecar in dev)
+cd server && go build -o bin/comichub-server.exe ./cmd/comichub-server && cd ..
+
+# 2. Install JS deps
+pnpm install
+
+# 3. Run the client (spawns the embedded server, shows the handshake status)
+pnpm dev:client        # → pnpm --filter @comichub/client tauri dev
+
+# Run the reader standalone
+pnpm dev:reader
+```
+
+Verify the server alone:
+
+```sh
+pnpm --filter @comichub/client build   # typecheck + bundle the frontend
+go test ./...                          # from /server
+```
+
 ## Tech stack at a glance
 
 | Layer | Choice |

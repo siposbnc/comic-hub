@@ -1,0 +1,87 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--ch-bg);
+  color: var(--ch-text);
+  font-family: var(--ch-font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+}
+
+.panel {
+  width: min(560px, 100%);
+  background: var(--ch-surface);
+  border: 1px solid var(--ch-border);
+  border-radius: var(--ch-radius);
+  padding: 1.75rem;
+}
+
+.wordmark {
+  font-family: var(--ch-font-display);
+  font-size: var(--ch-text-title);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  margin: 0 0 0.25rem;
+}
+
+.subtitle {
+  color: var(--ch-text-muted);
+  margin: 0 0 1.5rem;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: 9rem 1fr;
+  gap: 0.4rem 1rem;
+  font-family: var(--ch-font-mono);
+  font-size: var(--ch-text-small);
+}
+
+.kv dt {
+  color: var(--ch-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dot {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  margin-right: 0.4rem;
+  vertical-align: middle;
+}
+
+.dot--ok {
+  background: var(--ch-success-500);
+}
+
+.dot--err {
+  background: var(--ch-danger-500);
+}
+
+.dot--wait {
+  background: var(--ch-yellow-400);
+}
+
+.error {
+  color: var(--ch-danger-500);
+  font-family: var(--ch-font-mono);
+  font-size: var(--ch-text-small);
+  margin-top: 1rem;
+}

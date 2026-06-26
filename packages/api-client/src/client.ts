@@ -1,0 +1,96 @@
+import type {
+  AuthHandshakeResult,
+  Connection,
+  HealthStatus,
+  ServerInfo,
+  ServerStats,
+} from './types.js';
+
+/** Thrown when the server returns a non-2xx response. */
+export class ApiError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+/**
+ * ComicHubClient is the typed entry point both the client and reader use to talk to a
+ * server, regardless of deployment mode. It carries the bearer token from the
+ * connection and exposes one method per endpoint group (see docs/03-api.md).
+ */
+export class ComicHubClient {
+  private readonly baseUrl: string;
+  private readonly token: string;
+
+  constructor(connection: Connection) {
+    this.baseUrl = connection.baseUrl.replace(/\/$/, '');
+    this.token = connection.token;
+  }
+
+  /** Liveness — unauthenticated. */
+  health(): Promise<HealthStatus> {
+    return this.request<HealthStatus>('GET', '/healthz', { auth: false });
+  }
+
+  serverInfo(): Promise<ServerInfo> {
+    return this.request<ServerInfo>('GET', '/api/v1/server/info');
+  }
+
+  serverStats(): Promise<ServerStats> {
+    return this.request<ServerStats>('GET', '/api/v1/server/stats');
+  }
+
+  authHandshake(): Promise<AuthHandshakeResult> {
+    return this.request<AuthHandshakeResult>('GET', '/api/v1/auth/handshake');
+  }
+
+  /** Asks an embedded server to shut down gracefully. */
+  async shutdown(): Promise<void> {
+    await this.request<unknown>('POST', '/api/v1/admin/shutdown');
+  }
+
+  private async request<T>(
+    method: string,
+    path: string,
+    opts: { auth?: boolean; body?: unknown } = {},
+  ): Promise<T> {
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (opts.auth !== false && this.token) {
+      headers.Authorization = `Bearer ${this.token}`;
+    }
+    if (opts.body !== undefined) {
+      headers['Content-Type'] = 'application/json';
+    }
+
+    const res = await fetch(`${this.baseUrl}${path}`, {
+      method,
+      headers,
+      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    });
+
+    if (!res.ok) {
+      let code = 'http_error';
+      let message = res.statusText;
+      try {
+        const data = (await res.json()) as { error?: { code: string; message: string } };
+        if (data.error) {
+          code = data.error.code;
+          message = data.error.message;
+        }
+      } catch {
+        // non-JSON error body; keep defaults
+      }
+      throw new ApiError(res.status, code, message);
+    }
+
+    if (res.status === 204) {
+      return undefined as T;
+    }
+    return (await res.json()) as T;
+  }
+}

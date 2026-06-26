@@ -1,0 +1,69 @@
+/*
+ * ComicHub design tokens — the "Longbox" direction (docs/07-design-system.md).
+ * A calm ink-dark gallery so the covers carry the color; process-cyan spot accent,
+ * process-magenta for "unread/new". Consumed by both the client and reader apps and
+ * by anything Claude Design builds.
+ */
+
+:root {
+  /* ── Ink (surfaces) ─────────────────────────────── */
+  --ch-ink-900: #0c0e12; /* app background */
+  --ch-ink-800: #13161c; /* raised surfaces / sidebar */
+  --ch-ink-700: #1c212b; /* cards, inputs, hover fills */
+  --ch-ink-600: #2a313d; /* borders, dividers, hairlines */
+
+  /* ── Paper (text on ink) ────────────────────────── */
+  --ch-paper-100: #eceef2; /* primary text */
+  --ch-paper-400: #9ba3b0; /* secondary text, metadata */
+  --ch-paper-600: #5c6573; /* tertiary / disabled */
+
+  /* ── Process inks (accents) ─────────────────────── */
+  --ch-cyan-500: #16b9e6; /* primary: actions, focus, read-progress, links */
+  --ch-cyan-600: #0e93b8; /* pressed / accent border */
+  --ch-magenta-500: #e6398b; /* unread / new highlight only */
+  --ch-yellow-400: #f4c13c; /* key / warning accent (rare) */
+
+  /* ── Status ─────────────────────────────────────── */
+  --ch-danger-500: #e5484d;
+  --ch-success-500: #46a758;
+
+  /* ── Semantic aliases ───────────────────────────── */
+  --ch-bg: var(--ch-ink-900);
+  --ch-surface: var(--ch-ink-800);
+  --ch-surface-raised: var(--ch-ink-700);
+  --ch-border: var(--ch-ink-600);
+  --ch-text: var(--ch-paper-100);
+  --ch-text-muted: var(--ch-paper-400);
+  --ch-accent: var(--ch-cyan-500);
+  --ch-accent-pressed: var(--ch-cyan-600);
+  --ch-unread: var(--ch-magenta-500);
+
+  /* ── Typography ─────────────────────────────────── */
+  --ch-font-display: 'Archivo Expanded', 'Archivo', system-ui, sans-serif;
+  --ch-font-body: 'Inter', system-ui, sans-serif;
+  --ch-font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Code', monospace;
+
+  --ch-text-display-xl: 3.05rem;
+  --ch-text-display-l: 2.44rem;
+  --ch-text-title: 1.95rem;
+  --ch-text-heading: 1.25rem;
+  --ch-text-body: 1rem;
+  --ch-text-small: 0.8rem;
+  --ch-text-label: 0.75rem;
+
+  /* ── Shape & rhythm ─────────────────────────────── */
+  --ch-radius: 6px;
+  --ch-space: 8px;
+  --ch-cover-aspect: 0.66; /* ~2:3 */
+}
+
+[data-theme='light'] {
+  --ch-bg: #f7f6f2; /* warm paper, not cream */
+  --ch-surface: #ffffff;
+  --ch-surface-raised: #f0efe9;
+  --ch-border: #d9d7cf;
+  --ch-text: #16191f;
+  --ch-text-muted: #5c6573;
+  --ch-accent: var(--ch-cyan-600);
+  --ch-accent-pressed: #0a7a99;
+}
