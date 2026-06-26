@@ -1,0 +1,47 @@
+# ── Node / pnpm ──────────────────────────────────────────────
+node_modules/
+.pnpm-store/
+dist/
+dist-ssr/
+*.local
+.vite/
+.turbo/
+
+# ── Go ───────────────────────────────────────────────────────
+/server/bin/
+/server/tmp/
+*.exe
+*.exe~
+*.test
+*.out
+coverage.out
+vendor/
+
+# ── Rust / Tauri ─────────────────────────────────────────────
+target/
+**/src-tauri/target/
+**/src-tauri/gen/
+
+# Tauri bundles the server binary in here at build time
+**/src-tauri/binaries/
+
+# ── Editors / OS ─────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.shared.json
+*.log
+
+# ── ComicHub runtime data (never commit a real library/db) ───
+/.data/
+*.comichub.db
+*.db-wal
+*.db-shm
+connection.json
+
+# ── Env / secrets ────────────────────────────────────────────
+.env
+.env.*
+!.env.example
