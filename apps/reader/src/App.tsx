@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { SUPPORTED_EXTENSIONS } from '@comichub/reader-core';
 
 function isTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -41,7 +42,10 @@ export function App() {
             <p className="path">{openPath}</p>
           </>
         ) : (
-          <p className="path">No file provided. Double-click a .cbz, or launch from the client.</p>
+          <p className="path">
+            No file provided. Open a comic file ({SUPPORTED_EXTENSIONS.join(', ')}), or launch it
+            from the client.
+          </p>
         )}
       </div>
     </div>

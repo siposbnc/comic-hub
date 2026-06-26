@@ -62,7 +62,7 @@ type Book struct {
 	SeriesID      string
 	LibraryID     string
 	FilePath      string
-	FileFormat    string // cbz|cbr|cb7|cbt|pdf
+	FileFormat    string // one of domain.SupportedFormats
 	FileSize      int64
 	FileMTime     int64
 	ContentHash   string

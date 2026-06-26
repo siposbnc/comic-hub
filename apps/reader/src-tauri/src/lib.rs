@@ -2,29 +2,20 @@
 //! launched with (file-association double-click) so the webview can show what it will
 //! open. Direct archive reading + the connected-mode page stream arrive in Phase 1.
 
+mod formats;
+
 use std::path::Path;
 
 /// Returns the comic file path passed on the command line, if any. The first argument
-/// that looks like an existing path to a comic file wins.
+/// whose extension is a supported comic format wins.
 #[tauri::command]
 fn get_open_path() -> Option<String> {
-    std::env::args().skip(1).find_map(|arg| {
-        let p = Path::new(&arg);
-        let looks_like_comic = p
+    std::env::args().skip(1).find(|arg| {
+        Path::new(arg)
             .extension()
             .and_then(|e| e.to_str())
-            .map(|e| {
-                matches!(
-                    e.to_ascii_lowercase().as_str(),
-                    "cbz" | "cbr" | "cb7" | "cbt" | "pdf"
-                )
-            })
-            .unwrap_or(false);
-        if looks_like_comic {
-            Some(arg)
-        } else {
-            None
-        }
+            .map(formats::is_supported)
+            .unwrap_or(false)
     })
 }
 

@@ -5,6 +5,27 @@
  * LocalPageProvider reads an archive on disk via the Tauri core. See docs/06-reader.md.
  */
 
+/**
+ * Canonical comic formats ComicHub reads — the single source of truth for the
+ * frontend. Keep in sync with the spec (docs/00-overview.md §6), the reader's Rust
+ * `formats.rs`, and the server's `domain.SupportedFormats`. Don't hardcode format
+ * lists anywhere else.
+ */
+export const SUPPORTED_FORMATS = ['cbz', 'cbr', 'cb7', 'cbt', 'pdf'] as const;
+export type ComicFormat = (typeof SUPPORTED_FORMATS)[number];
+
+/** Archive-container formats (everything except PDF). */
+export const ARCHIVE_FORMATS = ['cbz', 'cbr', 'cb7', 'cbt'] as const;
+
+/** Dotted extensions, e.g. ".cbz" — handy for UI copy and file pickers. */
+export const SUPPORTED_EXTENSIONS: readonly string[] = SUPPORTED_FORMATS.map((f) => `.${f}`);
+
+/** True if `ext` (with or without a leading dot, any case) is a supported format. */
+export function isSupportedFormat(ext: string): boolean {
+  const e = ext.replace(/^\./, '').toLowerCase();
+  return (SUPPORTED_FORMATS as readonly string[]).includes(e);
+}
+
 export type ReadingDirection = 'ltr' | 'rtl';
 
 export type PageType = 'FrontCover' | 'Story' | 'Advertisement' | 'BackCover' | 'Other';
