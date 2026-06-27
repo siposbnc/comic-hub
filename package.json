@@ -16,13 +16,16 @@
     "dev:reader": "pnpm --filter @comichub/reader tauri dev",
     "dev:client:web": "pnpm --filter @comichub/client dev",
     "dev:reader:web": "pnpm --filter @comichub/reader dev",
-    "lint": "pnpm -r run lint",
+    "lint": "pnpm -r run lint && pnpm lint:ds",
+    "lint:ds": "eslint apps",
     "typecheck": "pnpm -r run typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,json,md,css}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,json,md,css}\""
   },
   "devDependencies": {
+    "eslint": "^10.6.0",
     "prettier": "^3.4.2",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.62.0"
   }
 }

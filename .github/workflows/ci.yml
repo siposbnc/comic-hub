@@ -37,6 +37,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm codegen:check
       - run: pnpm typecheck
+      - run: pnpm lint:ds
       - run: pnpm --filter @comichub/client build
       - run: pnpm --filter @comichub/reader build
 
