@@ -4,6 +4,7 @@
 
 mod formats;
 mod formats_gen;
+mod local;
 
 use std::path::Path;
 
@@ -23,7 +24,16 @@ fn get_open_path() -> Option<String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![get_open_path])
+        .invoke_handler(tauri::generate_handler![
+            get_open_path,
+            local::local_open,
+            local::local_manifest,
+            local::local_page,
+            local::local_thumb,
+            local::local_prefetch,
+            local::local_save_progress,
+            local::local_restore_progress
+        ])
         .run(tauri::generate_context!())
         .expect("error while running ComicHub reader");
 }
