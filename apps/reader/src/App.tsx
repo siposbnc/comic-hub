@@ -18,6 +18,21 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // While already running, a new one-click Read is forwarded by the single-instance
+  // handler as a `reader://open-url` event — re-open that book in place.
+  useEffect(() => {
+    if (!('__TAURI_INTERNALS__' in window)) return;
+    let unlisten: (() => void) | undefined;
+    void import('@tauri-apps/api/event').then(({ listen }) =>
+      listen<string>('reader://open-url', (e) => {
+        if (e.payload) useReaderStore.getState().openUrl(e.payload);
+      }).then((un) => {
+        unlisten = un;
+      }),
+    );
+    return () => unlisten?.();
+  }, []);
+
   if (status === 'ready') {
     return <Reader />;
   }

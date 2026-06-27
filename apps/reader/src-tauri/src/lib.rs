@@ -30,10 +30,16 @@ pub fn run() {
     // forwards the URL to the deep-link plugin instead of spawning a new window.
     #[cfg(any(target_os = "windows", target_os = "linux"))]
     {
-        use tauri::Manager;
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        use tauri::{Emitter, Manager};
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_focus();
+            }
+            // A second launch carrying a comichub-reader:// link (the client's one-click
+            // Read while we're already open) re-focuses this instance; forward the URL to
+            // the running webview so it swaps to the new book instead of doing nothing.
+            if let Some(url) = argv.iter().find(|a| a.starts_with("comichub-reader://")) {
+                let _ = app.emit("reader://open-url", url.clone());
             }
         }));
     }

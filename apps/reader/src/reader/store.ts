@@ -52,7 +52,9 @@ export interface ReaderState {
   pages: PageCache | null;
   thumbs: ThumbCache | null;
 
-  init: () => Promise<void>;
+  init: (url?: string) => Promise<void>;
+  /** Re-open a book from a deep-link URL while the reader is already running. */
+  openUrl: (url: string) => void;
   retry: () => void;
   goToPage: (page: number) => void;
   next: () => void;
@@ -94,7 +96,8 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
   function refreshWindow(): void {
     const { pages, currentPage, manifest, settings } = get();
     if (!pages || !manifest) return;
-    const ahead = settings.layout === 'double' ? DEFAULT_PREFETCH_AHEAD * 2 : DEFAULT_PREFETCH_AHEAD;
+    const ahead =
+      settings.layout === 'double' ? DEFAULT_PREFETCH_AHEAD * 2 : DEFAULT_PREFETCH_AHEAD;
     pages.setWindow(currentPage, ahead, DEFAULT_PREFETCH_BEHIND, manifest.pageCount);
   }
 
@@ -148,10 +151,10 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
     pages: null,
     thumbs: null,
 
-    init: async () => {
+    init: async (url?: string) => {
       set({ status: 'loading' });
       try {
-        const launch = await resolveLaunch();
+        const launch = await resolveLaunch(url);
         if (launch.kind === 'empty') {
           set({ status: 'idle', mode: 'empty' });
           return;
@@ -162,8 +165,7 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
         }
 
         const provider = launch.provider;
-        const manifest =
-          launch.kind === 'standalone' ? launch.manifest : await provider.manifest();
+        const manifest = launch.kind === 'standalone' ? launch.manifest : await provider.manifest();
 
         const pages = new PageCache(provider, PAGE_CACHE_CAPACITY);
         const thumbs = new ThumbCache(provider);
@@ -205,6 +207,27 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
 
     retry: () => {
       void get().init();
+    },
+
+    openUrl: (url) => {
+      // Persist the current book's place and tear down its caches before swapping.
+      const { provider, manifest, currentPage, finished } = get();
+      if (provider && manifest) {
+        provider.saveProgress({
+          bookId: manifest.bookId,
+          page: currentPage,
+          status: finished ? 'read' : 'in_progress',
+          updatedAt: Date.now(),
+        });
+      }
+      if (saveTimer) {
+        clearTimeout(saveTimer);
+        saveTimer = null;
+      }
+      get().pages?.dispose();
+      get().thumbs?.dispose();
+      set({ provider: null, pages: null, thumbs: null, finished: false, resumePage: null });
+      void get().init(url);
     },
 
     goToPage: (page) => navigateTo(page),
@@ -256,7 +279,8 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
       get().setLayout(next);
     },
 
-    setFit: (fit) => set((s) => ({ settings: { ...s.settings, fit }, zoom: MIN_ZOOM, panX: 0, panY: 0 })),
+    setFit: (fit) =>
+      set((s) => ({ settings: { ...s.settings, fit }, zoom: MIN_ZOOM, panX: 0, panY: 0 })),
 
     cycleFit: () => {
       const current = get().settings.fit;

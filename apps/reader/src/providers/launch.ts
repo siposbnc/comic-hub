@@ -62,17 +62,29 @@ async function readDeepLinkParams(): Promise<URLSearchParams | null> {
   return null;
 }
 
-/** Resolves how the reader was launched and builds the matching PageProvider. */
-export async function resolveLaunch(): Promise<LaunchResult> {
-  let params = readParams();
+/** Parses launch params out of an explicit `comichub-reader://open?...` URL. */
+function paramsFromUrl(raw: string): URLSearchParams {
+  try {
+    return new URL(raw).searchParams;
+  } catch {
+    return new URLSearchParams();
+  }
+}
+
+/**
+ * Resolves how the reader was launched and builds the matching PageProvider. Pass an
+ * explicit deep-link URL to re-open a book while the reader is already running (the
+ * single-instance forward path); otherwise params come from the window/deep link.
+ */
+export async function resolveLaunch(explicitUrl?: string): Promise<LaunchResult> {
+  let params = explicitUrl ? paramsFromUrl(explicitUrl) : readParams();
   // A fresh launch from the client arrives as a deep link, not in window.location.
-  if (!params.get('bookId') && isTauri()) {
+  if (!params.get('bookId') && !explicitUrl && isTauri()) {
     const deepLink = await readDeepLinkParams();
     if (deepLink) params = deepLink;
   }
   const bookId = params.get('bookId');
-  const envServer =
-    (import.meta.env.VITE_SERVER_URL as string | undefined) || undefined;
+  const envServer = (import.meta.env.VITE_SERVER_URL as string | undefined) || undefined;
 
   // Connected mode: an explicit bookId (deep link or dev harness).
   if (bookId) {
