@@ -12,6 +12,8 @@ export { Badge } from './components/core/Badge';
 export type { BadgeProps } from './components/core/Badge';
 export { Tag } from './components/core/Tag';
 export type { TagProps } from './components/core/Tag';
+export { Avatar } from './components/core/Avatar';
+export type { AvatarProps } from './components/core/Avatar';
 
 // comic
 export { CoverCard } from './components/comic/CoverCard';
@@ -36,9 +38,17 @@ export { Toast } from './components/feedback/Toast';
 export type { ToastProps } from './components/feedback/Toast';
 export { Tooltip } from './components/feedback/Tooltip';
 export type { TooltipProps } from './components/feedback/Tooltip';
+export { Dialog } from './components/feedback/Dialog';
+export type { DialogProps } from './components/feedback/Dialog';
 
 // forms
 export { Input } from './components/forms/Input';
 export type { InputProps } from './components/forms/Input';
 export { Slider } from './components/forms/Slider';
 export type { SliderProps } from './components/forms/Slider';
+export { Checkbox } from './components/forms/Checkbox';
+export type { CheckboxProps } from './components/forms/Checkbox';
+export { Select } from './components/forms/Select';
+export type { SelectProps } from './components/forms/Select';
+export { Switch } from './components/forms/Switch';
+export type { SwitchProps } from './components/forms/Switch';
