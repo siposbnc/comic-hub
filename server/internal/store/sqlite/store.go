@@ -16,6 +16,7 @@ type Store struct {
 	books     *bookRepo
 	progress  *progressRepo
 	jobs      *jobRepo
+	metadata  *metadataRepo
 }
 
 // NewStore wraps an open database in the catalog repositories.
@@ -27,6 +28,7 @@ func NewStore(db *sql.DB) *Store {
 		books:     &bookRepo{db: db},
 		progress:  &progressRepo{db: db},
 		jobs:      &jobRepo{db: db},
+		metadata:  &metadataRepo{db: db},
 	}
 }
 
@@ -35,6 +37,7 @@ func (s *Store) Series() domain.SeriesRepository     { return s.series }
 func (s *Store) Books() domain.BookRepository        { return s.books }
 func (s *Store) Progress() domain.ProgressRepository { return s.progress }
 func (s *Store) Jobs() domain.JobRepository          { return s.jobs }
+func (s *Store) Metadata() domain.MetadataRepository { return s.metadata }
 
 // compile-time assertion that Store satisfies the domain boundary.
 var _ domain.Repository = (*Store)(nil)

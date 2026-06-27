@@ -13,6 +13,7 @@ type Repository interface {
 	Books() BookRepository
 	Progress() ProgressRepository
 	Jobs() JobRepository
+	Metadata() MetadataRepository
 }
 
 // LibraryRepository persists libraries and their roots.
