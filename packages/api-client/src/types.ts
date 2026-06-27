@@ -50,6 +50,25 @@ export interface ApiErrorBody {
   };
 }
 
+export type LibraryKind = 'comic' | 'manga';
+
+/** A named set of root folders ComicHub scans (see docs/02-data-model.md). */
+export interface Library {
+  id: string;
+  name: string;
+  kind: LibraryKind;
+  roots: string[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** Request body for creating a library. */
+export interface CreateLibraryInput {
+  name: string;
+  kind?: LibraryKind;
+  roots: string[];
+}
+
 /** Connection descriptor the client obtains from the embedded sidecar handshake. */
 export interface Connection {
   baseUrl: string;

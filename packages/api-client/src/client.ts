@@ -1,7 +1,9 @@
 import type {
   AuthHandshakeResult,
   Connection,
+  CreateLibraryInput,
   HealthStatus,
+  Library,
   ServerInfo,
   ServerStats,
 } from './types.js';
@@ -52,6 +54,25 @@ export class ComicHubClient {
   /** Asks an embedded server to shut down gracefully. */
   async shutdown(): Promise<void> {
     await this.request<unknown>('POST', '/api/v1/admin/shutdown');
+  }
+
+  // ── Libraries ──────────────────────────────────────────────────────────────
+
+  async listLibraries(): Promise<Library[]> {
+    const res = await this.request<{ items: Library[] }>('GET', '/api/v1/libraries');
+    return res.items;
+  }
+
+  createLibrary(input: CreateLibraryInput): Promise<Library> {
+    return this.request<Library>('POST', '/api/v1/libraries', { body: input });
+  }
+
+  getLibrary(id: string): Promise<Library> {
+    return this.request<Library>('GET', `/api/v1/libraries/${encodeURIComponent(id)}`);
+  }
+
+  async deleteLibrary(id: string): Promise<void> {
+    await this.request<unknown>('DELETE', `/api/v1/libraries/${encodeURIComponent(id)}`);
   }
 
   private async request<T>(
