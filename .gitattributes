@@ -12,6 +12,8 @@
 *.icns  binary
 *.webp  binary
 *.avif  binary
+*.cbz   binary
+*.cbr   binary
 
 # Generated lockfiles: keep as-is, mark for linguist.
 pnpm-lock.yaml -diff linguist-generated
