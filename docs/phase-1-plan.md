@@ -87,8 +87,8 @@ latency, cache hit); docs kept in lockstep (03-api.md, 09-tech-decisions.md).
 | S3 — Scanner + job system | ✅ done |
 | S4 — Image pipeline + page streaming | ✅ done (pure-Go; govips swap later) |
 | S5 — Browse + progress + WS | ✅ done — **server backbone complete** |
-| R1 / R2 — Reader | ⬜ pending |
-| C1–C4 — Client | ⬜ pending (next) |
+| R1 / R2 — Reader | ✅ done (connected mode + UX; standalone CBZ/CBT via Rust) |
+| C1–C4 — Client | 🛠 in progress |
 
 Design-system components (CoverCard, Rail, …) are pulled into `packages/ui` on demand
 during the C-phase, one at a time.
