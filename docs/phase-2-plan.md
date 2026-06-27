@@ -94,7 +94,7 @@ Accessibility gate per screen; CI bench thresholds; docs kept in lockstep (03-ap
 | M2 — Metadata schema + apply pipeline | ✅ done |
 | M3 — Metadata API (candidates / apply / job) | ✅ done |
 | M4 — Metadata client UI (candidate picker) | ✅ done — **metadata track complete** |
-| F1 — CB7 + CBT | ⏳ pending |
+| F1 — CB7 + CBT | ✅ done |
 | F2 — PDF (MuPDF + C toolchain) | ⏳ pending |
 | S / O / W / R — search, organization, watch/health, reader | ⏳ pending |
 
