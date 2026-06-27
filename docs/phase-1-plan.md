@@ -88,7 +88,14 @@ latency, cache hit); docs kept in lockstep (03-api.md, 09-tech-decisions.md).
 | S4 — Image pipeline + page streaming | ✅ done (pure-Go; govips swap later) |
 | S5 — Browse + progress + WS | ✅ done — **server backbone complete** |
 | R1 / R2 — Reader | ✅ done (connected mode + UX; standalone CBZ/CBT via Rust) |
-| C1–C4 — Client | 🛠 in progress |
+| C1–C4 — Client | ✅ done (shell, add+scan, browse, one-click read) |
+
+**Phase 1 is functionally complete** — server backbone, reader, and client all built and
+integrated (all packages typecheck; both apps build). Remaining polish: register the
+`comichub-reader://` deep-link scheme reader-side; swap the reader's Tauri shell-outs for
+`tauri-plugin-dialog`/`-opener`; add the reader's control glyphs (`single-page`,
+`double-page`, `fullscreen-exit`, `zoom-in/out`) to the design-system `Icon` and re-sync so
+the reader can drop its local `Icon`; the govips image-pipeline swap; CI bench thresholds.
 
 Design-system components (CoverCard, Rail, …) are pulled into `packages/ui` on demand
 during the C-phase, one at a time.
