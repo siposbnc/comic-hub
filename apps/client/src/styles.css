@@ -1,72 +1,47 @@
-/* Phase-0 handshake screen styling. Real screens (AppShell, Home, …) replace this
-   in Phase 1 client work; tokens come from @comichub/ui/styles.css. */
+/* ComicHub client — app-level globals. Design tokens + print signatures come from
+   @comichub/ui/styles.css; this file only sets the full-height app frame and a few
+   ergonomics on top of the design system. */
 
-.app {
-  min-height: 100%;
-  display: grid;
-  place-items: center;
-  padding: 2rem;
+html,
+body,
+#root {
+  height: 100%;
 }
 
-.panel {
-  width: min(560px, 100%);
-  background: var(--surface-raised);
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-md);
-  padding: 1.75rem;
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
-.wordmark {
-  font-family: var(--font-display);
-  font-size: var(--text-title);
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  margin: 0 0 0.25rem;
+/* Quiet, theme-aware scrollbars so they recede behind the cover art. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-pill);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+  background-clip: content-box;
 }
 
-.subtitle {
-  color: var(--text-secondary);
-  margin: 0 0 1.5rem;
-}
-
-.kv {
-  display: grid;
-  grid-template-columns: 9rem 1fr;
-  gap: 0.4rem 1rem;
-  font-family: var(--font-mono);
-  font-size: var(--text-small);
-}
-
-.kv dt {
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.dot {
-  display: inline-block;
-  width: 0.6rem;
-  height: 0.6rem;
-  border-radius: 50%;
-  margin-right: 0.4rem;
-  vertical-align: middle;
-}
-
-.dot--ok {
-  background: var(--success-500);
-}
-
-.dot--err {
-  background: var(--danger-500);
-}
-
-.dot--wait {
-  background: var(--yellow-400);
-}
-
-.error {
-  color: var(--danger-500);
-  font-family: var(--font-mono);
-  font-size: var(--text-small);
-  margin-top: 1rem;
+/* Honor reduced-motion globally for any transform/opacity transitions we add inline. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

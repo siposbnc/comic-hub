@@ -24,3 +24,23 @@ export async function startEmbeddedServer(): Promise<Connection> {
 export async function stopEmbeddedServer(): Promise<void> {
   await invoke('stop_server');
 }
+
+/** Web-dev fallback: talk to a server started by hand (see CLAUDE run notes). Auth is
+ *  off in `--mode=server`, so the token is empty. */
+function webConnection(): Connection {
+  const baseUrl =
+    (import.meta.env.VITE_SERVER_URL as string | undefined) || 'http://127.0.0.1:8099';
+  return { baseUrl: baseUrl.replace(/\/$/, ''), token: '' };
+}
+
+/**
+ * Resolves the connection for the current host: the embedded sidecar inside Tauri, or
+ * the standalone dev server in a plain browser. The single entry point the app boots
+ * from.
+ */
+export async function resolveConnection(): Promise<Connection> {
+  if (isTauri()) {
+    return startEmbeddedServer();
+  }
+  return webConnection();
+}
