@@ -10,7 +10,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             server::start_server,
             server::stop_server,
-            commands::pick_folder
+            commands::pick_folder,
+            commands::launch_reader
         ])
         .run(tauri::generate_context!())
         .expect("error while running ComicHub client");

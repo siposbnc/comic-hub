@@ -50,3 +50,32 @@ pub fn pick_folder() -> Result<Option<String>, String> {
     #[allow(unreachable_code)]
     Ok(None)
 }
+
+/// Hands the reader deep link to the OS so the registered `comichub-reader://` handler
+/// (the desktop reader) opens the book. `server`/`token`/`book_id`/`page` are accepted for
+/// forward-compatibility (e.g. spawning the reader binary directly) but the deep link is
+/// the canonical path today.
+#[tauri::command]
+pub fn launch_reader(
+    url: String,
+    _server: Option<String>,
+    _token: Option<String>,
+    _book_id: Option<String>,
+    _page: Option<u32>,
+) -> Result<(), String> {
+    open_url(&url)
+}
+
+/// Opens a URL/URI with the platform's default handler.
+fn open_url(url: &str) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    let result = Command::new("cmd").args(["/C", "start", "", url]).spawn();
+
+    #[cfg(target_os = "macos")]
+    let result = Command::new("open").arg(url).spawn();
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let result = Command::new("xdg-open").arg(url).spawn();
+
+    result.map(|_| ()).map_err(|e| format!("open reader link: {e}"))
+}
