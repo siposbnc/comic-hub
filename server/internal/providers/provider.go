@@ -7,13 +7,13 @@ import "context"
 
 // SeriesCandidate is a possible series match from a provider.
 type SeriesCandidate struct {
-	ProviderID string
-	Name       string
-	Year       int
-	Publisher  string
-	IssueCount int
-	CoverURL   string
-	Score      float64 // matcher confidence 0..1
+	ProviderID string  `json:"providerId"`
+	Name       string  `json:"name"`
+	Year       int     `json:"year"`
+	Publisher  string  `json:"publisher"`
+	IssueCount int     `json:"issueCount"`
+	CoverURL   string  `json:"coverUrl"`
+	Score      float64 `json:"score"` // matcher confidence 0..1
 }
 
 // IssueCandidate is a possible issue match from a provider.

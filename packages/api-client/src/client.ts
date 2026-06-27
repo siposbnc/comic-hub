@@ -10,10 +10,12 @@ import type {
   Job,
   Library,
   Progress,
+  ProviderStatus,
   ReadStatus,
   ScanMode,
   SeriesCard,
   SeriesDetail,
+  SeriesMatchCandidate,
   ServerInfo,
   ServerStats,
 } from './types.js';
@@ -206,6 +208,55 @@ export class ComicHubClient {
   markBook(bookId: string, status: 'read' | 'unread'): Promise<Progress> {
     return this.request<Progress>('POST', `/api/v1/me/books/${encodeURIComponent(bookId)}/mark`, {
       body: { status },
+    });
+  }
+
+  // ── Metadata matching ──────────────────────────────────────────────────────────
+
+  /** Configured metadata providers and whether each has credentials. */
+  async providers(): Promise<ProviderStatus[]> {
+    const res = await this.request<{ providers: ProviderStatus[] }>('GET', '/api/v1/providers');
+    return res.providers;
+  }
+
+  /** Ranked provider candidates for a series (defaults the query to the series name). */
+  async seriesMatchCandidates(
+    seriesId: string,
+    opts: { provider?: string; query?: string } = {},
+  ): Promise<SeriesMatchCandidate[]> {
+    const p = new URLSearchParams();
+    if (opts.provider) p.set('provider', opts.provider);
+    if (opts.query) p.set('query', opts.query);
+    const qs = p.toString();
+    const res = await this.request<{ candidates: SeriesMatchCandidate[] }>(
+      'GET',
+      `/api/v1/series/${encodeURIComponent(seriesId)}/match/candidates${qs ? `?${qs}` : ''}`,
+    );
+    return res.candidates;
+  }
+
+  /** Applies a chosen provider volume to a series (batch); returns the match job id. */
+  async applySeriesMatch(
+    seriesId: string,
+    providerId: string,
+    opts: { provider?: string; fields?: string[] } = {},
+  ): Promise<string> {
+    const res = await this.request<{ jobId: string }>(
+      'POST',
+      `/api/v1/series/${encodeURIComponent(seriesId)}/match/apply`,
+      { body: { providerId, provider: opts.provider, fields: opts.fields } },
+    );
+    return res.jobId;
+  }
+
+  /** Applies a chosen provider issue's metadata to a single book (synchronous). */
+  async applyBookMatch(
+    bookId: string,
+    providerId: string,
+    opts: { provider?: string; fields?: string[] } = {},
+  ): Promise<void> {
+    await this.request<unknown>('POST', `/api/v1/books/${encodeURIComponent(bookId)}/match/apply`, {
+      body: { providerId, provider: opts.provider, fields: opts.fields },
     });
   }
 

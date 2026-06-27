@@ -191,3 +191,22 @@ export interface Connection {
   pid?: number;
   version?: string;
 }
+
+/** A configured metadata provider and whether it has credentials (GET /providers). */
+export interface ProviderStatus {
+  name: string;
+  label: string;
+  configured: boolean;
+}
+
+/** A ranked provider series (volume) candidate for matching (GET …/match/candidates). */
+export interface SeriesMatchCandidate {
+  providerId: string;
+  name: string;
+  year: number;
+  publisher: string;
+  issueCount: number;
+  coverUrl: string;
+  /** Matcher confidence, 0..1. */
+  score: number;
+}
