@@ -87,6 +87,85 @@ export interface Job {
   finishedAt?: number;
 }
 
+export type ReadStatus = 'unread' | 'in_progress' | 'read';
+
+/** Progress shown on a card (no book/page-count context). */
+export interface ProgressSummary {
+  page: number;
+  status: ReadStatus;
+  percent: number;
+  updatedAt: number;
+}
+
+/** Full progress for a single book (from the /me/progress endpoints). */
+export interface Progress {
+  bookId: string;
+  page: number;
+  pageCount: number;
+  status: ReadStatus;
+  percent: number;
+  updatedAt: number;
+}
+
+/** A series in the library grid. */
+export interface SeriesCard {
+  id: string;
+  name: string;
+  year?: number;
+  readingDir: 'ltr' | 'rtl';
+  bookCount: number;
+  readCount: number;
+  coverBookId?: string;
+}
+
+/** A book in a list/rail/grid. */
+export interface BookCard {
+  id: string;
+  seriesId: string;
+  number?: string;
+  title?: string;
+  pageCount: number;
+  format: string;
+  isCorrupt?: boolean;
+  progress?: ProgressSummary;
+}
+
+export interface SeriesDetail {
+  id: string;
+  name: string;
+  year?: number;
+  publisher?: string;
+  summary?: string;
+  readingDir: 'ltr' | 'rtl';
+  bookCount: number;
+  readCount: number;
+  books: BookCard[];
+}
+
+export interface BookDetail {
+  id: string;
+  seriesId: string;
+  seriesName: string;
+  number?: string;
+  title?: string;
+  volume?: number;
+  pageCount: number;
+  format: string;
+  readingDir: 'ltr' | 'rtl';
+  releaseDate?: number;
+  ageRating?: string;
+  language?: string;
+  summary?: string;
+  isCorrupt?: boolean;
+  progress?: ProgressSummary;
+}
+
+/** The Home feed. */
+export interface Discover {
+  continueReading: BookCard[];
+  recentlyAdded: BookCard[];
+}
+
 /** Connection descriptor the client obtains from the embedded sidecar handshake. */
 export interface Connection {
   baseUrl: string;

@@ -86,9 +86,9 @@ latency, cache hit); docs kept in lockstep (03-api.md, 09-tech-decisions.md).
 | S2 — Archive readers (CBZ + CBR) | ✅ done |
 | S3 — Scanner + job system | ✅ done |
 | S4 — Image pipeline + page streaming | ✅ done (pure-Go; govips swap later) |
-| S5 — Browse + progress + WS | ⬜ pending (next) |
+| S5 — Browse + progress + WS | ✅ done — **server backbone complete** |
 | R1 / R2 — Reader | ⬜ pending |
-| C1–C4 — Client | ⬜ pending |
+| C1–C4 — Client | ⬜ pending (next) |
 
 Design-system components (CoverCard, Rail, …) are pulled into `packages/ui` on demand
 during the C-phase, one at a time.

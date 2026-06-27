@@ -1,11 +1,18 @@
 import type {
   AuthHandshakeResult,
+  BookCard,
+  BookDetail,
   Connection,
   CreateLibraryInput,
+  Discover,
   HealthStatus,
   Job,
   Library,
+  Progress,
+  ReadStatus,
   ScanMode,
+  SeriesCard,
+  SeriesDetail,
   ServerInfo,
   ServerStats,
 } from './types.js';
@@ -132,6 +139,67 @@ export class ComicHubClient {
   async prefetch(bookId: string, from: number, count: number): Promise<void> {
     await this.request<unknown>('POST', `/api/v1/books/${encodeURIComponent(bookId)}/prefetch`, {
       body: { from, count },
+    });
+  }
+
+  // ── Browse ───────────────────────────────────────────────────────────────────
+
+  async listSeries(libraryId: string): Promise<SeriesCard[]> {
+    const res = await this.request<{ items: SeriesCard[] }>(
+      'GET',
+      `/api/v1/series?library=${encodeURIComponent(libraryId)}`,
+    );
+    return res.items;
+  }
+
+  seriesDetail(id: string): Promise<SeriesDetail> {
+    return this.request<SeriesDetail>('GET', `/api/v1/series/${encodeURIComponent(id)}`);
+  }
+
+  bookDetail(id: string): Promise<BookDetail> {
+    return this.request<BookDetail>('GET', `/api/v1/books/${encodeURIComponent(id)}`);
+  }
+
+  async recentBooks(libraryId?: string, limit?: number): Promise<BookCard[]> {
+    const p = new URLSearchParams();
+    if (libraryId) p.set('library', libraryId);
+    if (limit) p.set('limit', String(limit));
+    const qs = p.toString();
+    const res = await this.request<{ items: BookCard[] }>(
+      'GET',
+      `/api/v1/books${qs ? `?${qs}` : ''}`,
+    );
+    return res.items;
+  }
+
+  discover(libraryId?: string): Promise<Discover> {
+    const qs = libraryId ? `?library=${encodeURIComponent(libraryId)}` : '';
+    return this.request<Discover>('GET', `/api/v1/discover${qs}`);
+  }
+
+  // ── Progress ─────────────────────────────────────────────────────────────────
+
+  async continueReading(): Promise<BookCard[]> {
+    const res = await this.request<{ items: BookCard[] }>('GET', '/api/v1/me/continue');
+    return res.items;
+  }
+
+  getProgress(bookId: string): Promise<Progress> {
+    return this.request<Progress>('GET', `/api/v1/me/progress/${encodeURIComponent(bookId)}`);
+  }
+
+  putProgress(
+    bookId: string,
+    input: { page: number; status?: ReadStatus; device?: string },
+  ): Promise<Progress> {
+    return this.request<Progress>('PUT', `/api/v1/me/progress/${encodeURIComponent(bookId)}`, {
+      body: input,
+    });
+  }
+
+  markBook(bookId: string, status: 'read' | 'unread'): Promise<Progress> {
+    return this.request<Progress>('POST', `/api/v1/me/books/${encodeURIComponent(bookId)}/mark`, {
+      body: { status },
     });
   }
 
