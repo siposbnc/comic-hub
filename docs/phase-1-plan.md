@@ -90,12 +90,28 @@ latency, cache hit); docs kept in lockstep (03-api.md, 09-tech-decisions.md).
 | R1 / R2 — Reader | ✅ done (connected mode + UX; standalone CBZ/CBT via Rust) |
 | C1–C4 — Client | ✅ done (shell, add+scan, browse, one-click read) |
 
-**Phase 1 is functionally complete** — server backbone, reader, and client all built and
-integrated (all packages typecheck; both apps build). Remaining polish: register the
-`comichub-reader://` deep-link scheme reader-side; swap the reader's Tauri shell-outs for
-`tauri-plugin-dialog`/`-opener`; add the reader's control glyphs (`single-page`,
-`double-page`, `fullscreen-exit`, `zoom-in/out`) to the design-system `Icon` and re-sync so
-the reader can drop its local `Icon`; the govips image-pipeline swap; CI bench thresholds.
+**Phase 1 is functionally complete and packaged** — server backbone, reader, and client all
+built, integrated, and **building to installers**:
+
+- Server bundled as a Tauri **sidecar** (`externalBin` + `tools/prepare-sidecar.mjs`); the
+  client installer ships `comichub-server.exe` next to the app, so embedded zero-config mode
+  works in an installed build. Embedded handshake (ephemeral port + token + serve + 401)
+  verified.
+- Reader registers the **`comichub-reader://`** deep-link scheme (+ cbz/cbr/cb7/cbt file
+  associations); the client's one-click Read launches it.
+- `tauri build` produces MSI + NSIS installers for **both** client and reader (WiX/NSIS).
+- All TS packages typecheck; both Tauri shells `cargo build` clean.
+
+Remaining (follow-on, none blocking the core loop):
+- **Verification:** a GUI end-to-end run on a desktop session (window spawns sidecar →
+  browse → one-click → reader); the 5 MVP success criteria measured on a ~10k library;
+  accessibility audit.
+- **Standalone CBR/CB7/PDF** in the reader (need native unrar/7z/mupdf; CBZ/CBT work today).
+- **govips** image-pipeline swap (WebP/AVIF + scan-time thumbnail prewarm).
+- Add the reader's control glyphs (`single-page`, `double-page`, `fullscreen-exit`,
+  `zoom-in/out`) to the design-system `Icon` + re-sync, then drop the reader's local `Icon`.
+- Swap the Tauri **shell-outs** (folder dialog, URL open) for `tauri-plugin-dialog`/`-opener`.
+- CI bench thresholds.
 
 Design-system components (CoverCard, Rail, …) are pulled into `packages/ui` on demand
 during the C-phase, one at a time.
