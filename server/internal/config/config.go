@@ -34,6 +34,11 @@ type Config struct {
 	LogLevel      string // debug|info|warn|error
 	LogFormat     string // json|text
 	Database      DatabaseConfig
+
+	// ComicVineAPIKey is the Comic Vine metadata provider key, read from the
+	// COMICVINE_API_KEY environment variable (server-side only; never sent to clients).
+	// Empty disables online matching against Comic Vine.
+	ComicVineAPIKey string
 }
 
 // DatabaseConfig describes the catalog store.
@@ -80,6 +85,8 @@ func Load(args []string) (Config, error) {
 		LogLevel:      *logLevel,
 		LogFormat:     *logFormat,
 		Database:      DatabaseConfig{Driver: "sqlite", Path: *dbPath},
+		// Provider keys are env-only (never flags, so they don't leak into shell history).
+		ComicVineAPIKey: strings.TrimSpace(os.Getenv("COMICVINE_API_KEY")),
 	}
 
 	if cfg.Mode != ModeEmbedded && cfg.Mode != ModeServer {

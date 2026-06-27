@@ -57,6 +57,7 @@ func NewRouter(d Deps) http.Handler {
 
 		r.Get("/server/info", handleServerInfo(d.Config))
 		r.Get("/server/stats", handleServerStats(d.DB))
+		r.Get("/providers", handleProviders(d.Config))
 		r.Get("/auth/handshake", handleAuthHandshake(d.Config))
 		r.Post("/admin/shutdown", handleShutdown(d.Logger, d.Shutdown))
 

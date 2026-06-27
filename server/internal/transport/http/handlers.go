@@ -50,6 +50,22 @@ func handleServerInfo(cfg config.Config) http.HandlerFunc {
 	}
 }
 
+// handleProviders reports the configured metadata providers and whether each has
+// credentials (docs/03-api.md §9). Keys themselves are never exposed.
+func handleProviders(cfg config.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"providers": []map[string]any{
+				{
+					"name":       "comicvine",
+					"label":      "Comic Vine",
+					"configured": cfg.ComicVineAPIKey != "",
+				},
+			},
+		})
+	}
+}
+
 func handleServerStats(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		stats := map[string]int64{}
