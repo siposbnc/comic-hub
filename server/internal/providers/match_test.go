@@ -69,6 +69,27 @@ func TestNameSimilarity(t *testing.T) {
 	}
 }
 
+func TestCleanQuery(t *testing.T) {
+	cases := map[string]string{
+		"Batman (2016)":               "Batman",
+		"Batman Vol. 3":               "Batman",
+		"Saga (2012) Vol. 1":          "Saga",
+		"Wonder Woman 013-028 (2017)": "Wonder Woman", // issue range stripped
+		"Batman 001":                  "Batman",       // trailing issue number stripped
+		"X-Men":                       "X-Men",        // punctuation preserved
+		"X-23":                        "X-23",         // letter-digit hyphen is not a range
+		"100 Bullets":                 "100 Bullets",  // leading number kept
+		"  Wonder  Woman  ":           "Wonder Woman",
+		"013-028":                     "013-028", // cleaning to empty falls back to original
+		"The Amazing Spider-Man":      "The Amazing Spider-Man",
+	}
+	for in, want := range cases {
+		if got := CleanQuery(in); got != want {
+			t.Errorf("CleanQuery(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestRankSeries(t *testing.T) {
 	local := LocalSeries{Name: "Saga", Year: 2012, IssueCount: 60}
 	cands := []SeriesCandidate{

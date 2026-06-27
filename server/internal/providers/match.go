@@ -23,11 +23,31 @@ const (
 )
 
 var (
-	reParens    = regexp.MustCompile(`\([^)]*\)`)                    // "(2016)", "(of 6)"
-	reVolume    = regexp.MustCompile(`(?i)\bvol(?:ume|\.)?\s*\d+\b`) // "Vol. 3", "volume 2"
-	reNonAlnum  = regexp.MustCompile(`[^a-z0-9]+`)
-	reSpaceRuns = regexp.MustCompile(`\s+`)
+	reParens     = regexp.MustCompile(`\([^)]*\)`)                    // "(2016)", "(of 6)"
+	reVolume     = regexp.MustCompile(`(?i)\bvol(?:ume|\.)?\s*\d+\b`) // "Vol. 3", "volume 2"
+	reIssueRange = regexp.MustCompile(`#?\b\d{1,4}\s*-\s*\d{1,4}\b`)  // "013-028", "#1-6"
+	reTrailNum   = regexp.MustCompile(`\s+#?\d{1,4}\s*$`)             // trailing "001", "#5"
+	reNonAlnum   = regexp.MustCompile(`[^a-z0-9]+`)
+	reSpaceRuns  = regexp.MustCompile(`\s+`)
 )
+
+// CleanQuery prepares a series name for a provider name/free-text search: it drops the
+// "(year)" / "Vol. N" qualifiers and the issue ranges and numbers a scanned folder name
+// carries, then collapses whitespace — so "Batman (2016)", "Batman Vol. 3", and
+// "Wonder Woman 013-028 (2017)" search as "Batman" / "Wonder Woman". Casing, word order,
+// and punctuation are preserved (providers may substring-match, where "X-Men" must stay
+// hyphenated). Returns the original (trimmed) string if cleaning would leave it empty.
+func CleanQuery(name string) string {
+	s := reParens.ReplaceAllString(name, " ")
+	s = reVolume.ReplaceAllString(s, " ")
+	s = reIssueRange.ReplaceAllString(s, " ")
+	s = reTrailNum.ReplaceAllString(s, " ")
+	s = strings.TrimSpace(reSpaceRuns.ReplaceAllString(s, " "))
+	if s == "" {
+		return strings.TrimSpace(name)
+	}
+	return s
+}
 
 // ScoreSeries returns a 0..1 confidence that the candidate is the same series as local.
 // It blends normalized name similarity with publication-year and issue-count proximity,

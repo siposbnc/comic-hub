@@ -75,7 +75,9 @@ func (c *Client) Name() string { return "comicvine" }
 // SearchSeries finds candidate volumes (series) for a free-text query.
 func (c *Client) SearchSeries(ctx context.Context, query string) ([]providers.SeriesCandidate, error) {
 	params := url.Values{}
-	params.Set("filter", "name:"+query)
+	// Comic Vine's name filter is a substring match, so the "(year)"/"Vol. N" qualifiers a
+	// scanned series name carries would match nothing — strip them before searching.
+	params.Set("filter", "name:"+providers.CleanQuery(query))
 	params.Set("field_list", "id,name,start_year,count_of_issues,image,publisher")
 	params.Set("limit", "20")
 

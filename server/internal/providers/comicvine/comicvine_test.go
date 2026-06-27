@@ -78,6 +78,26 @@ func TestSearchSeries(t *testing.T) {
 	}
 }
 
+// A scanned series name carries "(year)"/"Vol. N" qualifiers; the name filter sent to
+// Comic Vine must strip them, or its substring match finds nothing.
+func TestSearchSeriesStripsQualifiers(t *testing.T) {
+	var lastFilter string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		lastFilter = r.URL.Query().Get("filter")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(volumesJSON))
+	}))
+	t.Cleanup(ts.Close)
+
+	c := New("test-key", WithBaseURL(ts.URL), WithHTTPClient(ts.Client()), WithMinInterval(0))
+	if _, err := c.SearchSeries(context.Background(), "Wonder Woman (2016) Vol. 1"); err != nil {
+		t.Fatal(err)
+	}
+	if lastFilter != "name:Wonder Woman" {
+		t.Fatalf("filter = %q, want %q", lastFilter, "name:Wonder Woman")
+	}
+}
+
 func TestIssues(t *testing.T) {
 	c, _ := newTestClient(t)
 	got, err := c.Issues(context.Background(), "42")
