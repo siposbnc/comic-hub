@@ -2,6 +2,7 @@ import type {
   AuthHandshakeResult,
   BookCard,
   BookDetail,
+  BookManifest,
   Connection,
   CreateLibraryInput,
   Discover,
@@ -158,6 +159,11 @@ export class ComicHubClient {
 
   bookDetail(id: string): Promise<BookDetail> {
     return this.request<BookDetail>('GET', `/api/v1/books/${encodeURIComponent(id)}`);
+  }
+
+  /** The reader's manifest (page list + reading direction) for a book. */
+  manifest(id: string): Promise<BookManifest> {
+    return this.request<BookManifest>('GET', `/api/v1/books/${encodeURIComponent(id)}/manifest`);
   }
 
   async recentBooks(libraryId?: string, limit?: number): Promise<BookCard[]> {

@@ -69,3 +69,6 @@ export interface PageProvider {
 
 export const DEFAULT_PREFETCH_AHEAD = 4;
 export const DEFAULT_PREFETCH_BEHIND = 1;
+
+// Connected-mode provider (also reused by the client for prefetch-on-hover).
+export { ServerPageProvider } from './server-provider.js';

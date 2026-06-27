@@ -166,6 +166,23 @@ export interface Discover {
   recentlyAdded: BookCard[];
 }
 
+/** One page in a book manifest. */
+export interface ManifestPage {
+  idx: number;
+  w: number;
+  h: number;
+  type?: string;
+  double?: boolean;
+}
+
+/** The reader's source of truth for a book (page list + reading direction). */
+export interface BookManifest {
+  bookId: string;
+  pageCount: number;
+  readingDir: 'ltr' | 'rtl';
+  pages: ManifestPage[];
+}
+
 /** Connection descriptor the client obtains from the embedded sidecar handshake. */
 export interface Connection {
   baseUrl: string;
