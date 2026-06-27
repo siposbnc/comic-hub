@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
-import { Button, IconButton, ProgressBar, Tabs, CoverCard, EmptyState } from '@comichub/ui';
+import { Button, ProgressBar, Tabs, CoverCard, EmptyState } from '@comichub/ui';
 import type { BookCard, SeriesDetail } from '@comichub/api-client';
 import { useClient } from '../lib/client.js';
 import { useSeriesDetail } from '../lib/queries.js';
 import { useReadLaunch } from '../lib/launch.js';
 import { LoadingState, ErrorState } from '../components/Page.js';
+import { MatchDialog } from '../components/MatchDialog.js';
 import { issueLabel, resumePage, toCoverStatus, progressFraction } from '../lib/format.js';
 
 const route = getRouteApi('/series/$id');
@@ -42,6 +43,7 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
   const navigate = useNavigate();
   const launch = useReadLaunch();
   const [tab, setTab] = useState('issues');
+  const [matching, setMatching] = useState(false);
 
   const resumeBook =
     detail.books.find((b) => b.progress?.status === 'in_progress') ??
@@ -173,7 +175,9 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
                 >
                   Issue details
                 </Button>
-                <IconButton icon="more-horizontal" label="More" variant="solid" />
+                <Button variant="ghost" icon="search" onClick={() => setMatching(true)}>
+                  Match
+                </Button>
               </div>
             )}
           </div>
@@ -242,6 +246,14 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
           <p style={{ color: 'var(--text-tertiary)' }}>No reading history yet.</p>
         )}
       </div>
+
+      {matching && (
+        <MatchDialog
+          seriesId={detail.id}
+          seriesName={detail.name}
+          onClose={() => setMatching(false)}
+        />
+      )}
     </div>
   );
 }
