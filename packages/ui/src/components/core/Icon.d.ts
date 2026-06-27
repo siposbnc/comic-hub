@@ -6,7 +6,9 @@ export interface IconProps {
     | 'search' | 'x' | 'check' | 'plus' | 'minus' | 'chevron-right' | 'chevron-left' | 'chevron-down'
     | 'more-horizontal' | 'book-open' | 'filter' | 'sort' | 'grid' | 'columns' | 'sun' | 'moon'
     | 'alert-triangle' | 'info' | 'trash' | 'edit' | 'star' | 'folder' | 'refresh' | 'user'
-    | 'clock' | 'download' | 'link' | 'maximize';
+    | 'clock' | 'download' | 'link' | 'maximize'
+    | 'single-page' | 'double-page' | 'fit' | 'zoom-in' | 'zoom-out' | 'fullscreen-exit'
+    | 'direction' | 'book';
   /** Pixel size (width = height). Default 18. */
   size?: number;
   /** Stroke color. Default currentColor — inherits text color. */

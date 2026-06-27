@@ -76,7 +76,7 @@ export function Toolbar() {
         <IconButton icon="zoom-out" label="Zoom out" hint="-" onClick={() => zoomBy(-1)} />
         <IconButton icon="zoom-in" label="Zoom in" hint="+" onClick={() => zoomBy(1)} />
         <IconButton
-          icon={full ? 'fullscreen-exit' : 'fullscreen'}
+          icon={full ? 'fullscreen-exit' : 'maximize'}
           label={full ? 'Exit fullscreen' : 'Fullscreen'}
           hint="F"
           active={full}

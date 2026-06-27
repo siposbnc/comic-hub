@@ -11,7 +11,7 @@ import { useReaderStore } from './store.js';
 import { usePageSnapshot } from './usePageSnapshot.js';
 import { spreadIndexOf } from './layout.js';
 import type { FitMode } from './types.js';
-import { Icon } from '../ui/Icon.js';
+import { Icon } from '@comichub/ui';
 
 const PAGE_GAP = 8;
 const MAX_ZOOM = 5;
@@ -51,8 +51,13 @@ function PageImage({ idx, height }: { idx: number; height: number }) {
 
   if (snap.status === 'error') {
     return (
-      <div className="page-img page-img--placeholder" style={{ width, height }} role="img" aria-label={`Page ${idx + 1} could not be loaded`}>
-        <Icon name="alert" size={32} />
+      <div
+        className="page-img page-img--placeholder"
+        style={{ width, height }}
+        role="img"
+        aria-label={`Page ${idx + 1} could not be loaded`}
+      >
+        <Icon name="alert-triangle" size={32} />
         <span>Page {idx + 1} unavailable</span>
       </div>
     );
@@ -130,9 +135,14 @@ export function PageView() {
   const isZoomed = zoom > MIN_ZOOM;
 
   // Pointer interaction: drag to pan when zoomed, otherwise click zones to turn.
-  const drag = useRef<{ active: boolean; moved: boolean; x: number; y: number; px: number; py: number }>(
-    { active: false, moved: false, x: 0, y: 0, px: 0, py: 0 },
-  );
+  const drag = useRef<{
+    active: boolean;
+    moved: boolean;
+    x: number;
+    y: number;
+    px: number;
+    py: number;
+  }>({ active: false, moved: false, x: 0, y: 0, px: 0, py: 0 });
 
   const handlePointerDown = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {

@@ -43,6 +43,15 @@ const PATHS = {
   download: ['M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', 'M7 10l5 5 5-5', 'M12 15V3'],
   link: ['M9 17H7A5 5 0 0 1 7 7h2', 'M15 7h2a5 5 0 0 1 0 10h-2', 'M8 12h8'],
   maximize: ['M8 3H5a2 2 0 0 0-2 2v3', 'M21 8V5a2 2 0 0 0-2-2h-3', 'M3 16v3a2 2 0 0 0 2 2h3', 'M16 21h3a2 2 0 0 0 2-2v-3'],
+  // Reader / viewer controls (folded in from the reader's former local icon set).
+  'single-page': ['M9 4h6a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z'],
+  'double-page': ['M4 4h6a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z', 'M14 4h6a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z'],
+  fit: ['M4 9V5a1 1 0 0 1 1-1h4', 'M20 9V5a1 1 0 0 0-1-1h-4', 'M4 15v4a1 1 0 0 0 1 1h4', 'M20 15v4a1 1 0 0 1-1 1h-4'],
+  'zoom-in': ['M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z', 'm21 21-4.3-4.3', 'M11 8v6', 'M8 11h6'],
+  'zoom-out': ['M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z', 'm21 21-4.3-4.3', 'M8 11h6'],
+  'fullscreen-exit': ['M8 3v3a2 2 0 0 1-2 2H3', 'M21 8h-3a2 2 0 0 1-2-2V3', 'M3 16h3a2 2 0 0 1 2 2v3', 'M16 21v-3a2 2 0 0 1 2-2h3'],
+  direction: ['M4 12h16', 'M12 6l8 6-8 6', 'M8 6l-4 6 4 6'],
+  book: ['M4 5a1 1 0 0 1 1-1h6v16H5a1 1 0 0 1-1-1Z', 'M20 5a1 1 0 0 0-1-1h-6v16h6a1 1 0 0 0 1-1Z'],
 };
 
 export function Icon({ name, size = 18, color = 'currentColor', strokeWidth = 1.5, style, ...rest }) {

@@ -1,8 +1,8 @@
 import { forwardRef, type ButtonHTMLAttributes } from 'react';
-import { Icon, type IconName } from './Icon.js';
+import { Icon, type IconProps } from '@comichub/ui';
 
 export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  icon: IconName;
+  icon: IconProps['name'];
   /** Required for accessibility — also surfaced as the tooltip text. */
   label: string;
   /** Optional keyboard hint shown in the tooltip (e.g. "D"). */

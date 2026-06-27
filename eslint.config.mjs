@@ -124,7 +124,7 @@ const valueRules = [
     c: 'Icon',
     p: 'name',
     allow:
-      'home|library|list|layers|collection|bookmark|stats|settings|search|x|check|plus|minus|chevron-right|chevron-left|chevron-down|more-horizontal|book-open|filter|sort|grid|columns|sun|moon|alert-triangle|info|trash|edit|star|folder|refresh|user|clock|download|link|maximize',
+      'home|library|list|layers|collection|bookmark|stats|settings|search|x|check|plus|minus|chevron-right|chevron-left|chevron-down|more-horizontal|book-open|filter|sort|grid|columns|sun|moon|alert-triangle|info|trash|edit|star|folder|refresh|user|clock|download|link|maximize|single-page|double-page|fit|zoom-in|zoom-out|fullscreen-exit|direction|book',
   },
   { c: 'Toast', p: 'tone', allow: 'info|success|warning|danger' },
   { c: 'Tooltip', p: 'side', allow: 'top|bottom|left|right' },
@@ -197,8 +197,9 @@ export default tseslint.config(
     rules: { 'no-restricted-syntax': ['warn', ...tokenRules, ...valueRules, ...propRules] },
   },
   {
-    // Reader keeps its own local Icon / IconButton (reader-specific glyphs), which
-    // collide by name with the DS contracts, so it gets token enforcement only.
+    // Reader keeps its own local IconButton (an extra `hint` prop) that collides by
+    // name with the DS contract, so it gets token enforcement only. (Its Icon is now
+    // the shared DS Icon.)
     files: ['apps/reader/**/*.{ts,tsx}'],
     rules: { 'no-restricted-syntax': ['warn', ...tokenRules] },
   },

@@ -5,7 +5,7 @@ import { Toolbar } from './Toolbar.js';
 import { Scrubber } from './Scrubber.js';
 import { PageView } from './PageView.js';
 import { Button } from '@comichub/ui';
-import { Icon } from '../ui/Icon.js';
+import { Icon } from '@comichub/ui';
 
 const IDLE_HIDE_MS = 2800;
 const RESUME_TOAST_MS = 6000;
@@ -87,7 +87,7 @@ export function Reader() {
             aria-label="Dismiss"
             onClick={dismissResume}
           >
-            <Icon name="close" size={16} />
+            <Icon name="x" size={16} />
           </button>
         </div>
       )}
