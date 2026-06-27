@@ -18,6 +18,7 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/config"
 	"github.com/siposbnc/comic-hub/server/internal/connection"
 	"github.com/siposbnc/comic-hub/server/internal/logging"
+	"github.com/siposbnc/comic-hub/server/internal/service/library"
 	"github.com/siposbnc/comic-hub/server/internal/store/sqlite"
 	httptransport "github.com/siposbnc/comic-hub/server/internal/transport/http"
 	"github.com/siposbnc/comic-hub/server/internal/version"
@@ -59,6 +60,10 @@ func run() error {
 	}
 	logger.Info("database ready", "path", cfg.Database.Path)
 
+	// Catalog store + application services over the domain.Repository boundary.
+	store := sqlite.NewStore(db)
+	libraries := library.New(store)
+
 	ln, err := net.Listen("tcp", cfg.Bind)
 	if err != nil {
 		return fmt.Errorf("listen on %s: %w", cfg.Bind, err)
@@ -74,6 +79,7 @@ func run() error {
 		DB:       db,
 		Config:   cfg,
 		Shutdown: appCancel,
+		Library:  libraries,
 	})
 
 	srv := &http.Server{

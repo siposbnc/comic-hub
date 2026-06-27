@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/cors"
 
 	"github.com/siposbnc/comic-hub/server/internal/config"
+	"github.com/siposbnc/comic-hub/server/internal/service/library"
 )
 
 // Deps are the dependencies the HTTP layer needs.
@@ -22,6 +23,7 @@ type Deps struct {
 	DB       *sql.DB
 	Config   config.Config
 	Shutdown context.CancelFunc
+	Library  *library.Service
 }
 
 // NewRouter builds the HTTP handler tree.
@@ -46,6 +48,13 @@ func NewRouter(d Deps) http.Handler {
 		r.Get("/server/stats", handleServerStats(d.DB))
 		r.Get("/auth/handshake", handleAuthHandshake(d.Config))
 		r.Post("/admin/shutdown", handleShutdown(d.Logger, d.Shutdown))
+
+		r.Route("/libraries", func(r chi.Router) {
+			r.Get("/", handleListLibraries(d.Library))
+			r.Post("/", handleCreateLibrary(d.Library))
+			r.Get("/{id}", handleGetLibrary(d.Library))
+			r.Delete("/{id}", handleDeleteLibrary(d.Library))
+		})
 	})
 
 	return r

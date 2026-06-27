@@ -49,7 +49,7 @@ type Series struct {
 	SortName    string
 	Year        int
 	Publisher   string
-	Description  string
+	Description string
 	ReadingDir  ReadingDirection
 	CoverBookID string
 	CreatedAt   int64
