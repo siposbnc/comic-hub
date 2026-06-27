@@ -20,8 +20,10 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/image"
 	"github.com/siposbnc/comic-hub/server/internal/jobs"
 	"github.com/siposbnc/comic-hub/server/internal/scanner"
+	"github.com/siposbnc/comic-hub/server/internal/service/browse"
 	"github.com/siposbnc/comic-hub/server/internal/service/library"
 	"github.com/siposbnc/comic-hub/server/internal/service/reader"
+	"github.com/siposbnc/comic-hub/server/internal/service/reading"
 	"github.com/siposbnc/comic-hub/server/internal/store/sqlite"
 )
 
@@ -68,6 +70,8 @@ func newScanServer(t *testing.T) (string, *sqlite.Store) {
 		Repo:    store,
 		Runner:  runner,
 		Reader:  readerSvc,
+		Browse:  browse.New(store),
+		Reading: reading.New(store, nil),
 	})
 	srv := httptest.NewServer(router)
 	t.Cleanup(func() { srv.Close(); runner.Shutdown(); _ = db.Close() })

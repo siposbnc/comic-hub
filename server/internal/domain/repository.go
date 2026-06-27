@@ -31,6 +31,9 @@ type SeriesRepository interface {
 	// scanner can reuse an existing series id across rescans (ErrNotFound if absent).
 	GetByFolder(ctx context.Context, libraryID, folderPath string) (Series, error)
 	ListByLibrary(ctx context.Context, libraryID string) ([]Series, error)
+	// Summaries lists a library's series with grid aggregates (book/read counts +
+	// resolved cover book) for the given user, in one query.
+	Summaries(ctx context.Context, libraryID, userID string) ([]SeriesSummary, error)
 }
 
 // BookRepository persists books and their pages.
@@ -44,6 +47,9 @@ type BookRepository interface {
 	// ListPages returns a book's pages in index order (the reader's manifest source).
 	ListPages(ctx context.Context, bookID string) ([]Page, error)
 	ListBySeries(ctx context.Context, seriesID string) ([]Book, error)
+	// ListRecent returns the most recently added books, newest first. An empty
+	// libraryID spans all libraries.
+	ListRecent(ctx context.Context, libraryID string, limit int) ([]Book, error)
 }
 
 // ProgressRepository persists per-user reading progress.

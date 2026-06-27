@@ -153,6 +153,33 @@ func (r *bookRepo) ListPages(ctx context.Context, bookID string) ([]domain.Page,
 	return out, rows.Err()
 }
 
+func (r *bookRepo) ListRecent(ctx context.Context, libraryID string, limit int) ([]domain.Book, error) {
+	query := `SELECT ` + bookColumns + ` FROM book`
+	args := []any{}
+	if libraryID != "" {
+		query += ` WHERE library_id = ?`
+		args = append(args, libraryID)
+	}
+	query += ` ORDER BY added_at DESC LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []domain.Book
+	for rows.Next() {
+		b, err := scanBook(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, b)
+	}
+	return out, rows.Err()
+}
+
 func scanBook(row rowScanner) (domain.Book, error) {
 	var (
 		b        domain.Book

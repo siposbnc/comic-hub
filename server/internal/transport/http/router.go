@@ -16,8 +16,10 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/config"
 	"github.com/siposbnc/comic-hub/server/internal/domain"
 	"github.com/siposbnc/comic-hub/server/internal/jobs"
+	"github.com/siposbnc/comic-hub/server/internal/service/browse"
 	"github.com/siposbnc/comic-hub/server/internal/service/library"
 	"github.com/siposbnc/comic-hub/server/internal/service/reader"
+	"github.com/siposbnc/comic-hub/server/internal/service/reading"
 )
 
 // Deps are the dependencies the HTTP layer needs.
@@ -30,6 +32,8 @@ type Deps struct {
 	Repo     domain.Repository
 	Runner   *jobs.Runner
 	Reader   *reader.Service
+	Browse   *browse.Service
+	Reading  *reading.Service
 }
 
 // NewRouter builds the HTTP handler tree.
@@ -66,12 +70,30 @@ func NewRouter(d Deps) http.Handler {
 
 		r.Get("/jobs/{id}", handleGetJob(d.Repo))
 
+		// Browse: series & books.
+		r.Route("/series", func(r chi.Router) {
+			r.Get("/", handleListSeries(d.Browse))
+			r.Get("/{id}", handleSeriesDetail(d.Browse))
+		})
+
 		r.Route("/books", func(r chi.Router) {
+			r.Get("/", handleListBooks(d.Browse))
+			r.Get("/{id}", handleBookDetail(d.Browse))
 			r.Get("/{id}/manifest", handleManifest(d.Reader))
 			r.Get("/{id}/cover", handleCover(d.Reader))
 			r.Get("/{id}/pages/{idx}", handlePage(d.Reader))
 			r.Get("/{id}/pages/{idx}/thumb", handlePageThumb(d.Reader))
 			r.Post("/{id}/prefetch", handlePrefetch(d.Reader))
+		})
+
+		r.Get("/discover", handleDiscover(d.Browse))
+
+		// Progress & reading state (acting user = implicit owner in embedded mode).
+		r.Route("/me", func(r chi.Router) {
+			r.Get("/continue", handleContinueReading(d.Browse))
+			r.Get("/progress/{bookId}", handleGetProgress(d.Reading))
+			r.Put("/progress/{bookId}", handlePutProgress(d.Reading))
+			r.Post("/books/{id}/mark", handleMarkBook(d.Reading))
 		})
 	})
 

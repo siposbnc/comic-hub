@@ -25,8 +25,10 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/jobs"
 	"github.com/siposbnc/comic-hub/server/internal/logging"
 	"github.com/siposbnc/comic-hub/server/internal/scanner"
+	"github.com/siposbnc/comic-hub/server/internal/service/browse"
 	"github.com/siposbnc/comic-hub/server/internal/service/library"
 	"github.com/siposbnc/comic-hub/server/internal/service/reader"
+	"github.com/siposbnc/comic-hub/server/internal/service/reading"
 	"github.com/siposbnc/comic-hub/server/internal/store/sqlite"
 	httptransport "github.com/siposbnc/comic-hub/server/internal/transport/http"
 	"github.com/siposbnc/comic-hub/server/internal/version"
@@ -75,6 +77,8 @@ func run() error {
 	// Catalog store + application services over the domain.Repository boundary.
 	store := sqlite.NewStore(db)
 	libraries := library.New(store)
+	browsing := browse.New(store)
+	readingSvc := reading.New(store, nil) // WS progress broadcast wired in below once the hub exists
 
 	// Shared format registry for scanning and reading.
 	registry := archive.DefaultRegistry()
@@ -120,6 +124,8 @@ func run() error {
 		Repo:     store,
 		Runner:   runner,
 		Reader:   readerSvc,
+		Browse:   browsing,
+		Reading:  readingSvc,
 	})
 
 	srv := &http.Server{
