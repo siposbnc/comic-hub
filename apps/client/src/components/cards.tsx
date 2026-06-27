@@ -27,7 +27,13 @@ export function BookCover({ book, seriesName }: { book: BookCard; seriesName?: s
 }
 
 /** A series rendered as a CoverCard (its cover book) that routes to the series page. */
-export function SeriesCover({ series }: { series: SeriesCard }) {
+export function SeriesCover({
+  series,
+  size = 'm',
+}: {
+  series: SeriesCard;
+  size?: 's' | 'm' | 'l';
+}) {
   const client = useClient();
   const navigate = useNavigate();
   const allRead = series.bookCount > 0 && series.readCount >= series.bookCount;
@@ -36,9 +42,16 @@ export function SeriesCover({ series }: { series: SeriesCard }) {
     <CoverCard
       cover={series.coverBookId ? client.coverUrl(series.coverBookId, 300) : undefined}
       title={series.name}
-      subtitle={`${series.bookCount} ${series.bookCount === 1 ? 'issue' : 'issues'}`}
+      subtitle={
+        series.year
+          ? `${series.bookCount} issues · ${series.year}`
+          : `${series.bookCount} ${series.bookCount === 1 ? 'issue' : 'issues'}`
+      }
+      number={`#${String(series.bookCount).padStart(3, '0')}`}
       status={allRead ? 'read' : someRead ? 'reading' : 'unread'}
       progress={series.bookCount ? series.readCount / series.bookCount : 0}
+      size={size}
+      style={{ width: '100%' }}
       onClick={() => navigate({ to: '/series/$id', params: { id: series.id } })}
     />
   );

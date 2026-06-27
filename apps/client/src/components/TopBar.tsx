@@ -1,13 +1,32 @@
-import { Input, JobIndicator, IconButton, Tooltip, type JobItem } from '@comichub/ui';
+import { useRouter, useRouterState } from '@tanstack/react-router';
+import { useQuery } from '@tanstack/react-query';
+import {
+  Input,
+  JobIndicator,
+  IconButton,
+  Tooltip,
+  Button,
+  Avatar,
+  type JobItem,
+} from '@comichub/ui';
+import { useClient } from '../lib/client.js';
 import { useUiStore } from '../store/ui.js';
 
-/** 56px utility bar: catalog search, background-job status, and the theme toggle. */
+/** 56px utility bar: back nav, catalog search, view density, job status, theme, identity. */
 export function TopBar() {
+  const router = useRouter();
+  const client = useClient();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
   const search = useUiStore((s) => s.search);
   const setSearch = useUiStore((s) => s.setSearch);
   const theme = useUiStore((s) => s.theme);
   const toggleTheme = useUiStore((s) => s.toggleTheme);
+  const density = useUiStore((s) => s.density);
+  const setDensity = useUiStore((s) => s.setDensity);
   const jobs = useUiStore((s) => s.jobs);
+
+  const info = useQuery({ queryKey: ['server', 'info'], queryFn: () => client.serverInfo() });
+  const canGoBack = pathname.startsWith('/series/') || pathname.startsWith('/book/');
 
   const active = Object.values(jobs).filter((j) => j.state === 'running' || j.state === 'queued');
   const failed = Object.values(jobs).some((j) => j.state === 'failed');
@@ -39,16 +58,22 @@ export function TopBar() {
         display: 'flex',
         alignItems: 'center',
         gap: 14,
-        padding: '0 20px',
+        padding: '0 var(--space-6)',
         borderBottom: '1px solid var(--border-hairline)',
         background: 'var(--surface-raised)',
       }}
     >
-      <div style={{ flex: 1, maxWidth: 460 }}>
+      {canGoBack && (
+        <Button variant="ghost" size="sm" icon="chevron-left" onClick={() => router.history.back()}>
+          Back
+        </Button>
+      )}
+
+      <div style={{ flex: 1, maxWidth: 440 }}>
         <Input
           icon="search"
           size="sm"
-          placeholder="Search this library"
+          placeholder="Search title, series, writer…"
           aria-label="Search the catalog"
           value={search}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
@@ -56,6 +81,21 @@ export function TopBar() {
       </div>
 
       <div style={{ flex: 1 }} />
+
+      <div style={{ display: 'flex', gap: 2 }}>
+        <IconButton
+          icon="columns"
+          label="Compact covers"
+          active={density === 's'}
+          onClick={() => setDensity('s')}
+        />
+        <IconButton
+          icon="grid"
+          label="Comfortable covers"
+          active={density === 'm'}
+          onClick={() => setDensity('m')}
+        />
+      </div>
 
       <JobIndicator
         status={status}
@@ -71,6 +111,8 @@ export function TopBar() {
           onClick={toggleTheme}
         />
       </Tooltip>
+
+      <Avatar name={info.data?.name || 'ComicHub'} />
     </header>
   );
 }

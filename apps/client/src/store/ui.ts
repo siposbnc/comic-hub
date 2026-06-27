@@ -2,6 +2,8 @@ import { create } from 'zustand';
 
 export type Theme = 'dark' | 'light';
 export type Accent = 'cyan' | 'magenta' | 'amber';
+/** Library cover grid density: small or medium covers. */
+export type Density = 's' | 'm';
 
 export interface ToastEntry {
   id: string;
@@ -24,12 +26,14 @@ export interface TrackedJob {
 interface UiState {
   theme: Theme;
   accent: Accent;
+  density: Density;
   search: string;
   jobs: Record<string, TrackedJob>;
   toasts: ToastEntry[];
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
   setAccent: (accent: Accent) => void;
+  setDensity: (density: Density) => void;
   setSearch: (q: string) => void;
   upsertJob: (job: TrackedJob) => void;
   clearFinishedJobs: () => void;
@@ -39,6 +43,7 @@ interface UiState {
 
 const THEME_KEY = 'comichub.theme';
 const ACCENT_KEY = 'comichub.accent';
+const DENSITY_KEY = 'comichub.density';
 
 function initialTheme(): Theme {
   if (typeof localStorage !== 'undefined') {
@@ -54,6 +59,14 @@ function initialAccent(): Accent {
     if (saved === 'cyan' || saved === 'magenta' || saved === 'amber') return saved;
   }
   return 'cyan';
+}
+
+function initialDensity(): Density {
+  if (typeof localStorage !== 'undefined') {
+    const saved = localStorage.getItem(DENSITY_KEY);
+    if (saved === 's' || saved === 'm') return saved;
+  }
+  return 'm';
 }
 
 /** Reflects the theme onto the document so the design tokens (`[data-theme]`) switch. */
@@ -76,6 +89,7 @@ let toastSeq = 0;
 export const useUiStore = create<UiState>((set) => ({
   theme: initialTheme(),
   accent: initialAccent(),
+  density: initialDensity(),
   search: '',
   jobs: {},
   toasts: [],
@@ -95,6 +109,10 @@ export const useUiStore = create<UiState>((set) => ({
     applyAccent(accent);
     if (typeof localStorage !== 'undefined') localStorage.setItem(ACCENT_KEY, accent);
     set({ accent });
+  },
+  setDensity: (density) => {
+    if (typeof localStorage !== 'undefined') localStorage.setItem(DENSITY_KEY, density);
+    set({ density });
   },
   setSearch: (search) => set({ search }),
   upsertJob: (job) => set((s) => ({ jobs: { ...s.jobs, [job.id]: job } })),

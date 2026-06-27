@@ -104,6 +104,32 @@ export function useSeriesNames(): Map<string, string> {
   return map;
 }
 
+/**
+ * A libraryId → series-count map across every library, for the sidebar nav counts.
+ * Reuses the `qk.series` query keys, so it shares cache with the library screens
+ * rather than issuing extra requests.
+ */
+export function useLibrarySeriesCounts(): Map<string, number> {
+  const client = useClient();
+  const libraries = useLibraries();
+  const ids = libraries.data?.map((l) => l.id) ?? [];
+
+  const results = useQueries({
+    queries: ids.map((libraryId) => ({
+      queryKey: qk.series(libraryId),
+      queryFn: () => client.listSeries(libraryId),
+      staleTime: 60_000,
+    })),
+  });
+
+  const map = new Map<string, number>();
+  ids.forEach((id, i) => {
+    const data = results[i]?.data;
+    if (data) map.set(id, data.length);
+  });
+  return map;
+}
+
 /** Toggle a book's read state, then refresh the surfaces that show it. */
 export function useMarkBook() {
   const client = useClient();

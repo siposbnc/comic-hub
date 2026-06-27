@@ -1,15 +1,16 @@
+import { useState } from 'react';
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
-import { Button, Badge, ProgressBar, EmptyState, IconButton, Tooltip } from '@comichub/ui';
+import { Button, IconButton, ProgressBar, Tabs, CoverCard, EmptyState } from '@comichub/ui';
 import type { BookCard, SeriesDetail } from '@comichub/api-client';
 import { useClient } from '../lib/client.js';
-import { useSeriesDetail, useMarkBook } from '../lib/queries.js';
+import { useSeriesDetail } from '../lib/queries.js';
 import { useReadLaunch } from '../lib/launch.js';
 import { LoadingState, ErrorState } from '../components/Page.js';
-import { issueLabel, resumePage } from '../lib/format.js';
+import { issueLabel, resumePage, toCoverStatus, progressFraction } from '../lib/format.js';
 
 const route = getRouteApi('/series/$id');
 
-/** Series detail: a cover hero with a resume CTA over the full run of issues. */
+/** Series detail: a full-bleed cover-wash hero with a resume CTA over the run of issues. */
 export function Series() {
   const { id } = route.useParams();
   const series = useSeriesDetail(id);
@@ -40,6 +41,7 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
   const client = useClient();
   const navigate = useNavigate();
   const launch = useReadLaunch();
+  const [tab, setTab] = useState('issues');
 
   const resumeBook =
     detail.books.find((b) => b.progress?.status === 'in_progress') ??
@@ -47,248 +49,234 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
     detail.books[0];
   const isResuming = resumeBook?.progress?.status === 'in_progress';
   const coverBook = resumeBook ?? detail.books[0];
+  const coverUrl = coverBook ? client.coverUrl(coverBook.id, 600) : undefined;
+  const format = detail.books[0]?.format?.toUpperCase();
+
+  const meta = [detail.publisher, detail.year, `${detail.bookCount} issues`]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
-    <div style={{ padding: 'var(--pad-screen, 32px)', maxWidth: 1320, margin: '0 auto' }}>
-      <section
+    <div>
+      {/* Hero */}
+      <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(200px, 232px) 1fr',
-          gap: 32,
-          marginBottom: 40,
-          alignItems: 'start',
+          position: 'relative',
+          overflow: 'hidden',
+          borderBottom: '1px solid var(--border-hairline)',
         }}
       >
+        {coverUrl && (
+          <div
+            aria-hidden
+            style={{
+              position: 'absolute',
+              inset: 0,
+              backgroundImage: `url(${coverUrl})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              filter: 'blur(40px) saturate(1.3)',
+              transform: 'scale(1.2)',
+              opacity: 0.5,
+            }}
+          />
+        )}
         <div
+          aria-hidden
           style={{
-            aspectRatio: 'var(--cover-aspect)',
-            background: 'var(--surface-cover)',
-            backgroundImage: coverBook ? `url(${client.coverUrl(coverBook.id, 400)})` : undefined,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            borderRadius: 'var(--radius-none)',
+            position: 'absolute',
+            inset: 0,
+            background:
+              'linear-gradient(180deg, color-mix(in oklab, var(--ink-900) 70%, transparent), var(--ink-900) 88%)',
           }}
         />
-        <div style={{ minWidth: 0 }}>
-          <h1
-            style={{
-              margin: '0 0 10px',
-              fontFamily: 'var(--font-display)',
-              fontSize: 'var(--text-display-l)',
-              lineHeight: 'var(--leading-display-l)',
-              fontWeight: 800,
-              letterSpacing: 'var(--tracking-tight)',
-              color: 'var(--text-primary)',
-            }}
-          >
-            {detail.name}
-          </h1>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              flexWrap: 'wrap',
-              marginBottom: 18,
-            }}
-          >
-            {detail.publisher && <Badge>{detail.publisher}</Badge>}
-            {detail.year && <Badge mono>{detail.year}</Badge>}
-            <Badge mono>
-              {detail.bookCount} {detail.bookCount === 1 ? 'issue' : 'issues'}
-            </Badge>
-            {detail.readCount > 0 && (
-              <Badge tone="accent" mono>
-                {detail.readCount} read
-              </Badge>
-            )}
-          </div>
-
-          {detail.bookCount > 0 && (
-            <div style={{ maxWidth: 360, marginBottom: 20 }}>
-              <ProgressBar
-                value={detail.readCount}
-                max={detail.bookCount}
-                tone="accent"
-                showCount
-              />
-            </div>
-          )}
-
-          {detail.summary && (
-            <p
-              style={{
-                margin: '0 0 22px',
-                maxWidth: 620,
-                color: 'var(--text-secondary)',
-                lineHeight: 1.55,
-              }}
-            >
-              {detail.summary}
-            </p>
-          )}
-
-          {resumeBook && (
-            <div style={{ display: 'flex', gap: 10 }}>
-              <Button
-                variant="primary"
-                icon="book-open"
-                onClick={() => launch(resumeBook.id, resumePage(resumeBook.progress))}
-              >
-                {isResuming
-                  ? `Continue ${issueLabel(resumeBook.number) ?? ''}`
-                  : 'Read first issue'}
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={() => navigate({ to: '/book/$id', params: { id: resumeBook.id } })}
-              >
-                Issue details
-              </Button>
-            </div>
-          )}
-        </div>
-      </section>
-
-      <h2
-        className="ch-mono"
-        style={{
-          margin: '0 0 16px',
-          fontSize: 'var(--text-label)',
-          textTransform: 'uppercase',
-          letterSpacing: 'var(--tracking-label)',
-          color: 'var(--text-secondary)',
-        }}
-      >
-        Issues
-      </h2>
-
-      {detail.books.length === 0 ? (
-        <EmptyState title="No issues yet">This series has no scanned issues.</EmptyState>
-      ) : (
-        <ul
+        <div
           style={{
-            listStyle: 'none',
-            margin: 0,
-            padding: 0,
+            position: 'relative',
             display: 'flex',
-            flexDirection: 'column',
+            gap: 28,
+            padding: 'var(--pad-screen)',
+            maxWidth: 'var(--content-max)',
+            margin: '0 auto',
           }}
         >
-          {detail.books.map((book) => (
-            <IssueRow key={book.id} book={book} seriesName={detail.name} />
-          ))}
-        </ul>
-      )}
+          <div className="ch-reg" style={{ flex: 'none' }}>
+            <div
+              style={{
+                width: 200,
+                aspectRatio: 'var(--cover-aspect)',
+                background: 'var(--surface-cover)',
+                backgroundImage: coverUrl ? `url(${coverUrl})` : undefined,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }}
+            />
+          </div>
+          <div style={{ flex: 1, minWidth: 0, paddingTop: 8 }}>
+            <h1
+              style={{
+                margin: 0,
+                fontFamily: 'var(--font-display)',
+                fontWeight: 800,
+                fontSize: 'var(--text-display-xl)',
+                lineHeight: 1.02,
+                letterSpacing: '-0.015em',
+                color: 'var(--text-primary)',
+              }}
+            >
+              {detail.name}
+            </h1>
+            {meta && (
+              <p
+                className="ch-label"
+                style={{ margin: '12px 0 0', color: 'var(--text-secondary)' }}
+              >
+                {meta}
+              </p>
+            )}
+            {detail.summary && (
+              <p
+                style={{
+                  margin: '16px 0 0',
+                  maxWidth: 560,
+                  color: 'var(--text-secondary)',
+                  fontSize: 'var(--text-body)',
+                  lineHeight: 1.55,
+                }}
+              >
+                {detail.summary}
+              </p>
+            )}
+            {detail.bookCount > 0 && (
+              <div style={{ maxWidth: 320, marginTop: 18 }}>
+                <ProgressBar
+                  value={detail.readCount}
+                  max={detail.bookCount}
+                  label="Read"
+                  showCount
+                />
+              </div>
+            )}
+            {resumeBook && (
+              <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+                <Button
+                  icon="book-open"
+                  onClick={() => launch(resumeBook.id, resumePage(resumeBook.progress))}
+                >
+                  {isResuming
+                    ? `Continue · ${issueLabel(resumeBook.number) ?? ''}`
+                    : 'Read first issue'}
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => navigate({ to: '/book/$id', params: { id: resumeBook.id } })}
+                >
+                  Issue details
+                </Button>
+                <IconButton icon="more-horizontal" label="More" variant="solid" />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div
+        style={{ padding: 'var(--pad-screen)', maxWidth: 'var(--content-max)', margin: '0 auto' }}
+      >
+        <Tabs
+          value={tab}
+          onChange={setTab}
+          tabs={[
+            { value: 'issues', label: 'Issues', count: detail.bookCount },
+            { value: 'details', label: 'Details' },
+            { value: 'history', label: 'History' },
+          ]}
+          style={{ marginBottom: 22 }}
+        />
+
+        {tab === 'issues' ? (
+          detail.books.length === 0 ? (
+            <EmptyState title="No issues yet">This series has no scanned issues.</EmptyState>
+          ) : (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(132px, 1fr))',
+                gap: 16,
+              }}
+            >
+              {detail.books.map((book) => (
+                <IssueCover key={book.id} book={book} seriesName={detail.name} />
+              ))}
+            </div>
+          )
+        ) : tab === 'details' ? (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '160px 1fr',
+              gap: '10px 24px',
+              maxWidth: 560,
+              fontSize: 'var(--text-body)',
+            }}
+          >
+            {(
+              [
+                ['Publisher', detail.publisher],
+                ['Year', detail.year ? String(detail.year) : undefined],
+                ['Issues', String(detail.bookCount)],
+                ['Format', format],
+                [
+                  'Reading direction',
+                  detail.readingDir === 'rtl' ? 'Right to left' : 'Left to right',
+                ],
+              ] as const
+            )
+              .filter(([, v]) => Boolean(v))
+              .map(([k, v]) => (
+                <Detail key={k} label={k} value={v as string} />
+              ))}
+          </div>
+        ) : (
+          <p style={{ color: 'var(--text-tertiary)' }}>No reading history yet.</p>
+        )}
+      </div>
     </div>
   );
 }
 
-function IssueRow({ book, seriesName }: { book: BookCard; seriesName: string }) {
+/** One issue as a small CoverCard that opens the reader at its resume page. */
+function IssueCover({ book, seriesName }: { book: BookCard; seriesName: string }) {
   const client = useClient();
-  const navigate = useNavigate();
   const launch = useReadLaunch();
-  const mark = useMarkBook();
-
-  const isRead = book.progress?.status === 'read';
-  const inProgress = book.progress?.status === 'in_progress';
-
+  const number = issueLabel(book.number);
   return (
-    <li
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 14,
-        padding: '10px 8px',
-        borderBottom: '1px solid var(--border-hairline)',
-      }}
-    >
-      <button
-        type="button"
-        onClick={() => navigate({ to: '/book/$id', params: { id: book.id } })}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 14,
-          flex: 1,
-          minWidth: 0,
-          background: 'none',
-          border: 'none',
-          padding: 0,
-          cursor: 'pointer',
-          textAlign: 'left',
-        }}
-      >
-        <div
-          style={{
-            width: 44,
-            height: 66,
-            flex: 'none',
-            background: 'var(--surface-cover)',
-            backgroundImage: `url(${client.coverUrl(book.id, 120)})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-          }}
-        />
-        <div style={{ minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span
-              className="ch-mono"
-              style={{ color: 'var(--text-tertiary)', fontSize: '0.78rem' }}
-            >
-              {issueLabel(book.number) ?? '—'}
-            </span>
-            <span
-              style={{
-                color: 'var(--text-primary)',
-                fontWeight: 600,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {book.title || seriesName}
-            </span>
-          </div>
-          <div
-            className="ch-mono"
-            style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginTop: 2 }}
-          >
-            {book.pageCount} pages
-            {inProgress && book.progress ? ` · ${Math.round(book.progress.percent)}% read` : ''}
-            {isRead ? ' · read' : ''}
-          </div>
-        </div>
-      </button>
+    <CoverCard
+      cover={client.coverUrl(book.id, 300)}
+      title={number ?? book.title ?? seriesName}
+      subtitle={`${book.pageCount} pp`}
+      number={number}
+      status={toCoverStatus(book.progress?.status)}
+      progress={progressFraction(book.progress)}
+      size="s"
+      style={{ width: '100%' }}
+      onClick={() => launch(book.id, resumePage(book.progress))}
+    />
+  );
+}
 
-      {inProgress && book.progress && (
-        <div style={{ width: 90 }}>
-          <ProgressBar value={book.progress.percent} max={100} height={4} />
-        </div>
-      )}
-
-      <Tooltip label={isRead ? 'Mark unread' : 'Mark read'}>
-        <IconButton
-          icon={isRead ? 'check' : 'bookmark'}
-          variant={isRead ? 'accent' : 'ghost'}
-          label={isRead ? 'Mark unread' : 'Mark read'}
-          disabled={mark.isPending}
-          onClick={() => mark.mutate({ bookId: book.id, status: isRead ? 'unread' : 'read' })}
-        />
-      </Tooltip>
-
-      <Tooltip label={inProgress ? 'Continue reading' : 'Read'}>
-        <IconButton
-          icon="book-open"
-          variant="solid"
-          label={inProgress ? 'Continue reading' : 'Read'}
-          onClick={() => launch(book.id, resumePage(book.progress))}
-        />
-      </Tooltip>
-    </li>
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <>
+      <div className="ch-label" style={{ color: 'var(--text-tertiary)', paddingTop: 2 }}>
+        {label}
+      </div>
+      <div style={{ color: 'var(--text-primary)' }}>{value}</div>
+    </>
   );
 }
 
 function Centered({ children }: { children: React.ReactNode }) {
-  return <div style={{ padding: 'var(--pad-screen, 32px)' }}>{children}</div>;
+  return <div style={{ padding: 'var(--pad-screen)' }}>{children}</div>;
 }

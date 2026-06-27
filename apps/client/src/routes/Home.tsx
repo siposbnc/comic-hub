@@ -47,16 +47,51 @@ export function Home() {
   const cr = continueReading.data ?? [];
   const recent = discover.data?.recentlyAdded ?? [];
   const nothingToShow = cr.length === 0 && recent.length === 0;
+  const libCount = libraries.data?.length ?? 0;
 
   return (
-    <Page
-      title="Home"
-      actions={
-        <Button variant="secondary" icon="plus" onClick={() => setAdding(true)}>
+    <div
+      style={{
+        padding: 'var(--pad-screen)',
+        maxWidth: 'var(--content-max)',
+        margin: '0 auto',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 'var(--gap-section)',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-end',
+          justifyContent: 'space-between',
+          gap: 16,
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <h1
+            style={{
+              margin: 0,
+              fontFamily: 'var(--font-display)',
+              fontWeight: 800,
+              fontSize: 'var(--text-display-l)',
+              lineHeight: 'var(--leading-display-l)',
+              letterSpacing: 'var(--tracking-tight)',
+              color: 'var(--text-primary)',
+            }}
+          >
+            {greeting()}
+          </h1>
+          <p className="ch-label" style={{ margin: '8px 0 0', color: 'var(--text-tertiary)' }}>
+            {weekday()} · {cr.length} in progress · {libCount}{' '}
+            {libCount === 1 ? 'library' : 'libraries'}
+          </p>
+        </div>
+        <Button variant="ghost" size="sm" icon="plus" onClick={() => setAdding(true)}>
           Add library
         </Button>
-      }
-    >
+      </div>
+
       {discover.isError ? (
         <ErrorState
           message={
@@ -69,7 +104,7 @@ export function Home() {
           Once a scan finishes, recently added issues and your reading progress show up here.
         </EmptyState>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-section, 48px)' }}>
+        <>
           {cr.length > 0 && (
             <Rail label="Continue reading">
               {cr.map((book) => (
@@ -83,7 +118,7 @@ export function Home() {
               action={
                 libraries.data && libraries.data.length === 1
                   ? {
-                      label: 'Browse all',
+                      label: 'See all',
                       onClick: () =>
                         navigate({
                           to: '/library/$id',
@@ -98,9 +133,21 @@ export function Home() {
               ))}
             </Rail>
           )}
-        </div>
+        </>
       )}
       {adding && <AddLibraryDialog onClose={() => setAdding(false)} />}
-    </Page>
+    </div>
   );
+}
+
+/** Time-of-day greeting in the design's voice (sentence case, no exclamation). */
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function weekday(): string {
+  return new Date().toLocaleDateString(undefined, { weekday: 'long' });
 }
