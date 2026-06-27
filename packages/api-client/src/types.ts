@@ -158,6 +158,10 @@ export interface BookDetail {
   summary?: string;
   isCorrupt?: boolean;
   progress?: ProgressSummary;
+  /** Credits keyed by role (writer, penciler, …) — from an online match. */
+  credits?: Record<string, string[]>;
+  genres?: string[];
+  characters?: string[];
 }
 
 /** The Home feed. */

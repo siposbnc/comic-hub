@@ -72,6 +72,11 @@ type BookDetail struct {
 	Summary     string        `json:"summary,omitempty"`
 	IsCorrupt   bool          `json:"isCorrupt,omitempty"`
 	Progress    *ProgressView `json:"progress,omitempty"`
+
+	// Normalized metadata from an online match (omitted when absent).
+	Credits    map[string][]string `json:"credits,omitempty"`
+	Genres     []string            `json:"genres,omitempty"`
+	Characters []string            `json:"characters,omitempty"`
 }
 
 // Discover is the Home feed.
@@ -161,6 +166,11 @@ func (s *Service) BookDetail(ctx context.Context, bookID, userID string) (BookDe
 		}
 	}
 
+	// Normalized credits/genres/characters from an online match (best-effort).
+	credits, _ := s.repo.Metadata().BookCredits(ctx, bookID)
+	genres, _ := s.repo.Metadata().BookGenres(ctx, bookID)
+	characters, _ := s.repo.Metadata().BookCharacters(ctx, bookID)
+
 	return BookDetail{
 		ID:          b.ID,
 		SeriesID:    b.SeriesID,
@@ -177,6 +187,9 @@ func (s *Service) BookDetail(ctx context.Context, bookID, userID string) (BookDe
 		Summary:     b.Summary,
 		IsCorrupt:   b.IsCorrupt,
 		Progress:    s.progressView(ctx, b, userID),
+		Credits:     credits,
+		Genres:      genres,
+		Characters:  characters,
 	}, nil
 }
 

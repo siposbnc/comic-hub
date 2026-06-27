@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
 import { Button, Badge, ProgressBar } from '@comichub/ui';
 import type { BookDetail } from '@comichub/api-client';
@@ -159,6 +160,8 @@ function BookView({ detail }: { detail: BookDetail }) {
             </p>
           )}
 
+          <Facts detail={detail} />
+
           <div style={{ display: 'flex', gap: 10 }}>
             <Button
               variant="primary"
@@ -195,6 +198,48 @@ function BookView({ detail }: { detail: BookDetail }) {
       <PageStrip detail={detail} onOpen={(idx) => launch(detail.id, idx)} />
     </div>
   );
+}
+
+/** Online-match metadata: release date, credits by role, genres, characters. */
+function Facts({ detail }: { detail: BookDetail }) {
+  const rows: [string, string][] = [];
+  if (detail.releaseDate) rows.push(['Released', formatRelease(detail.releaseDate)]);
+  for (const [role, names] of Object.entries(detail.credits ?? {})) {
+    if (names.length) rows.push([capitalize(role), names.join(', ')]);
+  }
+  if (detail.genres?.length) rows.push(['Genres', detail.genres.join(', ')]);
+  if (detail.characters?.length) rows.push(['Characters', detail.characters.join(', ')]);
+  if (rows.length === 0) return null;
+
+  return (
+    <dl
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '120px 1fr',
+        gap: '8px 18px',
+        margin: '0 0 24px',
+        maxWidth: 580,
+        fontSize: 'var(--text-small)',
+      }}
+    >
+      {rows.map(([label, value]) => (
+        <Fragment key={label}>
+          <dt className="ch-label" style={{ color: 'var(--text-tertiary)', paddingTop: 1 }}>
+            {label}
+          </dt>
+          <dd style={{ margin: 0, color: 'var(--text-secondary)' }}>{value}</dd>
+        </Fragment>
+      ))}
+    </dl>
+  );
+}
+
+function formatRelease(ms: number): string {
+  return new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'short' });
+}
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 /** A lazy-loaded thumbnail rail; clicking a page opens the reader at that page. */
