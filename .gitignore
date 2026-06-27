@@ -45,6 +45,3 @@ connection.json
 .env
 .env.*
 !.env.example
-
-# Local tooling scratch (tracebox MCP)
-_tracebox-data/
