@@ -1,3 +1,4 @@
+mod commands;
 mod server;
 
 use server::ServerProcess;
@@ -8,7 +9,8 @@ pub fn run() {
         .manage(ServerProcess::default())
         .invoke_handler(tauri::generate_handler![
             server::start_server,
-            server::stop_server
+            server::stop_server,
+            commands::pick_folder
         ])
         .run(tauri::generate_context!())
         .expect("error while running ComicHub client");
