@@ -69,6 +69,15 @@ func (r *bookRepo) Get(ctx context.Context, id string) (domain.Book, error) {
 	return b, err
 }
 
+func (r *bookRepo) GetByPath(ctx context.Context, filePath string) (domain.Book, error) {
+	row := r.db.QueryRowContext(ctx, `SELECT `+bookColumns+` FROM book WHERE file_path = ?`, filePath)
+	b, err := scanBook(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.Book{}, domain.ErrNotFound
+	}
+	return b, err
+}
+
 func (r *bookRepo) ListBySeries(ctx context.Context, seriesID string) ([]domain.Book, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT `+bookColumns+` FROM book WHERE series_id = ? ORDER BY sort_number, number`, seriesID)

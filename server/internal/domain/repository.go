@@ -12,6 +12,7 @@ type Repository interface {
 	Series() SeriesRepository
 	Books() BookRepository
 	Progress() ProgressRepository
+	Jobs() JobRepository
 }
 
 // LibraryRepository persists libraries and their roots.
@@ -26,6 +27,9 @@ type LibraryRepository interface {
 type SeriesRepository interface {
 	Upsert(ctx context.Context, s Series) (Series, error)
 	Get(ctx context.Context, id string) (Series, error)
+	// GetByFolder resolves a series by its source folder within a library, so the
+	// scanner can reuse an existing series id across rescans (ErrNotFound if absent).
+	GetByFolder(ctx context.Context, libraryID, folderPath string) (Series, error)
 	ListByLibrary(ctx context.Context, libraryID string) ([]Series, error)
 }
 
@@ -33,6 +37,9 @@ type SeriesRepository interface {
 type BookRepository interface {
 	Upsert(ctx context.Context, b Book) (Book, error)
 	Get(ctx context.Context, id string) (Book, error)
+	// GetByPath resolves a book by its absolute file path, so the scanner can
+	// change-detect and reuse ids across rescans (ErrNotFound if absent).
+	GetByPath(ctx context.Context, filePath string) (Book, error)
 	ReplacePages(ctx context.Context, bookID string, pages []Page) error
 	ListBySeries(ctx context.Context, seriesID string) ([]Book, error)
 }

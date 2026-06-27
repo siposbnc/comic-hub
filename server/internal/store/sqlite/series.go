@@ -55,6 +55,17 @@ func (r *seriesRepo) Get(ctx context.Context, id string) (domain.Series, error) 
 	return s, err
 }
 
+func (r *seriesRepo) GetByFolder(ctx context.Context, libraryID, folderPath string) (domain.Series, error) {
+	row := r.db.QueryRowContext(ctx,
+		`SELECT `+seriesColumns+` FROM series WHERE library_id = ? AND folder_path = ?`,
+		libraryID, folderPath)
+	s, err := scanSeries(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.Series{}, domain.ErrNotFound
+	}
+	return s, err
+}
+
 func (r *seriesRepo) ListByLibrary(ctx context.Context, libraryID string) ([]domain.Series, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT `+seriesColumns+` FROM series WHERE library_id = ? ORDER BY sort_name`, libraryID)
