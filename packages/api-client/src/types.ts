@@ -69,6 +69,24 @@ export interface CreateLibraryInput {
   roots: string[];
 }
 
+export type ScanMode = 'full' | 'incremental';
+
+export type JobState = 'queued' | 'running' | 'done' | 'failed' | 'canceled';
+
+/** A background job (scan, thumbnail, …); poll via getJob until WS jobs topic lands. */
+export interface Job {
+  id: string;
+  type: string;
+  state: JobState;
+  progress: number;
+  total: number;
+  done: number;
+  error?: string;
+  createdAt: number;
+  startedAt?: number;
+  finishedAt?: number;
+}
+
 /** Connection descriptor the client obtains from the embedded sidecar handshake. */
 export interface Connection {
   baseUrl: string;

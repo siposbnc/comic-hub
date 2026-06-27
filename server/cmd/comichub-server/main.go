@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -15,14 +16,22 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/siposbnc/comic-hub/server/internal/archive"
 	"github.com/siposbnc/comic-hub/server/internal/config"
 	"github.com/siposbnc/comic-hub/server/internal/connection"
+	"github.com/siposbnc/comic-hub/server/internal/domain"
+	"github.com/siposbnc/comic-hub/server/internal/jobs"
 	"github.com/siposbnc/comic-hub/server/internal/logging"
+	"github.com/siposbnc/comic-hub/server/internal/scanner"
 	"github.com/siposbnc/comic-hub/server/internal/service/library"
 	"github.com/siposbnc/comic-hub/server/internal/store/sqlite"
 	httptransport "github.com/siposbnc/comic-hub/server/internal/transport/http"
 	"github.com/siposbnc/comic-hub/server/internal/version"
 )
+
+// hashLargeThreshold is the file size above which content hashing switches to sampled
+// mode (config-driven later; see docs/04-server.md §9).
+const hashLargeThreshold = 256 << 20 // 256 MiB
 
 func main() {
 	if err := run(); err != nil {
@@ -64,6 +73,18 @@ func run() error {
 	store := sqlite.NewStore(db)
 	libraries := library.New(store)
 
+	// Background jobs: the scanner runs as a "scan" job on the worker pool.
+	runner := jobs.NewRunner(store, logger, 4)
+	defer runner.Shutdown()
+	sc := scanner.New(store, archive.DefaultRegistry(), logger, hashLargeThreshold)
+	runner.Register(domain.JobScan, func(ctx context.Context, payload string, progress jobs.ProgressFunc) error {
+		var p scanner.JobPayload
+		if err := json.Unmarshal([]byte(payload), &p); err != nil {
+			return err
+		}
+		return sc.Scan(ctx, p.LibraryID, p.Full, scanner.ProgressFunc(progress))
+	})
+
 	ln, err := net.Listen("tcp", cfg.Bind)
 	if err != nil {
 		return fmt.Errorf("listen on %s: %w", cfg.Bind, err)
@@ -80,6 +101,8 @@ func run() error {
 		Config:   cfg,
 		Shutdown: appCancel,
 		Library:  libraries,
+		Repo:     store,
+		Runner:   runner,
 	})
 
 	srv := &http.Server{

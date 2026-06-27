@@ -14,6 +14,8 @@ import (
 	"github.com/go-chi/cors"
 
 	"github.com/siposbnc/comic-hub/server/internal/config"
+	"github.com/siposbnc/comic-hub/server/internal/domain"
+	"github.com/siposbnc/comic-hub/server/internal/jobs"
 	"github.com/siposbnc/comic-hub/server/internal/service/library"
 )
 
@@ -24,6 +26,8 @@ type Deps struct {
 	Config   config.Config
 	Shutdown context.CancelFunc
 	Library  *library.Service
+	Repo     domain.Repository
+	Runner   *jobs.Runner
 }
 
 // NewRouter builds the HTTP handler tree.
@@ -54,7 +58,11 @@ func NewRouter(d Deps) http.Handler {
 			r.Post("/", handleCreateLibrary(d.Library))
 			r.Get("/{id}", handleGetLibrary(d.Library))
 			r.Delete("/{id}", handleDeleteLibrary(d.Library))
+			r.Post("/{id}/scan", handleScanLibrary(d.Library, d.Runner))
+			r.Post("/{id}/scan/cancel", handleCancelScan(d.Runner, d.Repo))
 		})
+
+		r.Get("/jobs/{id}", handleGetJob(d.Repo))
 	})
 
 	return r

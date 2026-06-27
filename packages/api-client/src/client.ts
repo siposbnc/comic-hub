@@ -3,7 +3,9 @@ import type {
   Connection,
   CreateLibraryInput,
   HealthStatus,
+  Job,
   Library,
+  ScanMode,
   ServerInfo,
   ServerStats,
 } from './types.js';
@@ -73,6 +75,29 @@ export class ComicHubClient {
 
   async deleteLibrary(id: string): Promise<void> {
     await this.request<unknown>('DELETE', `/api/v1/libraries/${encodeURIComponent(id)}`);
+  }
+
+  // ── Scanning & jobs ──────────────────────────────────────────────────────────
+
+  /** Starts a scan and returns the job id to poll (or follow over WS once available). */
+  async scanLibrary(id: string, mode: ScanMode = 'incremental'): Promise<string> {
+    const res = await this.request<{ jobId: string }>(
+      'POST',
+      `/api/v1/libraries/${encodeURIComponent(id)}/scan`,
+      { body: { mode } },
+    );
+    return res.jobId;
+  }
+
+  cancelScan(id: string): Promise<{ canceled: number }> {
+    return this.request<{ canceled: number }>(
+      'POST',
+      `/api/v1/libraries/${encodeURIComponent(id)}/scan/cancel`,
+    );
+  }
+
+  getJob(id: string): Promise<Job> {
+    return this.request<Job>('GET', `/api/v1/jobs/${encodeURIComponent(id)}`);
   }
 
   private async request<T>(
