@@ -25,7 +25,9 @@ S2 Archives (CBZ/CBR) ─┼─► S3 Scanner+Jobs ─► S4 Image pipeline ─�
 
 1. **Design system is the source of truth.** Tokens + components live in the ComicHub
    Design System (claude.ai/design); pulled into `packages/ui` incrementally via the
-   DesignSync read API, kept Prettier-exempt for clean re-syncs.
+   DesignSync read API, kept Prettier-exempt for clean re-syncs. Adherence is **enforced**
+   on app code via ESLint (`pnpm lint:ds`, in CI): raw hex/px/non-DS-font values and
+   off-contract component props/variants are flagged (warn). See `CLAUDE.md`.
 2. **Image pipeline: pure-Go now, govips later** (revised — the dev machine lacks a C
    toolchain/libvips, so govips can't build). Built behind an `image.Processor`
    interface; pure-Go impl (std image + x/image) ships in S4, govips swaps in behind the
@@ -101,6 +103,14 @@ built, integrated, and **building to installers**:
   associations); the client's one-click Read launches it.
 - `tauri build` produces MSI + NSIS installers for **both** client and reader (WiX/NSIS).
 - All TS packages typecheck; both Tauri shells `cargo build` clean.
+
+**UI tracks Design Preview v2.** The client screens (home, library, series) and the
+stylized "longbox" sidebar — vertical spine plate, `SpineTab` nav with registration-tick
+hover and an active clipped cyan tab, and a live "continue reading" footer card — are built
+to match the ComicHub Preview v2 client shell (`ClientPreview.jsx`). The design system was
+re-synced in the process (full primitive set; Avatar, Dialog, Checkbox, Select, Switch
+added). Mock-only elements (genre filters, writer/artist, the Lists/Stats nav) are omitted
+until the data/features exist.
 
 Remaining (follow-on, none blocking the core loop):
 - **Verification:** a GUI end-to-end run on a desktop session (window spawns sidecar →
