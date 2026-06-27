@@ -69,6 +69,14 @@ type zipSource struct {
 
 func (s *zipSource) PageCount() int { return len(s.pages) }
 
+func (s *zipSource) Pages() []PageInfo {
+	out := make([]PageInfo, len(s.pages))
+	for i, f := range s.pages {
+		out[i] = PageInfo{Index: i, FileName: path.Base(f.Name), Size: int64(f.UncompressedSize64)}
+	}
+	return out
+}
+
 func (s *zipSource) Page(i int) (io.ReadCloser, PageInfo, error) {
 	if i < 0 || i >= len(s.pages) {
 		return nil, PageInfo{}, fmt.Errorf("page %d out of range [0,%d)", i, len(s.pages))

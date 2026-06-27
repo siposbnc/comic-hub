@@ -88,6 +88,14 @@ func (CBR) Open(filePath string) (PageSource, error) {
 
 func (s *rarSource) PageCount() int { return len(s.pages) }
 
+func (s *rarSource) Pages() []PageInfo {
+	out := make([]PageInfo, len(s.pages))
+	for i, e := range s.pages {
+		out[i] = PageInfo{Index: i, FileName: path.Base(e.name), Size: e.size}
+	}
+	return out
+}
+
 func (s *rarSource) Page(i int) (io.ReadCloser, PageInfo, error) {
 	if i < 0 || i >= len(s.pages) {
 		return nil, PageInfo{}, fmt.Errorf("page %d out of range [0,%d)", i, len(s.pages))

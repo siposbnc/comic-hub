@@ -20,6 +20,10 @@ type PageInfo struct {
 type PageSource interface {
 	// PageCount returns the number of image pages.
 	PageCount() int
+	// Pages returns metadata for every page in reading order without decoding image
+	// bytes. Cheap for all formats (no per-page re-scan), so the scanner and manifest
+	// builder use it instead of calling Page in a loop.
+	Pages() []PageInfo
 	// Page returns the raw image bytes for page i along with its metadata.
 	Page(i int) (io.ReadCloser, PageInfo, error)
 	// Sidecar returns the embedded ComicInfo.xml if present.

@@ -121,6 +121,38 @@ func (r *bookRepo) ReplacePages(ctx context.Context, bookID string, pages []doma
 	return tx.Commit()
 }
 
+func (r *bookRepo) ListPages(ctx context.Context, bookID string) ([]domain.Page, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT book_id, idx, file_name, width, height, size, page_type, is_double
+		FROM page WHERE book_id = ? ORDER BY idx`, bookID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []domain.Page
+	for rows.Next() {
+		var (
+			p        domain.Page
+			width    sql.NullInt64
+			height   sql.NullInt64
+			size     sql.NullInt64
+			pageType sql.NullString
+			double   int
+		)
+		if err := rows.Scan(&p.BookID, &p.Index, &p.FileName, &width, &height, &size, &pageType, &double); err != nil {
+			return nil, err
+		}
+		p.Width = int(i64(width))
+		p.Height = int(i64(height))
+		p.Size = i64(size)
+		p.PageType = str(pageType)
+		p.IsDouble = double != 0
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
 func scanBook(row rowScanner) (domain.Book, error) {
 	var (
 		b        domain.Book

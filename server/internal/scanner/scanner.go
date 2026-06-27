@@ -1,0 +1,338 @@
+package scanner
+
+import (
+	"context"
+	"io/fs"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/siposbnc/comic-hub/server/internal/archive"
+	"github.com/siposbnc/comic-hub/server/internal/domain"
+	"github.com/siposbnc/comic-hub/server/internal/pkg/contenthash"
+	"github.com/siposbnc/comic-hub/server/internal/pkg/ulid"
+)
+
+// ProgressFunc reports scan progress (files done / total). It matches jobs.ProgressFunc
+// so the scanner can be driven directly by a job handler.
+type ProgressFunc func(done, total int64)
+
+// JobPayload is the JSON payload for a scan job.
+type JobPayload struct {
+	LibraryID string `json:"libraryId"`
+	Full      bool   `json:"full"`
+}
+
+// Scanner turns a library's folder tree into catalog rows. It is incremental
+// (change-detected by size+mtime), idempotent (safe to re-run), and resilient
+// (a corrupt file is flagged, never aborting the scan). See docs/04-server.md §3.
+type Scanner struct {
+	repo          domain.Repository
+	registry      *archive.Registry
+	logger        *slog.Logger
+	hashThreshold int64
+}
+
+// New constructs a scanner. hashThreshold is the file size above which content hashing
+// switches to sampled mode.
+func New(repo domain.Repository, registry *archive.Registry, logger *slog.Logger, hashThreshold int64) *Scanner {
+	return &Scanner{repo: repo, registry: registry, logger: logger, hashThreshold: hashThreshold}
+}
+
+// Scan walks a library's roots and upserts its catalog. When full is false, files whose
+// size and mtime are unchanged since the last scan are skipped.
+func (s *Scanner) Scan(ctx context.Context, libraryID string, full bool, progress ProgressFunc) error {
+	lib, err := s.repo.Libraries().Get(ctx, libraryID)
+	if err != nil {
+		return err
+	}
+
+	files, err := s.collect(ctx, lib.Roots)
+	if err != nil {
+		return err
+	}
+	total := int64(len(files))
+	if progress != nil {
+		progress(0, total)
+	}
+
+	for i, path := range files {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := s.processFile(ctx, lib, full, path); err != nil {
+			// Per-file failures are logged and recorded, never fatal to the whole scan.
+			s.logger.Warn("scan: file failed", "path", path, "err", err)
+		}
+		if progress != nil {
+			progress(int64(i+1), total)
+		}
+	}
+	return nil
+}
+
+// collect walks the roots and returns every supported comic file path.
+func (s *Scanner) collect(ctx context.Context, roots []string) ([]string, error) {
+	var files []string
+	for _, root := range roots {
+		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				// Unreadable dir/file: skip it, keep scanning the rest.
+				return nil //nolint:nilerr
+			}
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if d.IsDir() {
+				if isHiddenOrSystem(d.Name()) && path != root {
+					return fs.SkipDir
+				}
+				return nil
+			}
+			if s.registry.Supports(path) {
+				files = append(files, path)
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return files, nil
+}
+
+func (s *Scanner) processFile(ctx context.Context, lib domain.Library, full bool, path string) error {
+	fi, err := statFile(path)
+	if err != nil {
+		return err
+	}
+	size := fi.Size()
+	mtime := fi.ModTime().UnixMilli()
+
+	existing, getErr := s.repo.Books().GetByPath(ctx, path)
+	haveExisting := getErr == nil
+	if haveExisting && !full && !existing.IsCorrupt &&
+		existing.FileSize == size && existing.FileMTime == mtime {
+		return nil // unchanged
+	}
+
+	hash, err := contenthash.OfFile(path, s.hashThreshold)
+	if err != nil {
+		return s.persistCorrupt(ctx, lib, existing, haveExisting, path, size, mtime, "")
+	}
+
+	src, err := s.registry.Open(path)
+	if err != nil {
+		return s.persistCorrupt(ctx, lib, existing, haveExisting, path, size, mtime, hash)
+	}
+	defer src.Close()
+
+	var ci ComicInfo
+	haveCI := false
+	if r, ok := src.Sidecar(); ok {
+		if parsed, perr := ParseComicInfo(r); perr == nil {
+			ci, haveCI = parsed, true
+		}
+	}
+
+	pages := buildPages(src.Pages(), ci)
+	series, err := s.resolveSeries(ctx, lib, path, ci, haveCI)
+	if err != nil {
+		return err
+	}
+
+	book := s.buildBook(lib, series.ID, existing, haveExisting, path, size, mtime, hash, len(pages), ci, haveCI)
+	saved, err := s.repo.Books().Upsert(ctx, book)
+	if err != nil {
+		return err
+	}
+	return s.repo.Books().ReplacePages(ctx, saved.ID, pages)
+}
+
+// buildPages converts archive page metadata into domain pages, enriching with
+// ComicInfo per-page types/double-spread flags when present.
+func buildPages(infos []archive.PageInfo, ci ComicInfo) []domain.Page {
+	pages := make([]domain.Page, len(infos))
+	for i, in := range infos {
+		// BookID is supplied by ReplacePages, which keys inserts on its bookID argument.
+		p := domain.Page{
+			Index:    in.Index,
+			FileName: in.FileName,
+			Size:     in.Size,
+		}
+		if meta, ok := ci.Pages[in.Index]; ok {
+			p.PageType = meta.Type
+			p.IsDouble = meta.Double
+		}
+		pages[i] = p
+	}
+	return pages
+}
+
+func (s *Scanner) resolveSeries(ctx context.Context, lib domain.Library, path string, ci ComicInfo, haveCI bool) (domain.Series, error) {
+	folder := filepath.Dir(path)
+
+	// Series name comes from the folder (the "parent dir = series" rule), so every issue
+	// in a folder groups under one stable name. ComicInfo.Series overrides it. The
+	// filename is only used for per-issue fields (number/year/volume), never the series
+	// name — a single oddly-named or corrupt file must not rename the series.
+	name := filepath.Base(folder)
+	if haveCI && ci.Series != "" {
+		name = ci.Series
+	}
+
+	readingDir := domain.LTR
+	if lib.Kind == "manga" {
+		readingDir = domain.RTL
+	}
+	if haveCI && ci.ReadingDir != "" {
+		readingDir = ci.ReadingDir
+	}
+
+	now := time.Now().UnixMilli()
+	existing, err := s.repo.Series().GetByFolder(ctx, lib.ID, folder)
+	series := domain.Series{
+		LibraryID:  lib.ID,
+		FolderPath: folder,
+		Name:       name,
+		SortName:   sortName(name),
+		ReadingDir: readingDir,
+		UpdatedAt:  now,
+	}
+	if err == nil {
+		series.ID = existing.ID
+		series.CreatedAt = existing.CreatedAt
+	} else {
+		series.ID = ulid.New()
+		series.CreatedAt = now
+	}
+	return s.repo.Series().Upsert(ctx, series)
+}
+
+func (s *Scanner) buildBook(
+	lib domain.Library, seriesID string, existing domain.Book, haveExisting bool,
+	path string, size, mtime int64, hash string, pageCount int, ci ComicInfo, haveCI bool,
+) domain.Book {
+	parsed := ParseFilename(path)
+
+	number := parsed.Number
+	volume := parsed.Volume
+	var releaseDate int64
+	if parsed.Year > 0 {
+		releaseDate = time.Date(parsed.Year, 1, 1, 0, 0, 0, 0, time.UTC).UnixMilli()
+	}
+	title, ageRating, language, summary := "", "", "", ""
+	state := domain.MetaNone
+
+	if haveCI {
+		state = domain.MetaSidecar
+		if ci.Number != "" {
+			number = ci.Number
+		}
+		if ci.Volume > 0 {
+			volume = ci.Volume
+		}
+		if ci.ReleaseDate > 0 {
+			releaseDate = ci.ReleaseDate
+		}
+		title, ageRating, language, summary = ci.Title, ci.AgeRating, ci.Language, ci.Summary
+	}
+
+	now := time.Now().UnixMilli()
+	book := domain.Book{
+		SeriesID:      seriesID,
+		LibraryID:     lib.ID,
+		FilePath:      path,
+		FileFormat:    formatOf(path),
+		FileSize:      size,
+		FileMTime:     mtime,
+		ContentHash:   hash,
+		PageCount:     pageCount,
+		Title:         title,
+		Number:        number,
+		SortNumber:    SortNumber(number),
+		Volume:        volume,
+		ReleaseDate:   releaseDate,
+		AgeRating:     ageRating,
+		Language:      language,
+		Summary:       summary,
+		CoverPage:     0,
+		MetadataState: state,
+		UpdatedAt:     now,
+	}
+	if haveExisting {
+		book.ID = existing.ID
+		book.AddedAt = existing.AddedAt
+		// Don't downgrade user-locked metadata back to sidecar/none.
+		if existing.MetadataState == domain.MetaLocked {
+			book.MetadataState = domain.MetaLocked
+		}
+	} else {
+		book.ID = ulid.New()
+		book.AddedAt = now
+	}
+	return book
+}
+
+// persistCorrupt records a file that could not be opened/hashed so it surfaces in
+// Library Health, without aborting the scan.
+func (s *Scanner) persistCorrupt(
+	ctx context.Context, lib domain.Library, existing domain.Book, haveExisting bool,
+	path string, size, mtime int64, hash string,
+) error {
+	series, err := s.resolveSeries(ctx, lib, path, ComicInfo{}, false)
+	if err != nil {
+		return err
+	}
+	parsed := ParseFilename(path)
+	now := time.Now().UnixMilli()
+	book := domain.Book{
+		SeriesID:      series.ID,
+		LibraryID:     lib.ID,
+		FilePath:      path,
+		FileFormat:    formatOf(path),
+		FileSize:      size,
+		FileMTime:     mtime,
+		ContentHash:   hash,
+		PageCount:     0,
+		Number:        parsed.Number,
+		SortNumber:    SortNumber(parsed.Number),
+		Volume:        parsed.Volume,
+		MetadataState: domain.MetaNone,
+		IsCorrupt:     true,
+		UpdatedAt:     now,
+	}
+	if haveExisting {
+		book.ID = existing.ID
+		book.AddedAt = existing.AddedAt
+	} else {
+		book.ID = ulid.New()
+		book.AddedAt = now
+	}
+	_, err = s.repo.Books().Upsert(ctx, book)
+	return err
+}
+
+func formatOf(path string) string {
+	return strings.ToLower(strings.TrimPrefix(filepath.Ext(path), "."))
+}
+
+func isHiddenOrSystem(name string) bool {
+	return strings.HasPrefix(name, ".") || strings.EqualFold(name, "$RECYCLE.BIN") ||
+		strings.EqualFold(name, "System Volume Information") || name == "@eaDir"
+}
+
+// sortName produces a sort key that moves a leading article to the end
+// ("The Sandman" -> "Sandman, The").
+func sortName(name string) string {
+	for _, art := range []string{"The ", "A ", "An "} {
+		if strings.HasPrefix(name, art) {
+			return strings.TrimSpace(name[len(art):]) + ", " + strings.TrimSpace(art)
+		}
+	}
+	return name
+}
+
+func statFile(path string) (os.FileInfo, error) { return os.Stat(path) }

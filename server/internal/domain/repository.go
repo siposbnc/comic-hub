@@ -41,6 +41,8 @@ type BookRepository interface {
 	// change-detect and reuse ids across rescans (ErrNotFound if absent).
 	GetByPath(ctx context.Context, filePath string) (Book, error)
 	ReplacePages(ctx context.Context, bookID string, pages []Page) error
+	// ListPages returns a book's pages in index order (the reader's manifest source).
+	ListPages(ctx context.Context, bookID string) ([]Page, error)
 	ListBySeries(ctx context.Context, seriesID string) ([]Book, error)
 }
 
