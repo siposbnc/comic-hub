@@ -90,13 +90,16 @@ Accessibility gate per screen; CI bench thresholds; docs kept in lockstep (03-ap
 
 | Milestone | Status |
 |-----------|--------|
-| M1 — Provider framework + Comic Vine + matcher | 🚧 in progress |
-| M2 — Metadata schema + apply pipeline | ⏳ pending |
-| M3 — Metadata API | ⏳ pending |
-| M4 — Metadata client UI | ⏳ pending |
+| M1 — Provider framework + Comic Vine + matcher | ✅ done |
+| M2 — Metadata schema + apply pipeline | ✅ done |
+| M3 — Metadata API (candidates / apply / job) | ✅ done |
+| M4 — Metadata client UI (candidate picker) | ✅ done — **metadata track complete** |
 | F1 — CB7 + CBT | ⏳ pending |
 | F2 — PDF (MuPDF + C toolchain) | ⏳ pending |
 | S / O / W / R — search, organization, watch/health, reader | ⏳ pending |
+
+Remaining metadata polish (non-blocking): GCD as a second provider, ComicInfo
+`write-sidecar`, per-field lock toggles in the UI, and a book-level candidate picker.
 
 ## Verification
 
