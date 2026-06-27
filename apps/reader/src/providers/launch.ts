@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
+import { ComicHubClient } from '@comichub/api-client';
 import type { Manifest, PageProvider } from '@comichub/reader-core';
-import { ServerPageProvider } from './ServerPageProvider.js';
+import { ServerPageProvider } from '@comichub/reader-core';
 import { LocalPageProvider } from './LocalPageProvider.js';
 
 const DEFAULT_SERVER_URL = 'http://127.0.0.1:8099';
@@ -50,7 +51,8 @@ export async function resolveLaunch(): Promise<LaunchResult> {
     const token = params.get('token') || '';
     const pageParam = params.get('page');
     const startPage = pageParam !== null ? Number.parseInt(pageParam, 10) : undefined;
-    const provider = new ServerPageProvider({ baseUrl, token, bookId, device: deviceLabel() });
+    const client = new ComicHubClient({ baseUrl, token });
+    const provider = new ServerPageProvider(client, bookId, deviceLabel());
     return {
       kind: 'connected',
       provider,
