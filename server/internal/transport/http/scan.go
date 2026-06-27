@@ -84,8 +84,15 @@ type jobDTO struct {
 	FinishedAt int64   `json:"finishedAt,omitempty"`
 }
 
-// handleGetJob returns a job's current state — used to poll scan progress until the WS
-// jobs topic lands (docs/03-api.md §10).
+func toJobDTO(j domain.Job) jobDTO {
+	return jobDTO{
+		ID: j.ID, Type: j.Type, State: string(j.State), Progress: j.Progress,
+		Total: j.Total, Done: j.Done, Error: j.Error,
+		CreatedAt: j.CreatedAt, StartedAt: j.StartedAt, FinishedAt: j.FinishedAt,
+	}
+}
+
+// handleGetJob returns a job's current state (also broadcast live on the WS jobs topic).
 func handleGetJob(repo domain.Repository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		j, err := repo.Jobs().Get(r.Context(), chi.URLParam(r, "id"))
@@ -93,10 +100,6 @@ func handleGetJob(repo domain.Repository) http.HandlerFunc {
 			writeDomainError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, jobDTO{
-			ID: j.ID, Type: j.Type, State: string(j.State), Progress: j.Progress,
-			Total: j.Total, Done: j.Done, Error: j.Error,
-			CreatedAt: j.CreatedAt, StartedAt: j.StartedAt, FinishedAt: j.FinishedAt,
-		})
+		writeJSON(w, http.StatusOK, toJobDTO(j))
 	}
 }

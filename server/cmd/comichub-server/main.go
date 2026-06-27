@@ -78,7 +78,10 @@ func run() error {
 	store := sqlite.NewStore(db)
 	libraries := library.New(store)
 	browsing := browse.New(store)
-	readingSvc := reading.New(store, nil) // WS progress broadcast wired in below once the hub exists
+
+	// WebSocket hub for push (jobs/progress); services broadcast through it.
+	hub := httptransport.NewHub(logger)
+	readingSvc := reading.New(store, func(_ string, p domain.Progress) { hub.BroadcastProgress(p) })
 
 	// Shared format registry for scanning and reading.
 	registry := archive.DefaultRegistry()
@@ -95,6 +98,7 @@ func run() error {
 
 	// Background jobs: the scanner runs as a "scan" job on the worker pool.
 	runner := jobs.NewRunner(store, logger, 4)
+	runner.OnUpdate(hub.BroadcastJob)
 	defer runner.Shutdown()
 	sc := scanner.New(store, registry, logger, hashLargeThreshold)
 	runner.Register(domain.JobScan, func(ctx context.Context, payload string, progress jobs.ProgressFunc) error {
@@ -126,6 +130,7 @@ func run() error {
 		Reader:   readerSvc,
 		Browse:   browsing,
 		Reading:  readingSvc,
+		Hub:      hub,
 	})
 
 	srv := &http.Server{

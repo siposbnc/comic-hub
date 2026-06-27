@@ -52,7 +52,9 @@ func newScanServer(t *testing.T) (string, *sqlite.Store) {
 		t.Fatalf("reader svc: %v", err)
 	}
 
+	hub := NewHub(logger)
 	runner := jobs.NewRunner(store, logger, 2)
+	runner.OnUpdate(hub.BroadcastJob)
 	sc := scanner.New(store, registry, logger, 0)
 	runner.Register(domain.JobScan, func(ctx context.Context, payload string, progress jobs.ProgressFunc) error {
 		var p scanner.JobPayload
@@ -71,7 +73,8 @@ func newScanServer(t *testing.T) (string, *sqlite.Store) {
 		Runner:  runner,
 		Reader:  readerSvc,
 		Browse:  browse.New(store),
-		Reading: reading.New(store, nil),
+		Reading: reading.New(store, func(_ string, p domain.Progress) { hub.BroadcastProgress(p) }),
+		Hub:     hub,
 	})
 	srv := httptest.NewServer(router)
 	t.Cleanup(func() { srv.Close(); runner.Shutdown(); _ = db.Close() })

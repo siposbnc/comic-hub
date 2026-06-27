@@ -34,6 +34,7 @@ type Deps struct {
 	Reader   *reader.Service
 	Browse   *browse.Service
 	Reading  *reading.Service
+	Hub      *Hub
 }
 
 // NewRouter builds the HTTP handler tree.
@@ -95,6 +96,11 @@ func NewRouter(d Deps) http.Handler {
 			r.Put("/progress/{bookId}", handlePutProgress(d.Reading))
 			r.Post("/books/{id}/mark", handleMarkBook(d.Reading))
 		})
+
+		// Multiplexed push socket (jobs/progress topics).
+		if d.Hub != nil {
+			r.Get("/ws", d.Hub.handle())
+		}
 	})
 
 	return r

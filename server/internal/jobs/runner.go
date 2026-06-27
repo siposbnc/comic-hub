@@ -35,7 +35,13 @@ type Runner struct {
 
 	mu      sync.Mutex
 	cancels map[string]context.CancelFunc
+
+	onUpdate func(domain.Job)
 }
+
+// OnUpdate registers a callback invoked on every persisted job state change (used to
+// broadcast over the WS jobs topic). Not safe to call after Submit.
+func (r *Runner) OnUpdate(fn func(domain.Job)) { r.onUpdate = fn }
 
 // NewRunner builds a runner with the given max concurrent workers (min 1).
 func NewRunner(repo domain.Repository, logger *slog.Logger, workers int) *Runner {
@@ -145,6 +151,9 @@ func (r *Runner) finish(job domain.Job, state domain.JobState, errMsg string) {
 func (r *Runner) save(job domain.Job) {
 	if err := r.repo.Jobs().Update(context.Background(), job); err != nil {
 		r.logger.Error("persist job", "id", job.ID, "err", err)
+	}
+	if r.onUpdate != nil {
+		r.onUpdate(job)
 	}
 }
 
