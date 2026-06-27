@@ -45,3 +45,7 @@ connection.json
 .env
 .env.*
 !.env.example
+
+# Agent worktrees & browser-tooling scratch
+.claude/worktrees/
+.playwright-mcp/
