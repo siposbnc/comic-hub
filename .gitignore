@@ -49,3 +49,7 @@ connection.json
 # Agent worktrees & browser-tooling scratch
 .claude/worktrees/
 .playwright-mcp/
+
+# Agent worktrees & tooling scratch
+.claude/worktrees/
+.playwright-mcp/
