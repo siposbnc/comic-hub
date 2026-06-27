@@ -1,4 +1,4 @@
-import { create } from './createStore.js';
+import { create } from 'zustand';
 import {
   DEFAULT_PREFETCH_AHEAD,
   DEFAULT_PREFETCH_BEHIND,
@@ -84,7 +84,7 @@ export interface ReaderState {
   dispose: () => void;
 }
 
-export const useReaderStore = create<ReaderState>((set, get) => {
+export const useReaderStore = create<ReaderState>()((set, get) => {
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
   function clamp(value: number, min: number, max: number): number {
