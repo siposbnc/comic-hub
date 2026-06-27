@@ -26,8 +26,10 @@ S2 Archives (CBZ/CBR) ─┼─► S3 Scanner+Jobs ─► S4 Image pipeline ─�
 1. **Design system is the source of truth.** Tokens + components live in the ComicHub
    Design System (claude.ai/design); pulled into `packages/ui` incrementally via the
    DesignSync read API, kept Prettier-exempt for clean re-syncs.
-2. **Image pipeline: govips (libvips, CGo)** — chosen over the pure-Go fallback. Built
-   behind an `image.Thumbnailer` interface; CGo + Windows libvips set up at S4.
+2. **Image pipeline: pure-Go now, govips later** (revised — the dev machine lacks a C
+   toolchain/libvips, so govips can't build). Built behind an `image.Processor`
+   interface; pure-Go impl (std image + x/image) ships in S4, govips swaps in behind the
+   same interface once libvips + a compiler are installed (zero call-site changes).
 3. **IDs = ULID; content hash = xxhash64** (sampled for large files).
 4. **Hand-written typed repo methods** over `domain.Repository` (sqlc only if justified).
 5. **PDF / AVIF / CB7 / CBT are Phase 2** — `capabilities` flags stay off in Phase 1.
