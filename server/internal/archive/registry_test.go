@@ -10,6 +10,10 @@ func TestRegistrySupports(t *testing.T) {
 		"saga.zip":               true,
 		"saga.cbr":               true,
 		"saga.rar":               true,
+		"saga.cb7":               true,
+		"saga.7z":                true,
+		"saga.cbt":               true,
+		"saga.tar":               true,
 		"saga.pdf":               false, // not yet (Phase 2)
 		"saga.txt":               false,
 		"noext":                  false,

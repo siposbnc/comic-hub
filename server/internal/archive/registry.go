@@ -26,7 +26,7 @@ func NewRegistry(readers ...Reader) *Registry {
 
 // DefaultRegistry returns a registry with all built-in format readers.
 func DefaultRegistry() *Registry {
-	return NewRegistry(CBZ{}, CBR{})
+	return NewRegistry(CBZ{}, CBR{}, CB7{}, CBT{})
 }
 
 // Supports reports whether a reader is registered for the file's extension.
