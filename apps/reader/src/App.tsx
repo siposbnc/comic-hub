@@ -1,53 +1,61 @@
-import { useEffect, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { useEffect } from 'react';
 import { SUPPORTED_EXTENSIONS } from '@comichub/reader-core';
+import { useReaderStore } from './reader/store.js';
+import { Reader } from './reader/Reader.js';
+import { Button } from '@comichub/ui';
+import { Icon } from './ui/Icon.js';
 
-function isTauri(): boolean {
-  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-}
-
-/**
- * Phase 0 reader: detect how it was launched. A path argument (file-association
- * double-click) means standalone mode; no path means it was opened from the client
- * (connected mode arrives in Phase 1). Rendering of pages lands in Phase 1.
- */
 export function App() {
-  const [openPath, setOpenPath] = useState<string | null>(null);
-  const [ready, setReady] = useState(false);
+  const status = useReaderStore((s) => s.status);
+  const error = useReaderStore((s) => s.error);
+  const init = useReaderStore((s) => s.init);
+  const retry = useReaderStore((s) => s.retry);
+  const dispose = useReaderStore((s) => s.dispose);
 
   useEffect(() => {
-    (async () => {
-      if (isTauri()) {
-        try {
-          const path = await invoke<string | null>('get_open_path');
-          setOpenPath(path);
-        } catch {
-          setOpenPath(null);
-        }
-      }
-      setReady(true);
-    })();
+    void init();
+    return () => dispose();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const mode = openPath ? 'Standalone' : 'Connected (pending)';
+  if (status === 'ready') {
+    return <Reader />;
+  }
 
-  return (
-    <div className="reader">
-      <div>
-        <p className="mode">{ready ? mode : '…'}</p>
-        <h1>ComicHub Reader</h1>
-        {openPath ? (
-          <>
-            <p>Ready to open:</p>
-            <p className="path">{openPath}</p>
-          </>
-        ) : (
-          <p className="path">
-            No file provided. Open a comic file ({SUPPORTED_EXTENSIONS.join(', ')}), or launch it
-            from the client.
-          </p>
-        )}
+  if (status === 'loading') {
+    return (
+      <div className="screen" aria-busy="true">
+        <span className="spinner spinner--lg" />
+        <p className="screen__muted">Opening…</p>
       </div>
+    );
+  }
+
+  if (status === 'error') {
+    return (
+      <div className="screen" role="alert">
+        <Icon name="alert" size={40} />
+        <h1 className="screen__title">Couldn&apos;t open this comic</h1>
+        <p className="screen__muted">{error ?? 'Something went wrong.'}</p>
+        <Button onClick={retry}>Try again</Button>
+      </div>
+    );
+  }
+
+  // idle / empty: launched without a file or a connected book.
+  return (
+    <div className="screen">
+      <Icon name="book" size={44} />
+      <h1 className="screen__title">ComicHub Reader</h1>
+      <p className="screen__muted">
+        Open a comic file ({SUPPORTED_EXTENSIONS.join(', ')}), or launch a book from the
+        ComicHub client.
+      </p>
+      <p className="screen__hint">
+        Dev: append <code>?bookId=&lt;id&gt;</code> (and optionally{' '}
+        <code>&amp;server=&amp;token=&amp;page=</code>) to drive connected mode against a
+        running server.
+      </p>
     </div>
   );
 }
