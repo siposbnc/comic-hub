@@ -23,6 +23,13 @@
       "csp": null
     }
   },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["comichub-reader"]
+      }
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",

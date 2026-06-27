@@ -38,9 +38,38 @@ function readParams(): URLSearchParams {
   return new URLSearchParams();
 }
 
+/**
+ * Reads launch params delivered via a `comichub-reader://open?...` deep link (the
+ * client's one-click Read). Tauri-only; the plugin returns the URL(s) the app was
+ * launched with. Returns null on web or when there's no deep link.
+ */
+async function readDeepLinkParams(): Promise<URLSearchParams | null> {
+  try {
+    const { getCurrent } = await import('@tauri-apps/plugin-deep-link');
+    const urls = await getCurrent();
+    if (!urls) return null;
+    for (const raw of urls) {
+      try {
+        const u = new URL(raw);
+        if (u.searchParams.get('bookId')) return u.searchParams;
+      } catch {
+        // not a parseable URL; skip
+      }
+    }
+  } catch {
+    // plugin unavailable (web) or no launch URLs
+  }
+  return null;
+}
+
 /** Resolves how the reader was launched and builds the matching PageProvider. */
 export async function resolveLaunch(): Promise<LaunchResult> {
-  const params = readParams();
+  let params = readParams();
+  // A fresh launch from the client arrives as a deep link, not in window.location.
+  if (!params.get('bookId') && isTauri()) {
+    const deepLink = await readDeepLinkParams();
+    if (deepLink) params = deepLink;
+  }
   const bookId = params.get('bookId');
   const envServer =
     (import.meta.env.VITE_SERVER_URL as string | undefined) || undefined;

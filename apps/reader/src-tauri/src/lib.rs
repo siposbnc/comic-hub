@@ -23,7 +23,33 @@ fn get_open_path() -> Option<String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+
+    // Single-instance must be registered first so a second launch (the OS opening a
+    // comichub-reader:// link while we're already running) re-focuses this instance and
+    // forwards the URL to the deep-link plugin instead of spawning a new window.
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    {
+        use tauri::Manager;
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_focus();
+            }
+        }));
+    }
+
+    builder
+        .plugin(tauri_plugin_deep_link::init())
+        .setup(|_app| {
+            // Register the scheme at runtime so it also works in dev / unpackaged runs.
+            // Installed builds register it via tauri.conf.json plugins.deep-link.
+            #[cfg(any(target_os = "windows", target_os = "linux"))]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                let _ = _app.deep_link().register("comichub-reader");
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             get_open_path,
             local::local_open,
