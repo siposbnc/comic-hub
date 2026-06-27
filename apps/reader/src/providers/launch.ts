@@ -1,0 +1,79 @@
+import { invoke } from '@tauri-apps/api/core';
+import type { Manifest, PageProvider } from '@comichub/reader-core';
+import { ServerPageProvider } from './ServerPageProvider.js';
+import { LocalPageProvider } from './LocalPageProvider.js';
+
+const DEFAULT_SERVER_URL = 'http://127.0.0.1:8099';
+
+export type LaunchResult =
+  | { kind: 'connected'; provider: PageProvider; startPage?: number; title?: string }
+  | { kind: 'standalone'; provider: PageProvider; manifest: Manifest; title?: string }
+  | { kind: 'empty' }
+  | { kind: 'error'; message: string };
+
+function isTauri(): boolean {
+  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+}
+
+/** Best-effort, stable-ish device label for progress reconciliation. */
+function deviceLabel(): string {
+  if (typeof navigator !== 'undefined' && navigator.platform) {
+    return `reader-${navigator.platform}`;
+  }
+  return 'reader';
+}
+
+/**
+ * Reads launch params from the URL. Supports both the dev harness query string and a
+ * `comichub-reader://open?...` deep link (its search part is parsed the same way).
+ */
+function readParams(): URLSearchParams {
+  if (typeof window === 'undefined') return new URLSearchParams();
+  const { search, hash } = window.location;
+  if (search && search.length > 1) return new URLSearchParams(search);
+  // Deep links may surface their query in the hash depending on the host.
+  const q = hash.indexOf('?');
+  if (q >= 0) return new URLSearchParams(hash.slice(q));
+  return new URLSearchParams();
+}
+
+/** Resolves how the reader was launched and builds the matching PageProvider. */
+export async function resolveLaunch(): Promise<LaunchResult> {
+  const params = readParams();
+  const bookId = params.get('bookId');
+  const envServer =
+    (import.meta.env.VITE_SERVER_URL as string | undefined) || undefined;
+
+  // Connected mode: an explicit bookId (deep link or dev harness).
+  if (bookId) {
+    const baseUrl = params.get('server') || envServer || DEFAULT_SERVER_URL;
+    const token = params.get('token') || '';
+    const pageParam = params.get('page');
+    const startPage = pageParam !== null ? Number.parseInt(pageParam, 10) : undefined;
+    const provider = new ServerPageProvider({ baseUrl, token, bookId, device: deviceLabel() });
+    return {
+      kind: 'connected',
+      provider,
+      startPage: Number.isFinite(startPage as number) ? startPage : undefined,
+    };
+  }
+
+  // Standalone mode: a file path from the OS (file association double-click).
+  if (isTauri()) {
+    try {
+      const path = await invoke<string | null>('get_open_path');
+      if (path) {
+        const { provider, manifest } = await LocalPageProvider.open(path);
+        const title = path.split(/[\\/]/).pop();
+        return { kind: 'standalone', provider, manifest, title };
+      }
+    } catch (err) {
+      return {
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Could not open the comic file.',
+      };
+    }
+  }
+
+  return { kind: 'empty' };
+}
