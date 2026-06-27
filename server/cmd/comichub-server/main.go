@@ -24,9 +24,12 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/image"
 	"github.com/siposbnc/comic-hub/server/internal/jobs"
 	"github.com/siposbnc/comic-hub/server/internal/logging"
+	"github.com/siposbnc/comic-hub/server/internal/providers"
+	"github.com/siposbnc/comic-hub/server/internal/providers/comicvine"
 	"github.com/siposbnc/comic-hub/server/internal/scanner"
 	"github.com/siposbnc/comic-hub/server/internal/service/browse"
 	"github.com/siposbnc/comic-hub/server/internal/service/library"
+	"github.com/siposbnc/comic-hub/server/internal/service/metadata"
 	"github.com/siposbnc/comic-hub/server/internal/service/reader"
 	"github.com/siposbnc/comic-hub/server/internal/service/reading"
 	"github.com/siposbnc/comic-hub/server/internal/store/sqlite"
@@ -109,6 +112,23 @@ func run() error {
 		return sc.Scan(ctx, p.LibraryID, p.Full, scanner.ProgressFunc(progress))
 	})
 
+	// Online metadata matching (Comic Vine via COMICVINE_API_KEY). The metadata_match
+	// job batch-applies a chosen provider volume to a series' books.
+	var metaProviders []providers.Provider
+	if cfg.ComicVineAPIKey != "" {
+		metaProviders = append(metaProviders, comicvine.New(cfg.ComicVineAPIKey))
+		logger.Info("metadata provider configured", "provider", "comicvine")
+	}
+	metaSvc := metadata.New(store, metaProviders...)
+	runner.Register(domain.JobMetadataMatch, func(ctx context.Context, payload string, progress jobs.ProgressFunc) error {
+		var p httptransport.MatchJobPayload
+		if err := json.Unmarshal([]byte(payload), &p); err != nil {
+			return err
+		}
+		return metaSvc.MatchSeries(ctx, p.SeriesID, p.Provider, p.VolumeProviderID, p.Fields,
+			func(done, total int) { progress(int64(done), int64(total)) })
+	})
+
 	ln, err := net.Listen("tcp", cfg.Bind)
 	if err != nil {
 		return fmt.Errorf("listen on %s: %w", cfg.Bind, err)
@@ -130,6 +150,7 @@ func run() error {
 		Reader:   readerSvc,
 		Browse:   browsing,
 		Reading:  readingSvc,
+		Metadata: metaSvc,
 		Hub:      hub,
 	})
 

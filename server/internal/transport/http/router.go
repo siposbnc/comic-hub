@@ -18,6 +18,7 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/jobs"
 	"github.com/siposbnc/comic-hub/server/internal/service/browse"
 	"github.com/siposbnc/comic-hub/server/internal/service/library"
+	"github.com/siposbnc/comic-hub/server/internal/service/metadata"
 	"github.com/siposbnc/comic-hub/server/internal/service/reader"
 	"github.com/siposbnc/comic-hub/server/internal/service/reading"
 )
@@ -34,6 +35,7 @@ type Deps struct {
 	Reader   *reader.Service
 	Browse   *browse.Service
 	Reading  *reading.Service
+	Metadata *metadata.Service
 	Hub      *Hub
 }
 
@@ -76,6 +78,8 @@ func NewRouter(d Deps) http.Handler {
 		r.Route("/series", func(r chi.Router) {
 			r.Get("/", handleListSeries(d.Browse))
 			r.Get("/{id}", handleSeriesDetail(d.Browse))
+			r.Get("/{id}/match/candidates", handleSeriesCandidates(d.Metadata))
+			r.Post("/{id}/match/apply", handleSeriesMatch(d.Metadata, d.Runner))
 		})
 
 		r.Route("/books", func(r chi.Router) {
@@ -86,6 +90,7 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/{id}/pages/{idx}", handlePage(d.Reader))
 			r.Get("/{id}/pages/{idx}/thumb", handlePageThumb(d.Reader))
 			r.Post("/{id}/prefetch", handlePrefetch(d.Reader))
+			r.Post("/{id}/match/apply", handleBookApply(d.Metadata))
 		})
 
 		r.Get("/discover", handleDiscover(d.Browse))
