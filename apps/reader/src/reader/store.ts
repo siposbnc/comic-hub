@@ -16,7 +16,8 @@ import {
   type ReaderBackground,
   type ReaderSettings,
 } from './types.js';
-import { resolveLaunch } from '../providers/launch.js';
+import { invoke } from '@tauri-apps/api/core';
+import { resolveLaunch, resolveLaunchFromPath, type LaunchResult } from '../providers/launch.js';
 
 const FIT_CYCLE: FitMode[] = ['screen', 'width', 'height', 'original', 'smart'];
 const MIN_ZOOM = 1;
@@ -55,6 +56,8 @@ export interface ReaderState {
   init: (url?: string) => Promise<void>;
   /** Re-open a book from a deep-link URL while the reader is already running. */
   openUrl: (url: string) => void;
+  /** Prompt for a comic file on disk and open it (standalone mode). */
+  openFile: () => Promise<void>;
   retry: () => void;
   goToPage: (page: number) => void;
   next: () => void;
@@ -115,6 +118,80 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
     set({ spreads: buildSpreads(manifest, settings.layout, settings.coverAlone) });
   }
 
+  /** Saves the current book's place and tears down its caches before swapping books. */
+  function teardownCurrent(): void {
+    const { provider, manifest, currentPage, finished } = get();
+    if (provider && manifest) {
+      provider.saveProgress({
+        bookId: manifest.bookId,
+        page: currentPage,
+        status: finished ? 'read' : 'in_progress',
+        updatedAt: Date.now(),
+      });
+    }
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+      saveTimer = null;
+    }
+    get().pages?.dispose();
+    get().thumbs?.dispose();
+    set({ provider: null, pages: null, thumbs: null, finished: false, resumePage: null });
+  }
+
+  /** Applies a resolved launch to the store: builds caches, restores progress, and shows
+   *  the reader — or surfaces an empty/error state. Shared by every open path. */
+  async function applyLaunch(launch: LaunchResult): Promise<void> {
+    try {
+      if (launch.kind === 'empty') {
+        set({ status: 'idle', mode: 'empty' });
+        return;
+      }
+      if (launch.kind === 'error') {
+        set({ status: 'error', mode: 'empty', error: launch.message });
+        return;
+      }
+
+      const provider = launch.provider;
+      const manifest = launch.kind === 'standalone' ? launch.manifest : await provider.manifest();
+
+      const pages = new PageCache(provider, PAGE_CACHE_CAPACITY);
+      const thumbs = new ThumbCache(provider);
+      const direction = manifest.readingDir ?? DEFAULT_SETTINGS.direction;
+      const settings: ReaderSettings = { ...DEFAULT_SETTINGS, direction };
+      const spreads = buildSpreads(manifest, settings.layout, settings.coverAlone);
+
+      // Decide the entry page: deep-link page wins, else restored progress.
+      let startPage = launch.kind === 'connected' ? (launch.startPage ?? 0) : 0;
+      let resumePage: number | null = null;
+      const restored = await provider.restoreProgress();
+      if ((launch.kind !== 'connected' || launch.startPage == null) && restored) {
+        if (restored.page > 0 && restored.page < manifest.pageCount) {
+          startPage = restored.page;
+          resumePage = restored.page;
+        }
+      }
+
+      set({
+        status: 'ready',
+        mode: launch.kind,
+        title: launch.title,
+        manifest,
+        spreads,
+        settings,
+        provider,
+        pages,
+        thumbs,
+        resumePage,
+      });
+      navigateTo(startPage);
+    } catch (err) {
+      set({
+        status: 'error',
+        error: err instanceof Error ? err.message : 'Failed to open this comic.',
+      });
+    }
+  }
+
   /** Moves to a page, snapping to the start of its spread; resets zoom/pan. */
   function navigateTo(page: number): void {
     const { manifest, spreads } = get();
@@ -153,56 +230,7 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
 
     init: async (url?: string) => {
       set({ status: 'loading' });
-      try {
-        const launch = await resolveLaunch(url);
-        if (launch.kind === 'empty') {
-          set({ status: 'idle', mode: 'empty' });
-          return;
-        }
-        if (launch.kind === 'error') {
-          set({ status: 'error', mode: 'empty', error: launch.message });
-          return;
-        }
-
-        const provider = launch.provider;
-        const manifest = launch.kind === 'standalone' ? launch.manifest : await provider.manifest();
-
-        const pages = new PageCache(provider, PAGE_CACHE_CAPACITY);
-        const thumbs = new ThumbCache(provider);
-        const direction = manifest.readingDir ?? DEFAULT_SETTINGS.direction;
-        const settings: ReaderSettings = { ...DEFAULT_SETTINGS, direction };
-        const spreads = buildSpreads(manifest, settings.layout, settings.coverAlone);
-
-        // Decide the entry page: deep-link page wins, else restored progress.
-        let startPage = launch.kind === 'connected' ? (launch.startPage ?? 0) : 0;
-        let resumePage: number | null = null;
-        const restored = await provider.restoreProgress();
-        if ((launch.kind !== 'connected' || launch.startPage == null) && restored) {
-          if (restored.page > 0 && restored.page < manifest.pageCount) {
-            startPage = restored.page;
-            resumePage = restored.page;
-          }
-        }
-
-        set({
-          status: 'ready',
-          mode: launch.kind,
-          title: launch.title,
-          manifest,
-          spreads,
-          settings,
-          provider,
-          pages,
-          thumbs,
-          resumePage,
-        });
-        navigateTo(startPage);
-      } catch (err) {
-        set({
-          status: 'error',
-          error: err instanceof Error ? err.message : 'Failed to open this comic.',
-        });
-      }
+      await applyLaunch(await resolveLaunch(url));
     },
 
     retry: () => {
@@ -210,24 +238,26 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
     },
 
     openUrl: (url) => {
-      // Persist the current book's place and tear down its caches before swapping.
-      const { provider, manifest, currentPage, finished } = get();
-      if (provider && manifest) {
-        provider.saveProgress({
-          bookId: manifest.bookId,
-          page: currentPage,
-          status: finished ? 'read' : 'in_progress',
-          updatedAt: Date.now(),
-        });
-      }
-      if (saveTimer) {
-        clearTimeout(saveTimer);
-        saveTimer = null;
-      }
-      get().pages?.dispose();
-      get().thumbs?.dispose();
-      set({ provider: null, pages: null, thumbs: null, finished: false, resumePage: null });
+      teardownCurrent();
       void get().init(url);
+    },
+
+    openFile: async () => {
+      if (!('__TAURI_INTERNALS__' in window)) return;
+      let path: string | null;
+      try {
+        path = await invoke<string | null>('pick_comic_file');
+      } catch (err) {
+        set({
+          status: 'error',
+          error: err instanceof Error ? err.message : 'Could not open the file picker.',
+        });
+        return;
+      }
+      if (!path) return; // user cancelled
+      teardownCurrent();
+      set({ status: 'loading' });
+      await applyLaunch(await resolveLaunchFromPath(path));
     },
 
     goToPage: (page) => navigateTo(page),

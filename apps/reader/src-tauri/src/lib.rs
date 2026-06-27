@@ -7,6 +7,7 @@ mod formats_gen;
 mod local;
 
 use std::path::Path;
+use std::process::Command;
 
 /// Returns the comic file path passed on the command line, if any. The first argument
 /// whose extension is a supported comic format wins.
@@ -19,6 +20,59 @@ fn get_open_path() -> Option<String> {
             .map(formats::is_supported)
             .unwrap_or(false)
     })
+}
+
+/// Opens the OS file picker for a comic archive and returns the chosen absolute path, or
+/// `None` if the user cancelled. Shells out to the platform's native dialog so the crate's
+/// dependency surface stays unchanged (mirrors the client's `pick_folder`).
+#[tauri::command]
+fn pick_comic_file() -> Result<Option<String>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        // A WinForms OpenFileDialog driven by PowerShell in an STA thread. Prints the
+        // selected path on stdout, nothing on cancel.
+        let script = "Add-Type -AssemblyName System.Windows.Forms; \
+            $f = New-Object System.Windows.Forms.OpenFileDialog; \
+            $f.Title = 'Open a comic'; \
+            $f.Filter = 'Comic archives (*.cbz;*.cbr;*.cb7;*.cbt;*.zip;*.tar)|*.cbz;*.cbr;*.cb7;*.cbt;*.zip;*.tar|All files (*.*)|*.*'; \
+            if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { \
+            [Console]::Out.Write($f.FileName) }";
+        let out = Command::new("powershell")
+            .args(["-NoProfile", "-STA", "-NonInteractive", "-Command", script])
+            .output()
+            .map_err(|e| format!("open file dialog: {e}"))?;
+        let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        return Ok(if path.is_empty() { None } else { Some(path) });
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let script = "POSIX path of (choose file with prompt \"Open a comic\" \
+            of type {\"cbz\",\"cbr\",\"cb7\",\"cbt\",\"zip\",\"tar\"})";
+        let out = Command::new("osascript")
+            .args(["-e", script])
+            .output()
+            .map_err(|e| format!("open file dialog: {e}"))?;
+        let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        return Ok(if path.is_empty() { None } else { Some(path) });
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let out = Command::new("zenity")
+            .args([
+                "--file-selection",
+                "--title=Open a comic",
+                "--file-filter=Comics | *.cbz *.cbr *.cb7 *.cbt *.zip *.tar",
+            ])
+            .output()
+            .map_err(|e| format!("open file dialog: {e}"))?;
+        let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        return Ok(if path.is_empty() { None } else { Some(path) });
+    }
+
+    #[allow(unreachable_code)]
+    Ok(None)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -58,6 +112,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_open_path,
+            pick_comic_file,
             local::local_open,
             local::local_manifest,
             local::local_page,

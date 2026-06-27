@@ -16,6 +16,17 @@ function isTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 }
 
+/**
+ * Extracts a human message from a thrown value. Tauri's `invoke` rejects with the plain
+ * string a command returns (not an Error), so the helpful Rust message — e.g. "Standalone
+ * reading of .cbr files isn't supported yet" — is a string we must surface, not drop.
+ */
+function errMessage(err: unknown, fallback: string): string {
+  if (typeof err === 'string' && err.trim()) return err;
+  if (err instanceof Error && err.message) return err.message;
+  return fallback;
+}
+
 /** Best-effort, stable-ish device label for progress reconciliation. */
 function deviceLabel(): string {
   if (typeof navigator !== 'undefined' && navigator.platform) {
@@ -111,12 +122,23 @@ export async function resolveLaunch(explicitUrl?: string): Promise<LaunchResult>
         return { kind: 'standalone', provider, manifest, title };
       }
     } catch (err) {
-      return {
-        kind: 'error',
-        message: err instanceof Error ? err.message : 'Could not open the comic file.',
-      };
+      return { kind: 'error', message: errMessage(err, 'Could not open the comic file.') };
     }
   }
 
   return { kind: 'empty' };
+}
+
+/**
+ * Resolves a launch for an explicit on-disk comic path — the "Open file…" action inside the
+ * reader. Always standalone mode (no server); surfaces the Rust opener's message on failure.
+ */
+export async function resolveLaunchFromPath(path: string): Promise<LaunchResult> {
+  try {
+    const { provider, manifest } = await LocalPageProvider.open(path);
+    const title = path.split(/[\\/]/).pop();
+    return { kind: 'standalone', provider, manifest, title };
+  } catch (err) {
+    return { kind: 'error', message: errMessage(err, 'Could not open the comic file.') };
+  }
 }

@@ -69,7 +69,18 @@ pub fn launch_reader(
 /// Opens a URL/URI with the platform's default handler.
 fn open_url(url: &str) -> Result<(), String> {
     #[cfg(target_os = "windows")]
-    let result = Command::new("cmd").args(["/C", "start", "", url]).spawn();
+    let result = {
+        use std::os::windows::process::CommandExt;
+        // The deep link carries query params joined by `&`, which cmd treats as a command
+        // separator — so `cmd /C start "" <url>` truncates the URL at the first `&` and the
+        // reader loses `bookId` (it opens empty). std's arg quoting won't add quotes (the
+        // URL has no spaces), so emit the command line verbatim with the URL double-quoted,
+        // which makes cmd treat `&` literally. `""` is start's ignored window-title arg.
+        // The URL's values are percent-encoded upstream, so it can't contain a literal `"`.
+        Command::new("cmd")
+            .raw_arg(format!("/C start \"\" \"{url}\""))
+            .spawn()
+    };
 
     #[cfg(target_os = "macos")]
     let result = Command::new("open").arg(url).spawn();

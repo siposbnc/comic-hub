@@ -5,11 +5,14 @@ import { Reader } from './reader/Reader.js';
 import { Button } from '@comichub/ui';
 import { Icon } from '@comichub/ui';
 
+const canOpenFile = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
 export function App() {
   const status = useReaderStore((s) => s.status);
   const error = useReaderStore((s) => s.error);
   const init = useReaderStore((s) => s.init);
   const retry = useReaderStore((s) => s.retry);
+  const openFile = useReaderStore((s) => s.openFile);
   const dispose = useReaderStore((s) => s.dispose);
 
   useEffect(() => {
@@ -52,7 +55,14 @@ export function App() {
         <Icon name="alert-triangle" size={40} />
         <h1 className="screen__title">Couldn&apos;t open this comic</h1>
         <p className="screen__muted">{error ?? 'Something went wrong.'}</p>
-        <Button onClick={retry}>Try again</Button>
+        <div className="screen__actions">
+          <Button onClick={retry}>Try again</Button>
+          {canOpenFile && (
+            <Button variant="secondary" onClick={() => void openFile()}>
+              Open file…
+            </Button>
+          )}
+        </div>
       </div>
     );
   }
@@ -66,6 +76,11 @@ export function App() {
         Open a comic file ({SUPPORTED_EXTENSIONS.join(', ')}), or launch a book from the ComicHub
         client.
       </p>
+      {canOpenFile && (
+        <div className="screen__actions">
+          <Button onClick={() => void openFile()}>Open file…</Button>
+        </div>
+      )}
       <p className="screen__hint">
         Dev: append <code>?bookId=&lt;id&gt;</code> (and optionally{' '}
         <code>&amp;server=&amp;token=&amp;page=</code>) to drive connected mode against a running

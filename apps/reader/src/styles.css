@@ -51,6 +51,14 @@ body {
   color: var(--paper-400);
 }
 
+.screen__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  justify-content: center;
+  margin-top: 0.25rem;
+}
+
 .screen__hint {
   margin-top: 0.5rem;
   max-width: 54ch;
