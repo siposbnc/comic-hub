@@ -1,0 +1,32 @@
+/* ComicHub — Spacing & layout tokens. 8px base; section rhythm in multiples of 8. */
+
+:root {
+  --space-0: 0;
+  --space-1: 2px;   /* the cover grid gap — a hairline ink seam, gallery-tight */
+  --space-2: 4px;
+  --space-3: 8px;   /* BASE unit */
+  --space-4: 12px;
+  --space-5: 16px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 48px;
+  --space-9: 64px;
+  --space-10: 96px;
+
+  /* --- Semantic spacing --- */
+  --gap-cover: var(--space-1);     /* between covers in a grid/rail */
+  --pad-card: var(--space-5);      /* card inner padding */
+  --pad-screen: var(--space-7);    /* screen gutter */
+  --gap-section: var(--space-8);   /* between major sections */
+
+  /* --- Shell metrics --- */
+  --sidebar-width: 232px;
+  --topbar-height: 56px;
+  --content-max: 1440px;
+
+  /* --- Cover geometry --- */
+  --cover-aspect: 2 / 3; /* @kind other */ /* true comic cover ratio */
+  --cover-w-s: 120px;
+  --cover-w-m: 168px;
+  --cover-w-l: 232px;
+}

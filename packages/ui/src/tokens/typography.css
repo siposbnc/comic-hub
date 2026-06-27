@@ -1,0 +1,82 @@
+/* ComicHub — Typography tokens
+   Three voices, each doing one job, chosen to feel like comic production:
+   Display = cover masthead, Body = neutral catalog, Mono = spine/catalog-card labels. */
+
+:root {
+  /* --- Families --- */
+  --font-display: 'Archivo Expanded', 'Archivo', system-ui, sans-serif; /* wide grotesque, masthead */
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif; /* workhorse UI */
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace; /* data / spine labels */
+
+  /* --- Weights --- */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --weight-black: 800;
+
+  /* --- Type scale (1.25 ratio). Each pairs a size with its line-height. --- */
+  --text-display-xl: 3.05rem;  --leading-display-xl: 1.05; /* series hero titles */
+  --text-display-l: 2.44rem;   --leading-display-l: 1.1;   /* page titles */
+  --text-title: 1.95rem;       --leading-title: 1.15;      /* section headers */
+  --text-heading: 1.25rem;     --leading-heading: 1.3;     /* card titles, dialogs */
+  --text-body: 1rem;           --leading-body: 1.5;        /* default */
+  --text-small: 0.8rem;        --leading-small: 1.4;       /* captions */
+  --text-label: 0.75rem;       --leading-label: 1.3;       /* mono eyebrows, data */
+
+  /* --- Tracking --- */
+  --tracking-tight: -0.01em;  /* display sizes */
+  --tracking-normal: 0;
+  --tracking-label: 0.02em;   /* mono uppercase labels (+2%) */
+}
+
+/* ============================================================
+   Reusable type roles — apply as classes or copy the declarations.
+   ============================================================ */
+.ch-display-xl {
+  font-family: var(--font-display);
+  font-weight: var(--weight-black);
+  font-size: var(--text-display-xl);
+  line-height: var(--leading-display-xl);
+  letter-spacing: var(--tracking-tight);
+}
+.ch-display-l {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: var(--text-display-l);
+  line-height: var(--leading-display-l);
+  letter-spacing: var(--tracking-tight);
+}
+.ch-title {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: var(--text-title);
+  line-height: var(--leading-title);
+}
+.ch-heading {
+  font-family: var(--font-body);
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-heading);
+  line-height: var(--leading-heading);
+}
+.ch-body {
+  font-family: var(--font-body);
+  font-weight: var(--weight-regular);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+}
+.ch-small {
+  font-family: var(--font-body);
+  font-weight: var(--weight-medium);
+  font-size: var(--text-small);
+  line-height: var(--leading-small);
+}
+/* The signature "this is a comic's data" voice — issue numbers, page counts, dates. */
+.ch-label {
+  font-family: var(--font-mono);
+  font-weight: var(--weight-medium);
+  font-size: var(--text-label);
+  line-height: var(--leading-label);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}

@@ -1,0 +1,158 @@
+/* ComicHub — base reset + the print-signature primitives.
+   Everything here is brand-load-bearing: the longbox surface, the registration
+   ticks, the spine tab, and the halftone field. */
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg-app);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection { background: var(--accent); color: var(--text-on-accent); }
+
+@keyframes ch-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  @keyframes ch-spin { to { transform: none; } }
+}
+
+:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-sm);
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; text-underline-offset: 2px; }
+
+/* Thin mono tabular figures helper — issue numbers, counts, dates. */
+.ch-mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* ============================================================
+   SIGNATURE 1 — Registration crop-mark ticks
+   Thin cyan ticks at the four corners of a cover, like a plate on the press
+   bed. Wrap a cover in .ch-reg and they draw in on hover/focus-within.
+   ============================================================ */
+.ch-reg { position: relative; }
+.ch-reg::before,
+.ch-reg::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-standard);
+}
+/* top-left + bottom-right ticks */
+.ch-reg::before {
+  background:
+    linear-gradient(var(--accent), var(--accent)) left top / 14px var(--border-cover-tick) no-repeat,
+    linear-gradient(var(--accent), var(--accent)) left top / var(--border-cover-tick) 14px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) right bottom / 14px var(--border-cover-tick) no-repeat,
+    linear-gradient(var(--accent), var(--accent)) right bottom / var(--border-cover-tick) 14px no-repeat;
+}
+/* top-right + bottom-left ticks */
+.ch-reg::after {
+  background:
+    linear-gradient(var(--accent), var(--accent)) right top / 14px var(--border-cover-tick) no-repeat,
+    linear-gradient(var(--accent), var(--accent)) right top / var(--border-cover-tick) 14px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) left bottom / 14px var(--border-cover-tick) no-repeat,
+    linear-gradient(var(--accent), var(--accent)) left bottom / var(--border-cover-tick) 14px no-repeat;
+}
+.ch-reg:hover::before,
+.ch-reg:hover::after,
+.ch-reg:focus-within::before,
+.ch-reg:focus-within::after { opacity: 1; }
+
+/* ============================================================
+   SIGNATURE 2 — Spine tab
+   A small mono number tab clipped to a cover's lower-left, echoing a longbox
+   divider. Magenta = unread, hollow ink = read, cyan underline = in-progress.
+   ============================================================ */
+.ch-spine-tab {
+  position: absolute;
+  left: 0;
+  bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px 3px 6px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: var(--weight-medium);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tracking-label);
+  color: var(--text-on-accent);
+  background: var(--unread);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 7px) 100%, 0 100%);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.45);
+}
+.ch-spine-tab[data-state='read'] {
+  background: color-mix(in oklab, var(--ink-900) 70%, transparent);
+  color: var(--paper-400);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+.ch-spine-tab[data-state='reading'] { background: var(--accent); color: var(--text-on-accent); }
+
+/* ============================================================
+   SIGNATURE 3 — Halftone Ben-Day field (used once: empty states / splash)
+   A single large cyan→magenta dot field. The only place the "print" texture
+   appears, so it stays special.
+   ============================================================ */
+.ch-halftone {
+  background-image: radial-gradient(currentColor 1.4px, transparent 1.6px);
+  background-size: 12px 12px;
+  color: var(--accent);
+  opacity: 0.5;
+}
+.ch-halftone-duo {
+  background-image:
+    radial-gradient(var(--cyan-500) 1.4px, transparent 1.6px),
+    radial-gradient(var(--magenta-500) 1.4px, transparent 1.6px);
+  background-size: 14px 14px, 14px 14px;
+  background-position: 0 0, 7px 7px;
+  opacity: 0.42;
+}
+
+/* Range slider thumb (the track is set inline per-component). */
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--paper-100);
+  border: 2px solid var(--accent);
+  cursor: pointer;
+}
+input[type='range']::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--paper-100);
+  border: 2px solid var(--accent);
+  cursor: pointer;
+}
+
+/* Read-progress underline used under covers / cards. */
+.ch-progress {
+  height: 3px;
+  background: var(--ink-600);
+  overflow: hidden;
+}
+.ch-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}

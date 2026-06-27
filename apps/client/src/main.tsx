@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import '@comichub/ui/tokens.css';
+import '@comichub/ui/styles.css';
 import './styles.css';
 import { App } from './App.js';
 

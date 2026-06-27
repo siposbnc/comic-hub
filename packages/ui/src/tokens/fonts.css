@@ -1,0 +1,12 @@
+/* ComicHub webfonts
+   ---------------------------------------------------------------
+   Display : Archivo Expanded (700/800) — masthead / cover-logo voice
+   Body/UI : Inter (400/500/600)        — neutral catalog workhorse
+   Data    : IBM Plex Mono (500)        — issue numbers, page counts, dates
+
+   NOTE: loaded from the Google Fonts CDN. All three are exact matches to
+   the ComicHub brief (no substitutions). If you need self-hosted binaries,
+   drop the .woff2 files in tokens/fonts/ and replace the @import below with
+   local @font-face rules. */
+
+@import url('https://fonts.googleapis.com/css2?family=Archivo+Expanded:wght@700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');

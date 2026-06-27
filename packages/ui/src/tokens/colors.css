@@ -1,0 +1,106 @@
+/* ComicHub — Color tokens
+   "The Longbox": a calm ink-dark gallery so saturated cover art is the only
+   loud thing on screen. One bold idea — process CMYK printing: cyan is the
+   primary spot color, magenta marks "new/unread", yellow is a rare key accent. */
+
+:root,
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* --- Base ramp: ink (cool near-black press environment) --- */
+  --ink-900: #0C0E12; /* app background — the longbox interior */
+  --ink-800: #13161C; /* raised surfaces / sidebar */
+  --ink-700: #1C212B; /* cards, inputs, hover fills */
+  --ink-600: #2A313D; /* borders, dividers, hairlines */
+  --ink-500: #3A4250; /* stronger border / pressed border */
+
+  /* --- Base ramp: paper (text on ink) --- */
+  --paper-100: #ECEEF2; /* primary text */
+  --paper-400: #9BA3B0; /* secondary text, metadata */
+  --paper-600: #5C6573; /* tertiary / disabled */
+
+  /* --- Process inks (the one bold idea) --- */
+  --cyan-500: #16B9E6;  /* PRIMARY accent — actions, focus, progress, links */
+  --cyan-600: #0E93B8;  /* pressed / accent border */
+  --cyan-300: #7FD9F2;  /* light cyan — on-accent hairlines, subtle fills */
+  --magenta-500: #E6398B; /* UNREAD / new highlight only */
+  --magenta-600: #C32472;
+  --yellow-400: #F4C13C;  /* key / warning accent (rare) */
+
+  /* --- Semantic status --- */
+  --danger-500: #E5484D;
+  --success-500: #46A758;
+
+  /* ============================================================
+     Semantic aliases — reach for these in components, not the ramp
+     ============================================================ */
+  --bg-app: var(--ink-900);
+  --surface-raised: var(--ink-800);
+  --surface-card: var(--ink-700);
+  --surface-hover: var(--ink-700);
+  --surface-cover: var(--ink-800); /* covers always sit on this so art pops */
+
+  --border-hairline: var(--ink-600);
+  --border-strong: var(--ink-500);
+
+  --text-primary: var(--paper-100);
+  --text-secondary: var(--paper-400);
+  --text-tertiary: var(--paper-600);
+  --text-on-accent: #04121A;
+
+  --accent: var(--cyan-500);
+  --accent-press: var(--cyan-600);
+  --accent-soft: color-mix(in oklab, var(--cyan-500) 16%, var(--ink-800));
+  --focus-ring: var(--cyan-500);
+
+  --unread: var(--magenta-500);
+  --unread-press: var(--magenta-600);
+
+  --danger: var(--danger-500);
+  --success: var(--success-500);
+  --warning: var(--yellow-400);
+}
+
+/* --- Light theme: true (faintly warm) newsprint white, never cream --- */
+[data-theme='light'] {
+  color-scheme: light;
+
+  --ink-900: #F7F6F2; /* paper white — a hair warm, newsprint not cream */
+  --ink-800: #FFFFFF;
+  --ink-700: #FBFAF7;
+  --ink-600: #E2E1DB; /* borders */
+  --ink-500: #C9C8C1;
+
+  --paper-100: #15171C; /* ink text */
+  --paper-400: #555C68;
+  --paper-600: #8A909B;
+
+  --cyan-500: #0E93B8;  /* darken one step for AA on paper */
+  --cyan-600: #0A7396;
+  --cyan-300: #5BB9D6;
+  --magenta-500: #C32472;
+  --magenta-600: #9E1A5C;
+  --yellow-400: #C8951B;
+
+  --danger-500: #C62A2F;
+  --success-500: #2F7D3E;
+
+  --text-on-accent: #FFFFFF;
+  --surface-cover: #EDECE6; /* covers still on a neutral, slightly recessed plate */
+  --accent-soft: color-mix(in oklab, var(--cyan-500) 14%, var(--ink-800));
+}
+
+/* --- Accent override: personalization without breaking contrast --- */
+[data-accent='magenta'] {
+  --accent: var(--magenta-500);
+  --accent-press: var(--magenta-600);
+  --focus-ring: var(--magenta-500);
+  --accent-soft: color-mix(in oklab, var(--magenta-500) 16%, var(--ink-800));
+}
+[data-accent='amber'] {
+  --accent: var(--yellow-400);
+  --accent-press: #D9A92B;
+  --focus-ring: var(--yellow-400);
+  --text-on-accent: #1A1404;
+  --accent-soft: color-mix(in oklab, var(--yellow-400) 16%, var(--ink-800));
+}

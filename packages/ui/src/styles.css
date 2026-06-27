@@ -1,0 +1,11 @@
+/* ComicHub Design System — global stylesheet entry point.
+   Consumers link THIS one file. Keep it a list of @imports only.
+   Synced from the ComicHub Design System (claude.ai/design); see
+   packages/ui/README sync notes. */
+
+@import url('./tokens/fonts.css');
+@import url('./tokens/colors.css');
+@import url('./tokens/typography.css');
+@import url('./tokens/spacing.css');
+@import url('./tokens/effects.css');
+@import url('./tokens/base.css');

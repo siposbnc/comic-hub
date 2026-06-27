@@ -1,20 +1,5 @@
-* {
-  box-sizing: border-box;
-}
-
-html,
-body,
-#root {
-  height: 100%;
-  margin: 0;
-}
-
-body {
-  background: var(--ch-bg);
-  color: var(--ch-text);
-  font-family: var(--ch-font-body);
-  -webkit-font-smoothing: antialiased;
-}
+/* Phase-0 handshake screen styling. Real screens (AppShell, Home, …) replace this
+   in Phase 1 client work; tokens come from @comichub/ui/styles.css. */
 
 .app {
   min-height: 100%;
@@ -25,22 +10,22 @@ body {
 
 .panel {
   width: min(560px, 100%);
-  background: var(--ch-surface);
-  border: 1px solid var(--ch-border);
-  border-radius: var(--ch-radius);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-md);
   padding: 1.75rem;
 }
 
 .wordmark {
-  font-family: var(--ch-font-display);
-  font-size: var(--ch-text-title);
+  font-family: var(--font-display);
+  font-size: var(--text-title);
   font-weight: 800;
   letter-spacing: 0.02em;
   margin: 0 0 0.25rem;
 }
 
 .subtitle {
-  color: var(--ch-text-muted);
+  color: var(--text-secondary);
   margin: 0 0 1.5rem;
 }
 
@@ -48,12 +33,12 @@ body {
   display: grid;
   grid-template-columns: 9rem 1fr;
   gap: 0.4rem 1rem;
-  font-family: var(--ch-font-mono);
-  font-size: var(--ch-text-small);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
 }
 
 .kv dt {
-  color: var(--ch-text-muted);
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -68,20 +53,20 @@ body {
 }
 
 .dot--ok {
-  background: var(--ch-success-500);
+  background: var(--success-500);
 }
 
 .dot--err {
-  background: var(--ch-danger-500);
+  background: var(--danger-500);
 }
 
 .dot--wait {
-  background: var(--ch-yellow-400);
+  background: var(--yellow-400);
 }
 
 .error {
-  color: var(--ch-danger-500);
-  font-family: var(--ch-font-mono);
-  font-size: var(--ch-text-small);
+  color: var(--danger-500);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
   margin-top: 1rem;
 }
