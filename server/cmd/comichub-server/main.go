@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -20,10 +21,12 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/config"
 	"github.com/siposbnc/comic-hub/server/internal/connection"
 	"github.com/siposbnc/comic-hub/server/internal/domain"
+	"github.com/siposbnc/comic-hub/server/internal/image"
 	"github.com/siposbnc/comic-hub/server/internal/jobs"
 	"github.com/siposbnc/comic-hub/server/internal/logging"
 	"github.com/siposbnc/comic-hub/server/internal/scanner"
 	"github.com/siposbnc/comic-hub/server/internal/service/library"
+	"github.com/siposbnc/comic-hub/server/internal/service/reader"
 	"github.com/siposbnc/comic-hub/server/internal/store/sqlite"
 	httptransport "github.com/siposbnc/comic-hub/server/internal/transport/http"
 	"github.com/siposbnc/comic-hub/server/internal/version"
@@ -73,10 +76,23 @@ func run() error {
 	store := sqlite.NewStore(db)
 	libraries := library.New(store)
 
+	// Shared format registry for scanning and reading.
+	registry := archive.DefaultRegistry()
+
+	// Image pipeline: pure-Go processor + on-disk derived-image cache.
+	derivedCache, err := image.NewDiskCache(filepath.Join(cfg.DataDir, "cache", "derived"))
+	if err != nil {
+		return fmt.Errorf("init image cache: %w", err)
+	}
+	readerSvc, err := reader.New(store, registry, image.New(), derivedCache)
+	if err != nil {
+		return fmt.Errorf("init reader service: %w", err)
+	}
+
 	// Background jobs: the scanner runs as a "scan" job on the worker pool.
 	runner := jobs.NewRunner(store, logger, 4)
 	defer runner.Shutdown()
-	sc := scanner.New(store, archive.DefaultRegistry(), logger, hashLargeThreshold)
+	sc := scanner.New(store, registry, logger, hashLargeThreshold)
 	runner.Register(domain.JobScan, func(ctx context.Context, payload string, progress jobs.ProgressFunc) error {
 		var p scanner.JobPayload
 		if err := json.Unmarshal([]byte(payload), &p); err != nil {
@@ -103,6 +119,7 @@ func run() error {
 		Library:  libraries,
 		Repo:     store,
 		Runner:   runner,
+		Reader:   readerSvc,
 	})
 
 	srv := &http.Server{

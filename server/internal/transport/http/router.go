@@ -17,6 +17,7 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/domain"
 	"github.com/siposbnc/comic-hub/server/internal/jobs"
 	"github.com/siposbnc/comic-hub/server/internal/service/library"
+	"github.com/siposbnc/comic-hub/server/internal/service/reader"
 )
 
 // Deps are the dependencies the HTTP layer needs.
@@ -28,6 +29,7 @@ type Deps struct {
 	Library  *library.Service
 	Repo     domain.Repository
 	Runner   *jobs.Runner
+	Reader   *reader.Service
 }
 
 // NewRouter builds the HTTP handler tree.
@@ -63,6 +65,14 @@ func NewRouter(d Deps) http.Handler {
 		})
 
 		r.Get("/jobs/{id}", handleGetJob(d.Repo))
+
+		r.Route("/books", func(r chi.Router) {
+			r.Get("/{id}/manifest", handleManifest(d.Reader))
+			r.Get("/{id}/cover", handleCover(d.Reader))
+			r.Get("/{id}/pages/{idx}", handlePage(d.Reader))
+			r.Get("/{id}/pages/{idx}/thumb", handlePageThumb(d.Reader))
+			r.Post("/{id}/prefetch", handlePrefetch(d.Reader))
+		})
 	})
 
 	return r

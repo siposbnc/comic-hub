@@ -17,9 +17,11 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/archive"
 	"github.com/siposbnc/comic-hub/server/internal/config"
 	"github.com/siposbnc/comic-hub/server/internal/domain"
+	"github.com/siposbnc/comic-hub/server/internal/image"
 	"github.com/siposbnc/comic-hub/server/internal/jobs"
 	"github.com/siposbnc/comic-hub/server/internal/scanner"
 	"github.com/siposbnc/comic-hub/server/internal/service/library"
+	"github.com/siposbnc/comic-hub/server/internal/service/reader"
 	"github.com/siposbnc/comic-hub/server/internal/store/sqlite"
 )
 
@@ -37,9 +39,19 @@ func newScanServer(t *testing.T) (string, *sqlite.Store) {
 	}
 	store := sqlite.NewStore(db)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	registry := archive.DefaultRegistry()
+
+	derived, err := image.NewDiskCache(filepath.Join(t.TempDir(), "derived"))
+	if err != nil {
+		t.Fatalf("derived cache: %v", err)
+	}
+	readerSvc, err := reader.New(store, registry, image.New(), derived)
+	if err != nil {
+		t.Fatalf("reader svc: %v", err)
+	}
 
 	runner := jobs.NewRunner(store, logger, 2)
-	sc := scanner.New(store, archive.DefaultRegistry(), logger, 0)
+	sc := scanner.New(store, registry, logger, 0)
 	runner.Register(domain.JobScan, func(ctx context.Context, payload string, progress jobs.ProgressFunc) error {
 		var p scanner.JobPayload
 		if err := json.Unmarshal([]byte(payload), &p); err != nil {
@@ -55,6 +67,7 @@ func newScanServer(t *testing.T) (string, *sqlite.Store) {
 		Library: library.New(store),
 		Repo:    store,
 		Runner:  runner,
+		Reader:  readerSvc,
 	})
 	srv := httptest.NewServer(router)
 	t.Cleanup(func() { srv.Close(); runner.Shutdown(); _ = db.Close() })
