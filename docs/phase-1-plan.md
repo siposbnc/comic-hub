@@ -82,8 +82,8 @@ latency, cache hit); docs kept in lockstep (03-api.md, 09-tech-decisions.md).
 | M0 — Design-system foundation synced | ✅ done |
 | S1 — Catalog store + Libraries API | ✅ done |
 | S2 — Archive readers (CBZ + CBR) | ✅ done |
-| S3 — Scanner + job system | 🛠 in progress |
-| S4 — Image pipeline + page streaming | ⬜ pending |
+| S3 — Scanner + job system | ✅ done |
+| S4 — Image pipeline + page streaming | ⬜ pending (next) |
 | S5 — Browse + progress + WS | ⬜ pending |
 | R1 / R2 — Reader | ⬜ pending |
 | C1–C4 — Client | ⬜ pending |
