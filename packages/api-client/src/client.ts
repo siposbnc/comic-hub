@@ -100,6 +100,41 @@ export class ComicHubClient {
     return this.request<Job>('GET', `/api/v1/jobs/${encodeURIComponent(id)}`);
   }
 
+  // ── Images ───────────────────────────────────────────────────────────────────
+  // URL builders for <img src> — image endpoints accept the bearer token as a query
+  // param so plain <img> tags authenticate without headers (docs/03-api.md §11).
+
+  /** Absolute URL for a book's cover thumbnail (optional width). */
+  coverUrl(bookId: string, width?: number): string {
+    const w = width ? `&w=${width}` : '';
+    return `${this.baseUrl}/api/v1/books/${encodeURIComponent(bookId)}/cover?token=${encodeURIComponent(this.token)}${w}`;
+  }
+
+  /** Absolute URL for a full page image, with optional server-side resize/transcode. */
+  pageUrl(
+    bookId: string,
+    idx: number,
+    opts: { width?: number; format?: 'jpeg' | 'png'; quality?: number } = {},
+  ): string {
+    const p = new URLSearchParams({ token: this.token });
+    if (opts.width) p.set('w', String(opts.width));
+    if (opts.format) p.set('fmt', opts.format);
+    if (opts.quality) p.set('q', String(opts.quality));
+    return `${this.baseUrl}/api/v1/books/${encodeURIComponent(bookId)}/pages/${idx}?${p.toString()}`;
+  }
+
+  /** Absolute URL for a page's scrubber thumbnail. */
+  pageThumbUrl(bookId: string, idx: number): string {
+    return `${this.baseUrl}/api/v1/books/${encodeURIComponent(bookId)}/pages/${idx}/thumb?token=${encodeURIComponent(this.token)}`;
+  }
+
+  /** Hints the server to warm pages [from, from+count) into its cache. */
+  async prefetch(bookId: string, from: number, count: number): Promise<void> {
+    await this.request<unknown>('POST', `/api/v1/books/${encodeURIComponent(bookId)}/prefetch`, {
+      body: { from, count },
+    });
+  }
+
   private async request<T>(
     method: string,
     path: string,

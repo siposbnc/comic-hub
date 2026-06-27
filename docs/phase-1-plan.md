@@ -85,8 +85,8 @@ latency, cache hit); docs kept in lockstep (03-api.md, 09-tech-decisions.md).
 | S1 — Catalog store + Libraries API | ✅ done |
 | S2 — Archive readers (CBZ + CBR) | ✅ done |
 | S3 — Scanner + job system | ✅ done |
-| S4 — Image pipeline + page streaming | ⬜ pending (next) |
-| S5 — Browse + progress + WS | ⬜ pending |
+| S4 — Image pipeline + page streaming | ✅ done (pure-Go; govips swap later) |
+| S5 — Browse + progress + WS | ⬜ pending (next) |
 | R1 / R2 — Reader | ⬜ pending |
 | C1–C4 — Client | ⬜ pending |
 
