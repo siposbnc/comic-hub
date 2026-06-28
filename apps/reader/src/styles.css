@@ -754,3 +754,319 @@ body {
     animation-duration: 1.4s;
   }
 }
+
+/* ── Bookmarks ──────────────────────────────────────────────────────── */
+/* toolbar cluster: toggle (the IconButton) + count pill that opens the list */
+.toolbar__bm {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+}
+.bm-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  height: 30px;
+  padding: 0 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--paper-400);
+  cursor: pointer;
+}
+.bm-count .ch-mono {
+  font-size: 0.78rem;
+}
+.bm-count:hover {
+  color: var(--paper-100);
+}
+.bm-count.is-open {
+  background: var(--ink-700);
+  border-color: var(--ink-600);
+  color: var(--paper-100);
+}
+
+/* scrubber bookmark markers (diamonds on the track) */
+.scrubber__mark {
+  position: absolute;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  background: var(--accent);
+  border: 1px solid var(--ink-900);
+  cursor: pointer;
+  z-index: 2;
+}
+.scrubber__mark:hover,
+.scrubber__mark.is-current {
+  background: var(--paper-100);
+}
+
+/* slide-over list (mirrors the settings panel) */
+.bm-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 35;
+  width: min(344px, 86%);
+  display: flex;
+  flex-direction: column;
+  background: var(--ink-800);
+  border-left: 1px solid var(--ink-600);
+  box-shadow: -16px 0 48px rgba(0, 0, 0, 0.5);
+}
+.bm-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  height: 52px;
+  padding: 0 0.5rem 0 1rem;
+  border-bottom: 1px solid var(--ink-600);
+}
+.bm-head h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+  color: var(--paper-100);
+}
+.bm-head__spacer {
+  flex: 1;
+}
+.bm-synced {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--paper-600);
+}
+
+/* current-page toggle row (the mouse path for the core action) */
+.bm-current {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 1rem;
+  border: none;
+  border-bottom: 1px solid var(--ink-600);
+  background: var(--ink-700);
+  color: var(--paper-100);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+.bm-current:hover {
+  background: var(--ink-600);
+}
+.bm-current__label {
+  flex: 1;
+  font-size: 0.82rem;
+}
+.bm-current__page {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--paper-600);
+}
+.bm-current__page.is-on {
+  color: var(--accent);
+}
+
+.bm-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.bm-row {
+  display: flex;
+  gap: 0.7rem;
+  padding: 0.7rem 0.85rem 0.7rem 0.7rem;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+}
+.bm-row:hover {
+  background: var(--ink-700);
+}
+.bm-row.is-current {
+  border-left-color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 12%, transparent);
+}
+.bm-row__thumb,
+.bm-row__thumb img,
+.bm-row__thumb-ph {
+  flex: none;
+  width: 38px;
+  height: 57px;
+}
+.bm-row__thumb img {
+  object-fit: cover;
+  display: block;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+}
+.bm-row__thumb-ph {
+  display: block;
+  background: var(--ink-600);
+}
+.bm-row__body {
+  flex: 1;
+  min-width: 0;
+}
+.bm-row__top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.bm-row__page {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--paper-100);
+}
+.bm-row__current {
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid color-mix(in oklab, var(--accent) 45%, transparent);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.bm-row__spacer {
+  flex: 1;
+}
+.bm-row__ts {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--paper-600);
+}
+.bm-row__noteline {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.2rem;
+}
+.bm-row__note {
+  flex: 1;
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--paper-400);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.bm-row__note.is-empty {
+  color: var(--paper-600);
+  font-style: italic;
+}
+.bm-row__actions {
+  flex: none;
+  display: flex;
+  gap: 0.1rem;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.bm-row:hover .bm-row__actions {
+  opacity: 1;
+}
+
+.bm-edit {
+  margin-top: 0.5rem;
+}
+.bm-edit input {
+  width: 100%;
+  height: 30px;
+  padding: 0 0.6rem;
+  background: var(--ink-900);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  color: var(--paper-100);
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  outline: none;
+}
+.bm-edit__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.bm-edit__save {
+  height: 26px;
+  padding: 0 0.7rem;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-family: var(--font-body);
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.bm-edit__cancel {
+  height: 26px;
+  padding: 0 0.55rem;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--paper-400);
+  font-family: var(--font-body);
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+.bm-edit__count {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--paper-600);
+}
+
+.bm-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 2.6rem 1.6rem;
+}
+.bm-empty__art {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+.bm-empty__title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: var(--paper-100);
+}
+.bm-empty__body {
+  margin: 0.5rem 0 0;
+  font-size: 0.82rem;
+  color: var(--paper-400);
+  line-height: 1.5;
+}
+.bm-empty__body kbd {
+  font-family: var(--font-mono);
+  color: var(--accent);
+  border: 1px solid var(--ink-600);
+  border-radius: 4px;
+  padding: 0 0.3rem;
+}
+
+/* the toggle confirmation reuses the .toast pill */
+.bm-confirm {
+  gap: 0.5rem;
+  padding: 0.55rem 0.9rem;
+}

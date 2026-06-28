@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Icon } from '@comichub/ui';
 import { useReaderStore } from './store.js';
 import { IconButton } from '../ui/IconButton.js';
 import { toggleFullscreen, isFullscreen } from './fullscreen.js';
@@ -30,7 +31,11 @@ export function Toolbar() {
   const direction = useReaderStore((s) => s.settings.direction);
   const currentPage = useReaderStore((s) => s.currentPage);
   const pageCount = useReaderStore((s) => s.manifest?.pageCount ?? 0);
+  const bookmarks = useReaderStore((s) => s.bookmarks);
+  const bookmarksOpen = useReaderStore((s) => s.bookmarksOpen);
 
+  const toggleBookmark = useReaderStore((s) => s.toggleBookmark);
+  const setBookmarksOpen = useReaderStore((s) => s.setBookmarksOpen);
   const toggleLayout = useReaderStore((s) => s.toggleLayout);
   const toggleContinuous = useReaderStore((s) => s.toggleContinuous);
   const cycleFit = useReaderStore((s) => s.cycleFit);
@@ -82,6 +87,28 @@ export function Toolbar() {
           onClick={toggleDirection}
         />
         <IconButton icon="settings" label="Reader settings" onClick={() => openSettings(true)} />
+        {mode === 'connected' && (
+          <span className="toolbar__bm">
+            <IconButton
+              icon="bookmark"
+              label="Bookmark page"
+              hint="B"
+              active={bookmarks.some((b) => b.page === currentPage)}
+              onClick={() => void toggleBookmark()}
+            />
+            <button
+              type="button"
+              className={`bm-count${bookmarksOpen ? ' is-open' : ''}`}
+              aria-label="Bookmarks list"
+              aria-expanded={bookmarksOpen}
+              title="Bookmarks list"
+              onClick={() => setBookmarksOpen(!bookmarksOpen)}
+            >
+              <span className="ch-mono">{bookmarks.length}</span>
+              <Icon name="chevron-down" size={13} />
+            </button>
+          </span>
+        )}
         <span className="toolbar__divider" aria-hidden="true" />
         <IconButton icon="zoom-out" label="Zoom out" hint="-" onClick={() => zoomBy(-1)} />
         <IconButton icon="zoom-in" label="Zoom in" hint="+" onClick={() => zoomBy(1)} />

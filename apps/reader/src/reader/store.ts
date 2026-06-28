@@ -17,7 +17,7 @@ import {
   type ReaderSettings,
 } from './types.js';
 import { invoke } from '@tauri-apps/api/core';
-import type { ComicHubClient } from '@comichub/api-client';
+import type { Bookmark, ComicHubClient } from '@comichub/api-client';
 import {
   resolveLaunch,
   resolveLaunchFromPath,
@@ -75,6 +75,12 @@ export interface ReaderState {
   chromeVisible: boolean;
   settingsOpen: boolean;
 
+  /** Bookmarks for the open book (connected mode only); ordered by page ascending. */
+  bookmarks: Bookmark[];
+  bookmarksOpen: boolean;
+  /** Transient confirmation after a bookmark toggle (auto-clears). */
+  bmToast: string | null;
+
   provider: PageProvider | null;
   pages: PageCache | null;
   thumbs: ThumbCache | null;
@@ -127,13 +133,41 @@ export interface ReaderState {
   toggleChrome: () => void;
   setSettingsOpen: (open: boolean) => void;
 
+  /** Load the open book's bookmarks from the server (no-op outside connected mode). */
+  loadBookmarks: () => Promise<void>;
+  /** Bookmark or un-bookmark the current page (the B-key / toolbar toggle). */
+  toggleBookmark: () => Promise<void>;
+  /** Replace a bookmark's note. */
+  updateBookmarkNote: (id: string, note: string) => Promise<void>;
+  /** Remove a bookmark by id. */
+  removeBookmark: (id: string) => Promise<void>;
+  setBookmarksOpen: (open: boolean) => void;
+
   flushProgress: () => void;
   dispose: () => void;
+}
+
+const BM_TOAST_MS = 1900;
+
+/** Display page label (store pages are 0-indexed; the UI shows 1-indexed). */
+function pageLabel(page: number): string {
+  return `p.${String(page + 1).padStart(2, '0')}`;
 }
 
 export const useReaderStore = create<ReaderState>()((set, get) => {
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
   let prefsTimer: ReturnType<typeof setTimeout> | null = null;
+  let bmToastTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Show a transient bookmark confirmation toast. */
+  function flashBookmark(message: string): void {
+    if (bmToastTimer) clearTimeout(bmToastTimer);
+    set({ bmToast: message });
+    bmToastTimer = setTimeout(() => {
+      bmToastTimer = null;
+      set({ bmToast: null });
+    }, BM_TOAST_MS);
+  }
 
   /** The active per-book settings backend per the chosen sync mode. */
   function activePrefs(): PrefsBackend {
@@ -202,6 +236,8 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
       finished: false,
       resumePage: null,
       nextBook: null,
+      bookmarks: [],
+      bookmarksOpen: false,
     });
   }
 
@@ -264,6 +300,7 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
         resumePage,
       });
       navigateTo(startPage);
+      void get().loadBookmarks();
     } catch (err) {
       set({
         status: 'error',
@@ -309,6 +346,9 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
     panY: 0,
     chromeVisible: true,
     settingsOpen: false,
+    bookmarks: [],
+    bookmarksOpen: false,
+    bmToast: null,
     provider: null,
     pages: null,
     thumbs: null,
@@ -507,6 +547,74 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
 
     setSettingsOpen: (open) => set({ settingsOpen: open }),
 
+    loadBookmarks: async () => {
+      const { serverClient, manifest } = get();
+      if (!serverClient || !manifest) {
+        set({ bookmarks: [] });
+        return;
+      }
+      try {
+        const list = await serverClient.listBookmarks(manifest.bookId);
+        // Only apply if we're still on the same book (open is async).
+        if (get().manifest?.bookId === manifest.bookId) set({ bookmarks: list });
+      } catch {
+        // best-effort; leave whatever we have
+      }
+    },
+
+    toggleBookmark: async () => {
+      const { serverClient, manifest, currentPage, bookmarks } = get();
+      if (!serverClient || !manifest) return;
+      const bookId = manifest.bookId;
+      const existing = bookmarks.find((b) => b.page === currentPage);
+      if (existing) {
+        set({ bookmarks: bookmarks.filter((b) => b.id !== existing.id) }); // optimistic
+        flashBookmark(`Removed bookmark · ${pageLabel(currentPage)}`);
+        try {
+          await serverClient.removeBookmark(bookId, existing.id);
+        } catch {
+          void get().loadBookmarks(); // reconcile on failure
+        }
+        return;
+      }
+      flashBookmark(`Bookmarked ${pageLabel(currentPage)}`);
+      try {
+        const bm = await serverClient.addBookmark(bookId, currentPage);
+        if (get().manifest?.bookId === bookId) {
+          const next = [...get().bookmarks.filter((b) => b.id !== bm.id), bm].sort(
+            (a, b) => a.page - b.page,
+          );
+          set({ bookmarks: next });
+        }
+      } catch {
+        void get().loadBookmarks();
+      }
+    },
+
+    updateBookmarkNote: async (id, note) => {
+      const { serverClient, manifest } = get();
+      if (!serverClient || !manifest) return;
+      try {
+        const updated = await serverClient.updateBookmark(manifest.bookId, id, note);
+        set({ bookmarks: get().bookmarks.map((b) => (b.id === id ? updated : b)) });
+      } catch {
+        void get().loadBookmarks();
+      }
+    },
+
+    removeBookmark: async (id) => {
+      const { serverClient, manifest, bookmarks } = get();
+      if (!serverClient || !manifest) return;
+      set({ bookmarks: bookmarks.filter((b) => b.id !== id) }); // optimistic
+      try {
+        await serverClient.removeBookmark(manifest.bookId, id);
+      } catch {
+        void get().loadBookmarks();
+      }
+    },
+
+    setBookmarksOpen: (open) => set({ bookmarksOpen: open }),
+
     flushProgress: () => {
       const { provider, manifest, currentPage, finished } = get();
       if (!provider || !manifest) return;
@@ -526,6 +634,10 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
       if (prefsTimer) {
         clearTimeout(prefsTimer);
         prefsTimer = null;
+      }
+      if (bmToastTimer) {
+        clearTimeout(bmToastTimer);
+        bmToastTimer = null;
       }
       get().flushProgress();
       get().pages?.dispose();

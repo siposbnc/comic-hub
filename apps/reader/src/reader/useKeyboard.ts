@@ -60,6 +60,12 @@ export function useKeyboard(): void {
           e.preventDefault();
           s.toggleContinuous();
           break;
+        case 'b':
+        case 'B':
+          // Bookmarks are server-backed (connected mode only); no-ops otherwise.
+          e.preventDefault();
+          void s.toggleBookmark();
+          break;
         case '+':
         case '=':
           e.preventDefault();

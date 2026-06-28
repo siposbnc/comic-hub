@@ -20,6 +20,7 @@ export function Scrubber() {
   const currentPage = useReaderStore((s) => s.currentPage);
   const direction = useReaderStore((s) => s.settings.direction);
   const goToPage = useReaderStore((s) => s.goToPage);
+  const bookmarks = useReaderStore((s) => s.bookmarks);
 
   const [hover, setHover] = useState<{ page: number; x: number } | null>(null);
   const dragging = useRef(false);
@@ -90,6 +91,22 @@ export function Scrubber() {
           onPointerLeave={() => setHover(null)}
         >
           <div className="scrubber__fill" style={{ width: `${fillPct}%` }} />
+          {bookmarks.map((bm) => {
+            const f = count > 1 ? bm.page / (count - 1) : 0;
+            const pos = (rtl ? 1 - f : f) * 100;
+            return (
+              <span
+                key={bm.id}
+                className={`scrubber__mark${bm.page === currentPage ? ' is-current' : ''}`}
+                style={{ left: `${pos}%` }}
+                title={`p.${bm.page + 1}${bm.note ? ` · ${bm.note}` : ''}`}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  goToPage(bm.page);
+                }}
+              />
+            );
+          })}
           <div
             className="scrubber__handle"
             style={rtl ? { right: `${frac * 100}%` } : { left: `${frac * 100}%` }}

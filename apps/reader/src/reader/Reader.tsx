@@ -6,6 +6,7 @@ import { Scrubber } from './Scrubber.js';
 import { PageView } from './PageView.js';
 import { ContinuousView } from './ContinuousView.js';
 import { SettingsPanel } from './SettingsPanel.js';
+import { BookmarksPanel } from './BookmarksPanel.js';
 import { Button } from '@comichub/ui';
 import { Icon } from '@comichub/ui';
 
@@ -23,6 +24,8 @@ export function Reader() {
   const hideChrome = useReaderStore((s) => s.hideChrome);
   const finished = useReaderStore((s) => s.finished);
   const settingsOpen = useReaderStore((s) => s.settingsOpen);
+  const bookmarksOpen = useReaderStore((s) => s.bookmarksOpen);
+  const bmToast = useReaderStore((s) => s.bmToast);
   const resumePage = useReaderStore((s) => s.resumePage);
   const nextBook = useReaderStore((s) => s.nextBook);
   const dismissFinished = useReaderStore((s) => s.dismissFinished);
@@ -87,6 +90,14 @@ export function Reader() {
       </div>
 
       {settingsOpen && <SettingsPanel />}
+      {bookmarksOpen && <BookmarksPanel />}
+
+      {bmToast && (
+        <div className="toast bm-confirm" role="status">
+          <Icon name="bookmark" size={14} />
+          <span>{bmToast}</span>
+        </div>
+      )}
 
       {resumePage != null && (
         <div className="toast" role="status">
