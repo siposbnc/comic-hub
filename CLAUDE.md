@@ -53,32 +53,42 @@ CI (`.github/workflows/ci.yml`) runs three jobs. Before considering a change com
 
 ## Design system — `packages/ui` is synced, not authored
 
-The visual foundation and components in `packages/ui/src` are **synced verbatim from the
-ComicHub Design System** on claude.ai/design (project
-`c0e1bfbe-c5d5-422a-b364-afc6dcdde00b`, the source of truth). Do **not** hand-edit
-`src/styles.css`, `src/tokens/**`, or `src/components/**` — they are listed in
+**The source of all design is the `Design Preview v2` project on claude.ai/design**
+(project id `ef2d1724-12c0-48dd-98e8-996e5b3ee416`, owner Sickae). It holds everything:
+the **preview screens** (`ComicHub Preview Screens.dc.html` + `ClientPreview.jsx`), the
+**design kit** (`ComicHub Design Kit.dc.html` + `DesignKit.jsx`), per-feature **handoffs**
+(`design_handoff_<feature>/README.md` + `ClientPreview.jsx`), and an embedded snapshot of
+the design-system components/tokens under `_ds/comichub-design-system-c0e1bfbe…/`. Reach it
+with the `DesignSync` read API (`list_files` / `get_file`). Look here first for any design.
+
+The visual foundation and components in `packages/ui/src` are **synced verbatim** from that
+design system (the embedded snapshot's canonical home is the design-system-type project
+`c0e1bfbe-c5d5-422a-b364-afc6dcdde00b`; pull component/token files from there). Do **not**
+hand-edit `src/styles.css`, `src/tokens/**`, or `src/components/**` — they are listed in
 [`.prettierignore`](.prettierignore) to stay byte-faithful so re-syncs diff cleanly.
 `src/index.ts` (the barrel apps import from) **is** authored here.
 
 ### Designing any UI — preview-screen first (REQUIRED, not optional)
 
-A **design kit** lives in the design-system project (`c0e1bfbe…`). It is the source of
+The `Design Preview v2` project (`ef2d1724-12c0-48dd-98e8-996e5b3ee416`) is the source of
 truth for how the app looks. Before writing or changing **anything that touches UI** —
 screens, components, layouts, dialogs, empty states, or styling in `apps/client` or
 `apps/reader` — follow this, every time:
 
-1. **Look for a preview screen of it in the design-system project first.** Use the
-   `DesignSync` read API (`list_files` → `get_file` against `c0e1bfbe…`, e.g. under
-   `ui_kits/**` / the design kit). Build the UI to match that preview, using the design
-   kit's components and tokens.
+1. **Look for a preview screen of it in `Design Preview v2` first.** `DesignSync`
+   `list_files` → `get_file` against `ef2d1724…`. Preview screens live in
+   `design_handoff_<feature>/` (a `README.md` spec + a `ClientPreview.jsx`), in
+   `ClientPreview.jsx` / `ComicHub Preview Screens.dc.html` at the root, and the design kit
+   (`DesignKit.jsx` / `ComicHub Design Kit.dc.html`). Build the UI to match that preview,
+   using the design-system components and tokens.
 2. **If no preview screen exists for what you're building, stop and ask the user to make
-   one** in the design system that you can reference — then build against it. Do **not**
+   one** in `Design Preview v2` that you can reference — then build against it. Do **not**
    invent the layout/visuals yourself.
 3. **Only design UI yourself when the user explicitly approves** it for that specific
    piece. Absent that approval, the preview screen is mandatory.
 
 This is a hard rule: no improvising UI from scratch. When in doubt whether something
-"touches UI", treat it as yes and check the design kit.
+"touches UI", treat it as yes and check `Design Preview v2`.
 
 ### Workflow: syncing from the design system
 
