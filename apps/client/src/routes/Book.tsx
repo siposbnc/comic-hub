@@ -189,6 +189,16 @@ function BookView({ detail }: { detail: BookDetail }) {
             >
               {isRead ? 'Mark unread' : 'Mark read'}
             </Button>
+            {inProgress && (
+              <Button
+                variant="ghost"
+                icon="refresh"
+                disabled={mark.isPending}
+                onClick={() => mark.mutate({ bookId: detail.id, status: 'unread' })}
+              >
+                Reset progress
+              </Button>
+            )}
             <AddToActions
               bookId={detail.id}
               inCollections={detail.collectionIds ?? []}
