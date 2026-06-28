@@ -99,7 +99,7 @@ Accessibility gate per screen; CI bench thresholds; docs kept in lockstep (03-ap
 | S — Search (FTS5 + `/search` + TopBar type-ahead) | ✅ done |
 | O — Organization | ✅ done — collections, reading lists, tags, smart lists (rule engine) end-to-end: server + SDK + client (sidebar Lists/Tags nav, index/detail screens, smart-list rule builder, Add-to-list + Edit-tags on Book) |
 | W — Watch + Health | ✅ done — `GET /libraries/{id}/health` (corrupt/orphan/unmatched/duplicate) + client panel; fsnotify watcher → debounced incremental rescan; scanner move/rename reconciliation by content hash |
-| R — Reader extras | ✅ done — continuous (webtoon) scroll, per-book overrides (Settings panel; local/server), and auto-advance to the next issue (series or active reading list) on completion. Active reading-list queues (reorder + Home "Up next") landed alongside. (Bookmarks still a nice-to-have.) |
+| R — Reader extras | ✅ done — continuous (webtoon) scroll, per-book overrides (Settings panel; local/server), auto-advance to the next issue (series or active reading list) on completion, and **bookmarks** (page + note, server-synced; toolbar toggle + B key, slide-over list, scrubber markers). Active reading-list queues (reorder + Home "Up next") landed alongside. (Standalone-local bookmarks deferred — bookmarks are connected-mode only.) |
 
 Remaining metadata polish (non-blocking): GCD as a second provider, ComicInfo
 `write-sidecar`, per-field lock toggles in the UI, and a book-level candidate picker.
