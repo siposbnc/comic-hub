@@ -97,7 +97,8 @@ Accessibility gate per screen; CI bench thresholds; docs kept in lockstep (03-ap
 | F1 — CB7 + CBT | ✅ done |
 | F2 — PDF (MuPDF + C toolchain) | ⏳ deferred (skipped for now) |
 | S — Search (FTS5 + `/search` + TopBar type-ahead) | ✅ done |
-| O / W / R — organization, watch/health, reader | ⏳ pending |
+| O — Organization | 🚧 in progress — O1 Collections done (CRUD + ordered items + API + SDK); reading lists / tags / smart lists / sidebar nav pending |
+| W / R — watch/health, reader | ⏳ pending |
 
 Remaining metadata polish (non-blocking): GCD as a second provider, ComicInfo
 `write-sidecar`, per-field lock toggles in the UI, and a book-level candidate picker.
