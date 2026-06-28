@@ -17,6 +17,7 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/domain"
 	"github.com/siposbnc/comic-hub/server/internal/jobs"
 	"github.com/siposbnc/comic-hub/server/internal/service/browse"
+	"github.com/siposbnc/comic-hub/server/internal/service/health"
 	"github.com/siposbnc/comic-hub/server/internal/service/library"
 	"github.com/siposbnc/comic-hub/server/internal/service/metadata"
 	"github.com/siposbnc/comic-hub/server/internal/service/organize"
@@ -38,6 +39,7 @@ type Deps struct {
 	Reading  *reading.Service
 	Metadata *metadata.Service
 	Organize *organize.Service
+	Health   *health.Service
 	Hub      *Hub
 }
 
@@ -72,6 +74,7 @@ func NewRouter(d Deps) http.Handler {
 			r.Delete("/{id}", handleDeleteLibrary(d.Library))
 			r.Post("/{id}/scan", handleScanLibrary(d.Library, d.Runner))
 			r.Post("/{id}/scan/cancel", handleCancelScan(d.Runner, d.Repo))
+			r.Get("/{id}/health", handleLibraryHealth(d.Health))
 		})
 
 		r.Get("/jobs/{id}", handleGetJob(d.Repo))

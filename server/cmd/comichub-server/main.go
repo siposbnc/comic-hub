@@ -28,6 +28,7 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/providers/comicvine"
 	"github.com/siposbnc/comic-hub/server/internal/scanner"
 	"github.com/siposbnc/comic-hub/server/internal/service/browse"
+	"github.com/siposbnc/comic-hub/server/internal/service/health"
 	"github.com/siposbnc/comic-hub/server/internal/service/library"
 	"github.com/siposbnc/comic-hub/server/internal/service/metadata"
 	"github.com/siposbnc/comic-hub/server/internal/service/organize"
@@ -83,6 +84,7 @@ func run() error {
 	libraries := library.New(store)
 	browsing := browse.New(store)
 	organizing := organize.New(store)
+	healthSvc := health.New(store)
 
 	// WebSocket hub for push (jobs/progress); services broadcast through it.
 	hub := httptransport.NewHub(logger)
@@ -154,6 +156,7 @@ func run() error {
 		Reading:  readingSvc,
 		Metadata: metaSvc,
 		Organize: organizing,
+		Health:   healthSvc,
 		Hub:      hub,
 	})
 

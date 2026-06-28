@@ -56,6 +56,8 @@ type BookRepository interface {
 	// ListRecent returns the most recently added books, newest first. An empty
 	// libraryID spans all libraries.
 	ListRecent(ctx context.Context, libraryID string, limit int) ([]Book, error)
+	// ListByLibrary returns every book in a library (newest-added first).
+	ListByLibrary(ctx context.Context, libraryID string) ([]Book, error)
 }
 
 // ProgressRepository persists per-user reading progress.

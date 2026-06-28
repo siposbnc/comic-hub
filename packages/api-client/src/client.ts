@@ -11,6 +11,7 @@ import type {
   HealthStatus,
   Job,
   Library,
+  LibraryHealth,
   Progress,
   ProviderStatus,
   ReadingList,
@@ -118,6 +119,11 @@ export class ComicHubClient {
 
   getJob(id: string): Promise<Job> {
     return this.request<Job>('GET', `/api/v1/jobs/${encodeURIComponent(id)}`);
+  }
+
+  /** A library's maintenance report: corrupt / orphaned / unmatched / duplicate books. */
+  libraryHealth(id: string): Promise<LibraryHealth> {
+    return this.request<LibraryHealth>('GET', `/api/v1/libraries/${encodeURIComponent(id)}/health`);
   }
 
   // ── Images ───────────────────────────────────────────────────────────────────

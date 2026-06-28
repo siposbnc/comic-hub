@@ -55,6 +55,15 @@ export function useLibrary(id: string) {
   return useQuery({ queryKey: qk.library(id), queryFn: () => client.getLibrary(id) });
 }
 
+export function useLibraryHealth(id: string, enabled = true) {
+  const client = useClient();
+  return useQuery({
+    queryKey: ['libraryHealth', id],
+    queryFn: () => client.libraryHealth(id),
+    enabled,
+  });
+}
+
 export function useSeriesList(libraryId: string) {
   const client = useClient();
   return useQuery({

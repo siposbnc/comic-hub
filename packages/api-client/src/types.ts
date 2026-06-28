@@ -208,6 +208,38 @@ export interface SmartListResults {
   books: BookCard[];
 }
 
+/** A problem book in a library health report. */
+export interface HealthItem {
+  id: string;
+  seriesId: string;
+  number?: string;
+  title?: string;
+  path: string;
+}
+
+export interface DuplicateGroup {
+  contentHash: string;
+  books: HealthItem[];
+}
+
+export interface HealthCounts {
+  books: number;
+  corrupt: number;
+  orphans: number;
+  unmatched: number;
+  duplicateGroups: number;
+}
+
+/** A library's maintenance snapshot. */
+export interface LibraryHealth {
+  libraryId: string;
+  counts: HealthCounts;
+  corrupt: HealthItem[];
+  orphans: HealthItem[];
+  unmatched: HealthItem[];
+  duplicates: DuplicateGroup[];
+}
+
 /** The Home feed. */
 export interface Discover {
   continueReading: BookCard[];

@@ -21,6 +21,7 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/jobs"
 	"github.com/siposbnc/comic-hub/server/internal/scanner"
 	"github.com/siposbnc/comic-hub/server/internal/service/browse"
+	"github.com/siposbnc/comic-hub/server/internal/service/health"
 	"github.com/siposbnc/comic-hub/server/internal/service/library"
 	"github.com/siposbnc/comic-hub/server/internal/service/organize"
 	"github.com/siposbnc/comic-hub/server/internal/service/reader"
@@ -76,6 +77,7 @@ func newScanServer(t *testing.T) (string, *sqlite.Store) {
 		Browse:   browse.New(store),
 		Reading:  reading.New(store, func(_ string, p domain.Progress) { hub.BroadcastProgress(p) }),
 		Organize: organize.New(store),
+		Health:   health.New(store),
 		Hub:      hub,
 	})
 	srv := httptest.NewServer(router)

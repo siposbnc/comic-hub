@@ -8,6 +8,7 @@ import { useUiStore } from '../store/ui.js';
 import { LoadingState, ErrorState } from '../components/Page.js';
 import { CoverGrid } from '../components/CoverGrid.js';
 import { SeriesCover } from '../components/cards.js';
+import { HealthDialog } from '../components/HealthDialog.js';
 
 const route = getRouteApi('/library/$id');
 
@@ -25,6 +26,7 @@ export function Library() {
   const addToast = useUiStore((s) => s.addToast);
 
   const [sort, setSort] = useState<Sort>('added');
+  const [healthOpen, setHealthOpen] = useState(false);
 
   const library = useLibrary(id);
   const series = useSeriesList(id);
@@ -115,6 +117,9 @@ export function Library() {
             <Button variant="ghost" icon="trash" onClick={handleRemove}>
               Remove
             </Button>
+            <Button variant="ghost" icon="info" onClick={() => setHealthOpen(true)}>
+              Health
+            </Button>
             <Button variant="secondary" icon="refresh" onClick={handleScan}>
               Scan
             </Button>
@@ -189,6 +194,8 @@ export function Library() {
           />
         )}
       </div>
+
+      {healthOpen && <HealthDialog libraryId={id} onClose={() => setHealthOpen(false)} />}
     </div>
   );
 }
