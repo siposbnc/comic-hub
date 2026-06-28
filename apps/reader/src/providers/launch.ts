@@ -3,11 +3,19 @@ import { ComicHubClient } from '@comichub/api-client';
 import type { Manifest, PageProvider } from '@comichub/reader-core';
 import { ServerPageProvider } from '@comichub/reader-core';
 import { LocalPageProvider } from './LocalPageProvider.js';
+import { serverPrefs, type PrefsBackend } from '../reader/prefs.js';
 
 const DEFAULT_SERVER_URL = 'http://127.0.0.1:8099';
 
 export type LaunchResult =
-  | { kind: 'connected'; provider: PageProvider; startPage?: number; title?: string }
+  | {
+      kind: 'connected';
+      provider: PageProvider;
+      startPage?: number;
+      title?: string;
+      /** Server-backed per-book settings store (only in connected mode). */
+      prefsServer?: PrefsBackend;
+    }
   | { kind: 'standalone'; provider: PageProvider; manifest: Manifest; title?: string }
   | { kind: 'empty' }
   | { kind: 'error'; message: string };
@@ -109,6 +117,7 @@ export async function resolveLaunch(explicitUrl?: string): Promise<LaunchResult>
       kind: 'connected',
       provider,
       startPage: Number.isFinite(startPage as number) ? startPage : undefined,
+      prefsServer: serverPrefs(client),
     };
   }
 

@@ -5,7 +5,9 @@ package reading
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/siposbnc/comic-hub/server/internal/domain"
@@ -104,6 +106,31 @@ func (s *Service) Mark(ctx context.Context, userID, bookID, status string) (doma
 		return domain.Progress{}, errors.New("status must be \"read\" or \"unread\"")
 	}
 	return s.save(ctx, p)
+}
+
+// GetReaderPrefs returns the user's stored reader overrides for a book as a raw JSON
+// object, or "{}" when none are saved. The shape is owned by the reader client.
+func (s *Service) GetReaderPrefs(ctx context.Context, userID, bookID string) (json.RawMessage, error) {
+	raw, err := s.repo.ReaderPrefs().Get(ctx, userID, bookID)
+	if errors.Is(err, domain.ErrNotFound) {
+		return json.RawMessage("{}"), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(raw), nil
+}
+
+// SetReaderPrefs stores the user's reader overrides for a book. The book must exist and
+// settings must be a JSON object.
+func (s *Service) SetReaderPrefs(ctx context.Context, userID, bookID string, settings json.RawMessage) error {
+	if _, err := s.repo.Books().Get(ctx, bookID); err != nil {
+		return err
+	}
+	if len(settings) == 0 || !json.Valid(settings) {
+		return fmt.Errorf("%w: settings must be a JSON object", domain.ErrValidation)
+	}
+	return s.repo.ReaderPrefs().Put(ctx, userID, bookID, string(settings))
 }
 
 func (s *Service) save(ctx context.Context, p domain.Progress) (domain.Progress, error) {

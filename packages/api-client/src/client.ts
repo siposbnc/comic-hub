@@ -233,6 +233,23 @@ export class ComicHubClient {
     });
   }
 
+  /** The user's saved per-book reader overrides (opaque settings object; {} if none). */
+  async getReaderPrefs(bookId: string): Promise<Record<string, unknown>> {
+    const res = await this.request<{ settings: Record<string, unknown> }>(
+      'GET',
+      `/api/v1/me/books/${encodeURIComponent(bookId)}/reader-prefs`,
+    );
+    return res.settings ?? {};
+  }
+
+  async putReaderPrefs(bookId: string, settings: Record<string, unknown>): Promise<void> {
+    await this.request<unknown>(
+      'PUT',
+      `/api/v1/me/books/${encodeURIComponent(bookId)}/reader-prefs`,
+      { body: { settings } },
+    );
+  }
+
   markBook(bookId: string, status: 'read' | 'unread'): Promise<Progress> {
     return this.request<Progress>('POST', `/api/v1/me/books/${encodeURIComponent(bookId)}/mark`, {
       body: { status },

@@ -36,6 +36,7 @@ export function Toolbar() {
   const cycleFit = useReaderStore((s) => s.cycleFit);
   const toggleDirection = useReaderStore((s) => s.toggleDirection);
   const zoomBy = useReaderStore((s) => s.zoomBy);
+  const openSettings = useReaderStore((s) => s.setSettingsOpen);
 
   const full = useFullscreenState();
 
@@ -80,6 +81,7 @@ export function Toolbar() {
           active={direction === 'rtl'}
           onClick={toggleDirection}
         />
+        <IconButton icon="settings" label="Reader settings" onClick={() => openSettings(true)} />
         <span className="toolbar__divider" aria-hidden="true" />
         <IconButton icon="zoom-out" label="Zoom out" hint="-" onClick={() => zoomBy(-1)} />
         <IconButton icon="zoom-in" label="Zoom in" hint="+" onClick={() => zoomBy(1)} />

@@ -119,7 +119,9 @@ pub fn run() {
             local::local_thumb,
             local::local_prefetch,
             local::local_save_progress,
-            local::local_restore_progress
+            local::local_restore_progress,
+            local::local_save_prefs,
+            local::local_restore_prefs
         ])
         .run(tauri::generate_context!())
         .expect("error while running ComicHub reader");

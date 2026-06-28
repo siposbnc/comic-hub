@@ -1,6 +1,7 @@
 package http
 
 import (
+	"encoding/json"
 	"math"
 	"net/http"
 
@@ -93,5 +94,34 @@ func handleMarkBook(rd *reading.Service) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, toProgressDTO(p))
+	}
+}
+
+// handleGetReaderPrefs returns the user's per-book reader overrides (opaque JSON).
+func handleGetReaderPrefs(rd *reading.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		settings, err := rd.GetReaderPrefs(r.Context(), currentUserID(r), chi.URLParam(r, "id"))
+		if err != nil {
+			writeDomainError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"settings": settings})
+	}
+}
+
+// handlePutReaderPrefs stores the user's per-book reader overrides.
+func handlePutReaderPrefs(rd *reading.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Settings json.RawMessage `json:"settings"`
+		}
+		if !decodeJSON(w, r, &req) {
+			return
+		}
+		if err := rd.SetReaderPrefs(r.Context(), currentUserID(r), chi.URLParam(r, "id"), req.Settings); err != nil {
+			writeDomainError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
 }

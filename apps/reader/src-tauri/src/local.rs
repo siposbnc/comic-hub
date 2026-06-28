@@ -391,6 +391,49 @@ pub fn local_restore_progress(
     Ok(store.get(&book_id).cloned())
 }
 
+// ── Per-book reader overrides (layout/fit/direction/…) ─────────────────────────────────
+// Stored locally keyed by book id, the standalone counterpart to the server's reader-prefs
+// endpoint. The settings blob is opaque (the webview defines its shape).
+
+fn prefs_store_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir.join("reader_prefs.json"))
+}
+
+fn read_prefs_store(app: &tauri::AppHandle) -> serde_json::Value {
+    prefs_store_path(app)
+        .ok()
+        .and_then(|p| std::fs::read(p).ok())
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or_else(|| serde_json::json!({}))
+}
+
+#[tauri::command]
+pub fn local_save_prefs(
+    app: tauri::AppHandle,
+    book_id: String,
+    settings: serde_json::Value,
+) -> Result<(), String> {
+    let mut store = read_prefs_store(&app);
+    if let Some(map) = store.as_object_mut() {
+        map.insert(book_id, settings);
+    }
+    let path = prefs_store_path(&app)?;
+    std::fs::write(path, serde_json::to_vec_pretty(&store).map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn local_restore_prefs(
+    app: tauri::AppHandle,
+    book_id: String,
+) -> Result<Option<serde_json::Value>, String> {
+    let store = read_prefs_store(&app);
+    Ok(store.get(&book_id).cloned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -18,6 +18,16 @@ import {
 } from './types.js';
 import { invoke } from '@tauri-apps/api/core';
 import { resolveLaunch, resolveLaunchFromPath, type LaunchResult } from '../providers/launch.js';
+import {
+  loadConfig,
+  saveConfig,
+  localPrefs,
+  type PrefsBackend,
+  type ReaderConfig,
+  type SyncMode,
+} from './prefs.js';
+
+const PREFS_DEBOUNCE_MS = 600;
 
 const FIT_CYCLE: FitMode[] = ['screen', 'width', 'height', 'original', 'smart'];
 const MIN_ZOOM = 1;
@@ -42,12 +52,17 @@ export interface ReaderState {
   resumePage: number | null;
 
   settings: ReaderSettings;
+  /** App-level reader config (persisted in localStorage). */
+  config: ReaderConfig;
+  /** Server-backed per-book settings store, when in connected mode. */
+  prefsServer: PrefsBackend | null;
 
   zoom: number;
   panX: number;
   panY: number;
 
   chromeVisible: boolean;
+  settingsOpen: boolean;
 
   provider: PageProvider | null;
   pages: PageCache | null;
@@ -76,6 +91,11 @@ export interface ReaderState {
   setDirection: (dir: ReadingDirection) => void;
   toggleDirection: () => void;
   setBackground: (bg: ReaderBackground) => void;
+  setCoverAlone: (on: boolean) => void;
+  /** Toggle remembering settings per book; persisted to config. */
+  setRememberPerBook: (on: boolean) => void;
+  /** Choose where per-book overrides are stored (local vs server). */
+  setSyncMode: (mode: SyncMode) => void;
 
   setZoom: (zoom: number) => void;
   zoomBy: (delta: number) => void;
@@ -86,6 +106,7 @@ export interface ReaderState {
   showChrome: () => void;
   hideChrome: () => void;
   toggleChrome: () => void;
+  setSettingsOpen: (open: boolean) => void;
 
   flushProgress: () => void;
   dispose: () => void;
@@ -93,6 +114,24 @@ export interface ReaderState {
 
 export const useReaderStore = create<ReaderState>()((set, get) => {
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
+  let prefsTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** The active per-book settings backend per the chosen sync mode. */
+  function activePrefs(): PrefsBackend {
+    const { config, prefsServer } = get();
+    return config.syncMode === 'server' && prefsServer ? prefsServer : localPrefs;
+  }
+
+  /** Persist the current settings for the open book (debounced), when remembering is on. */
+  function persistPrefs(): void {
+    if (!get().config.rememberPerBook) return;
+    if (prefsTimer) clearTimeout(prefsTimer);
+    prefsTimer = setTimeout(() => {
+      prefsTimer = null;
+      const { manifest, settings } = get();
+      if (manifest) void activePrefs().save(manifest.bookId, settings);
+    }, PREFS_DEBOUNCE_MS);
+  }
 
   function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
@@ -156,10 +195,22 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
       const provider = launch.provider;
       const manifest = launch.kind === 'standalone' ? launch.manifest : await provider.manifest();
 
+      // Connected mode brings a server-backed prefs store; local mode falls back to it.
+      const prefsServer = launch.kind === 'connected' ? (launch.prefsServer ?? null) : null;
+      set({ prefsServer });
+
       const pages = new PageCache(provider, PAGE_CACHE_CAPACITY);
       const thumbs = new ThumbCache(provider);
       const direction = manifest.readingDir ?? DEFAULT_SETTINGS.direction;
-      const settings: ReaderSettings = { ...DEFAULT_SETTINGS, direction };
+      let settings: ReaderSettings = { ...DEFAULT_SETTINGS, direction };
+
+      // Restore this book's saved overrides (if remembering is enabled) before laying out.
+      const config = get().config;
+      if (config.rememberPerBook) {
+        const backend = config.syncMode === 'server' && prefsServer ? prefsServer : localPrefs;
+        const saved = await backend.load(manifest.bookId);
+        if (saved) settings = { ...settings, ...saved };
+      }
       const spreads = buildSpreads(manifest, settings.layout, settings.coverAlone);
 
       // Decide the entry page: deep-link page wins, else restored progress.
@@ -222,10 +273,13 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
     finished: false,
     resumePage: null,
     settings: { ...DEFAULT_SETTINGS },
+    config: loadConfig(),
+    prefsServer: null,
     zoom: MIN_ZOOM,
     panX: 0,
     panY: 0,
     chromeVisible: true,
+    settingsOpen: false,
     provider: null,
     pages: null,
     thumbs: null,
@@ -304,6 +358,7 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
       set((s) => ({ settings: { ...s.settings, layout } }));
       recomputeSpreads();
       navigateTo(get().currentPage);
+      persistPrefs();
     },
 
     toggleLayout: () => {
@@ -316,8 +371,10 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
       get().setLayout(next);
     },
 
-    setFit: (fit) =>
-      set((s) => ({ settings: { ...s.settings, fit }, zoom: MIN_ZOOM, panX: 0, panY: 0 })),
+    setFit: (fit) => {
+      set((s) => ({ settings: { ...s.settings, fit }, zoom: MIN_ZOOM, panX: 0, panY: 0 }));
+      persistPrefs();
+    },
 
     cycleFit: () => {
       const current = get().settings.fit;
@@ -325,14 +382,41 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
       get().setFit(FIT_CYCLE[(idx + 1) % FIT_CYCLE.length] ?? 'screen');
     },
 
-    setDirection: (direction) => set((s) => ({ settings: { ...s.settings, direction } })),
+    setDirection: (direction) => {
+      set((s) => ({ settings: { ...s.settings, direction } }));
+      persistPrefs();
+    },
 
     toggleDirection: () => {
       const next = get().settings.direction === 'ltr' ? 'rtl' : 'ltr';
       get().setDirection(next);
     },
 
-    setBackground: (background) => set((s) => ({ settings: { ...s.settings, background } })),
+    setBackground: (background) => {
+      set((s) => ({ settings: { ...s.settings, background } }));
+      persistPrefs();
+    },
+
+    setCoverAlone: (on) => {
+      set((s) => ({ settings: { ...s.settings, coverAlone: on } }));
+      recomputeSpreads();
+      navigateTo(get().currentPage);
+      persistPrefs();
+    },
+
+    setRememberPerBook: (on) => {
+      const config = { ...get().config, rememberPerBook: on };
+      set({ config });
+      saveConfig(config);
+      if (on) persistPrefs(); // capture the current book's settings immediately
+    },
+
+    setSyncMode: (mode) => {
+      const config = { ...get().config, syncMode: mode };
+      set({ config });
+      saveConfig(config);
+      persistPrefs(); // mirror current settings into the newly-selected store
+    },
 
     setZoom: (zoom) => {
       const z = clamp(zoom, MIN_ZOOM, MAX_ZOOM);
@@ -360,6 +444,8 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
     },
     toggleChrome: () => set((s) => ({ chromeVisible: !s.chromeVisible })),
 
+    setSettingsOpen: (open) => set({ settingsOpen: open }),
+
     flushProgress: () => {
       const { provider, manifest, currentPage, finished } = get();
       if (!provider || !manifest) return;
@@ -375,6 +461,10 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
       if (saveTimer) {
         clearTimeout(saveTimer);
         saveTimer = null;
+      }
+      if (prefsTimer) {
+        clearTimeout(prefsTimer);
+        prefsTimer = null;
       }
       get().flushProgress();
       get().pages?.dispose();

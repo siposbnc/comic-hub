@@ -139,6 +139,8 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/progress/{bookId}", handleGetProgress(d.Reading))
 			r.Put("/progress/{bookId}", handlePutProgress(d.Reading))
 			r.Post("/books/{id}/mark", handleMarkBook(d.Reading))
+			r.Get("/books/{id}/reader-prefs", handleGetReaderPrefs(d.Reading))
+			r.Put("/books/{id}/reader-prefs", handlePutReaderPrefs(d.Reading))
 
 			// Personal reading lists (per-user, ordered).
 			r.Route("/reading-lists", func(r chi.Router) {

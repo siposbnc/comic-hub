@@ -5,6 +5,7 @@ import { Toolbar } from './Toolbar.js';
 import { Scrubber } from './Scrubber.js';
 import { PageView } from './PageView.js';
 import { ContinuousView } from './ContinuousView.js';
+import { SettingsPanel } from './SettingsPanel.js';
 import { Button } from '@comichub/ui';
 import { Icon } from '@comichub/ui';
 
@@ -21,6 +22,7 @@ export function Reader() {
   const showChrome = useReaderStore((s) => s.showChrome);
   const hideChrome = useReaderStore((s) => s.hideChrome);
   const finished = useReaderStore((s) => s.finished);
+  const settingsOpen = useReaderStore((s) => s.settingsOpen);
   const resumePage = useReaderStore((s) => s.resumePage);
   const dismissFinished = useReaderStore((s) => s.dismissFinished);
   const startOver = useReaderStore((s) => s.startOver);
@@ -74,6 +76,8 @@ export function Reader() {
       <div className="chrome chrome--bottom" onPointerEnter={showChrome}>
         <Scrubber />
       </div>
+
+      {settingsOpen && <SettingsPanel />}
 
       {resumePage != null && (
         <div className="toast" role="status">
