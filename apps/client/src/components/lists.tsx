@@ -131,6 +131,7 @@ export function ListDetailScreen({
   onBack,
   onDelete,
   onRemoveBook,
+  onAddIssues,
   emptyText,
 }: {
   eyebrow: string;
@@ -145,6 +146,8 @@ export function ListDetailScreen({
   onDelete: () => void;
   /** When provided, each cover gets a corner remove button. Omit for rule-derived lists. */
   onRemoveBook?: (bookId: string) => void;
+  /** When provided, an "Add issues" button opens a search-and-multi-select picker. */
+  onAddIssues?: () => void;
   emptyText: string;
 }) {
   const seriesNames = useSeriesNames();
@@ -218,9 +221,16 @@ export function ListDetailScreen({
               {title}
             </h1>
           </div>
-          <Button variant="ghost" icon="trash" onClick={onDelete}>
-            Delete
-          </Button>
+          <div style={{ flex: 'none', display: 'flex', gap: 10 }}>
+            {onAddIssues && (
+              <Button variant="secondary" icon="plus" onClick={onAddIssues}>
+                Add issues
+              </Button>
+            )}
+            <Button variant="ghost" icon="trash" onClick={onDelete}>
+              Delete
+            </Button>
+          </div>
         </div>
       </div>
 
