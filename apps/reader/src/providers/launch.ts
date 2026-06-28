@@ -15,10 +15,30 @@ export type LaunchResult =
       title?: string;
       /** Server-backed per-book settings store (only in connected mode). */
       prefsServer?: PrefsBackend;
+      /** The client + book id, so the reader can resolve and open the next issue. */
+      client: ComicHubClient;
+      bookId: string;
     }
   | { kind: 'standalone'; provider: PageProvider; manifest: Manifest; title?: string }
   | { kind: 'empty' }
   | { kind: 'error'; message: string };
+
+/** Builds a connected launch for a specific book on an existing client — used for the
+ *  initial deep link and for advancing to the next issue in place. */
+export function connectedLaunch(
+  client: ComicHubClient,
+  bookId: string,
+  startPage?: number,
+): LaunchResult {
+  return {
+    kind: 'connected',
+    provider: new ServerPageProvider(client, bookId, deviceLabel()),
+    startPage,
+    prefsServer: serverPrefs(client),
+    client,
+    bookId,
+  };
+}
 
 function isTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -112,13 +132,11 @@ export async function resolveLaunch(explicitUrl?: string): Promise<LaunchResult>
     const pageParam = params.get('page');
     const startPage = pageParam !== null ? Number.parseInt(pageParam, 10) : undefined;
     const client = new ComicHubClient({ baseUrl, token });
-    const provider = new ServerPageProvider(client, bookId, deviceLabel());
-    return {
-      kind: 'connected',
-      provider,
-      startPage: Number.isFinite(startPage as number) ? startPage : undefined,
-      prefsServer: serverPrefs(client),
-    };
+    return connectedLaunch(
+      client,
+      bookId,
+      Number.isFinite(startPage as number) ? startPage : undefined,
+    );
   }
 
   // Standalone mode: a file path from the OS (file association double-click).

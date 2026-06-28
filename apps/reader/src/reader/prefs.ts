@@ -6,15 +6,24 @@ import type { ReaderSettings } from './types.js';
  *  mode only); `local` keeps them on this machine. */
 export type SyncMode = 'local' | 'server';
 
+/** When an issue is finished, what (if anything) to advance to next. */
+export type AutoAdvance = 'off' | 'series' | 'readingList';
+
 /** App-level reader configuration (not per book). Persisted in localStorage. */
 export interface ReaderConfig {
   /** Remember layout/fit/direction/background per book and restore on open. */
   rememberPerBook: boolean;
   syncMode: SyncMode;
+  /** Auto-advance to the next issue on completion (connected mode only). */
+  autoAdvance: AutoAdvance;
 }
 
 const CONFIG_KEY = 'comichub.reader.config';
-const DEFAULT_CONFIG: ReaderConfig = { rememberPerBook: true, syncMode: 'local' };
+const DEFAULT_CONFIG: ReaderConfig = {
+  rememberPerBook: true,
+  syncMode: 'local',
+  autoAdvance: 'off',
+};
 
 export function loadConfig(): ReaderConfig {
   try {

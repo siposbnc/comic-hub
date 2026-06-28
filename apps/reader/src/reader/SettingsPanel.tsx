@@ -2,7 +2,7 @@ import { useEffect, type ReactNode } from 'react';
 import { Icon } from '@comichub/ui';
 import { useReaderStore } from './store.js';
 import type { FitMode, LayoutMode, ReaderBackground } from './types.js';
-import type { SyncMode } from './prefs.js';
+import type { AutoAdvance, SyncMode } from './prefs.js';
 
 const LAYOUTS: { value: LayoutMode; label: string }[] = [
   { value: 'single', label: 'Single' },
@@ -30,6 +30,7 @@ export function SettingsPanel() {
   const setCoverAlone = useReaderStore((s) => s.setCoverAlone);
   const setRememberPerBook = useReaderStore((s) => s.setRememberPerBook);
   const setSyncMode = useReaderStore((s) => s.setSyncMode);
+  const setAutoAdvance = useReaderStore((s) => s.setAutoAdvance);
   const close = useReaderStore((s) => s.setSettingsOpen);
 
   useEffect(() => {
@@ -96,6 +97,25 @@ export function SettingsPanel() {
         </Row>
 
         <div className="settings-divider" />
+
+        <Row
+          label="When finished"
+          hint={
+            mode === 'connected'
+              ? 'Auto-advance to the next issue'
+              : 'Auto-advance needs a connected library'
+          }
+        >
+          <Seg
+            options={[
+              { value: 'off', label: 'Off' },
+              { value: 'series', label: 'Series' },
+              { value: 'readingList', label: 'List' },
+            ]}
+            value={config.autoAdvance}
+            onPick={(m: AutoAdvance) => setAutoAdvance(m)}
+          />
+        </Row>
 
         <Row label="Remember per book" hint="Restore this book's layout next time">
           <Toggle on={config.rememberPerBook} onChange={setRememberPerBook} />

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useReaderStore } from './store.js';
 import { useKeyboard } from './useKeyboard.js';
 import { Toolbar } from './Toolbar.js';
@@ -24,10 +24,13 @@ export function Reader() {
   const finished = useReaderStore((s) => s.finished);
   const settingsOpen = useReaderStore((s) => s.settingsOpen);
   const resumePage = useReaderStore((s) => s.resumePage);
+  const nextBook = useReaderStore((s) => s.nextBook);
   const dismissFinished = useReaderStore((s) => s.dismissFinished);
   const startOver = useReaderStore((s) => s.startOver);
   const dismissResume = useReaderStore((s) => s.dismissResume);
   const flushProgress = useReaderStore((s) => s.flushProgress);
+  const fetchNext = useReaderStore((s) => s.fetchNext);
+  const clearNext = useReaderStore((s) => s.clearNext);
 
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -61,6 +64,12 @@ export function Reader() {
     const t = setTimeout(() => dismissResume(), RESUME_TOAST_MS);
     return () => clearTimeout(t);
   }, [resumePage, dismissResume]);
+
+  // On reaching the end, resolve the next issue (when auto-advance is enabled).
+  useEffect(() => {
+    if (finished) void fetchNext();
+    else clearNext();
+  }, [finished, fetchNext, clearNext]);
 
   return (
     <div
@@ -103,16 +112,60 @@ export function Reader() {
           <div className="endcard__inner">
             <Icon name="check" size={40} />
             <h2>You&apos;ve reached the end</h2>
-            <p>Marked as read.</p>
-            <div className="endcard__actions">
-              <Button onClick={startOver}>Start over</Button>
-              <Button variant="ghost" onClick={dismissFinished}>
-                Keep reading
-              </Button>
-            </div>
+            {nextBook ? (
+              <AutoNext label={nextBook.label} />
+            ) : (
+              <FinishedActions onStartOver={startOver} onKeep={dismissFinished} />
+            )}
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+const AUTO_NEXT_SECONDS = 5;
+
+/** End-of-book offer to advance to the next issue, with a short auto-load countdown. */
+function AutoNext({ label }: { label: string }) {
+  const loadNext = useReaderStore((s) => s.loadNext);
+  const dismiss = useReaderStore((s) => s.dismissFinished);
+  const [secs, setSecs] = useState(AUTO_NEXT_SECONDS);
+
+  useEffect(() => {
+    if (secs <= 0) {
+      loadNext();
+      return;
+    }
+    const t = setTimeout(() => setSecs((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [secs, loadNext]);
+
+  return (
+    <>
+      <p>
+        Up next: <strong>{label}</strong>
+      </p>
+      <div className="endcard__actions">
+        <Button onClick={loadNext}>Read next now</Button>
+        <Button variant="ghost" onClick={dismiss}>
+          Stay ({secs})
+        </Button>
+      </div>
+    </>
+  );
+}
+
+function FinishedActions({ onStartOver, onKeep }: { onStartOver: () => void; onKeep: () => void }) {
+  return (
+    <>
+      <p>Marked as read.</p>
+      <div className="endcard__actions">
+        <Button onClick={onStartOver}>Start over</Button>
+        <Button variant="ghost" onClick={onKeep}>
+          Keep reading
+        </Button>
+      </div>
+    </>
   );
 }

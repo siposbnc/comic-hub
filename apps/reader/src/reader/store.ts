@@ -17,11 +17,18 @@ import {
   type ReaderSettings,
 } from './types.js';
 import { invoke } from '@tauri-apps/api/core';
-import { resolveLaunch, resolveLaunchFromPath, type LaunchResult } from '../providers/launch.js';
+import type { ComicHubClient } from '@comichub/api-client';
+import {
+  resolveLaunch,
+  resolveLaunchFromPath,
+  connectedLaunch,
+  type LaunchResult,
+} from '../providers/launch.js';
 import {
   loadConfig,
   saveConfig,
   localPrefs,
+  type AutoAdvance,
   type PrefsBackend,
   type ReaderConfig,
   type SyncMode,
@@ -56,6 +63,10 @@ export interface ReaderState {
   config: ReaderConfig;
   /** Server-backed per-book settings store, when in connected mode. */
   prefsServer: PrefsBackend | null;
+  /** The connected client, used to resolve/open the next issue (connected mode only). */
+  serverClient: ComicHubClient | null;
+  /** The next issue offered at the end of this one (when auto-advance is on). */
+  nextBook: { id: string; label: string } | null;
 
   zoom: number;
   panX: number;
@@ -96,6 +107,14 @@ export interface ReaderState {
   setRememberPerBook: (on: boolean) => void;
   /** Choose where per-book overrides are stored (local vs server). */
   setSyncMode: (mode: SyncMode) => void;
+  /** Set auto-advance behavior on completion. */
+  setAutoAdvance: (mode: AutoAdvance) => void;
+  /** Resolve the next issue to offer at the end (connected + auto-advance on). */
+  fetchNext: () => Promise<void>;
+  /** Open the offered next issue in place. */
+  loadNext: () => void;
+  /** Forget any offered next issue. */
+  clearNext: () => void;
 
   setZoom: (zoom: number) => void;
   zoomBy: (delta: number) => void;
@@ -176,7 +195,14 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
     }
     get().pages?.dispose();
     get().thumbs?.dispose();
-    set({ provider: null, pages: null, thumbs: null, finished: false, resumePage: null });
+    set({
+      provider: null,
+      pages: null,
+      thumbs: null,
+      finished: false,
+      resumePage: null,
+      nextBook: null,
+    });
   }
 
   /** Applies a resolved launch to the store: builds caches, restores progress, and shows
@@ -195,9 +221,10 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
       const provider = launch.provider;
       const manifest = launch.kind === 'standalone' ? launch.manifest : await provider.manifest();
 
-      // Connected mode brings a server-backed prefs store; local mode falls back to it.
+      // Connected mode brings a server-backed prefs store + client; local mode falls back.
       const prefsServer = launch.kind === 'connected' ? (launch.prefsServer ?? null) : null;
-      set({ prefsServer });
+      const serverClient = launch.kind === 'connected' ? launch.client : null;
+      set({ prefsServer, serverClient, nextBook: null });
 
       const pages = new PageCache(provider, PAGE_CACHE_CAPACITY);
       const thumbs = new ThumbCache(provider);
@@ -275,6 +302,8 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
     settings: { ...DEFAULT_SETTINGS },
     config: loadConfig(),
     prefsServer: null,
+    serverClient: null,
+    nextBook: null,
     zoom: MIN_ZOOM,
     panX: 0,
     panY: 0,
@@ -417,6 +446,38 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
       saveConfig(config);
       persistPrefs(); // mirror current settings into the newly-selected store
     },
+
+    setAutoAdvance: (mode) => {
+      const config = { ...get().config, autoAdvance: mode };
+      set({ config });
+      saveConfig(config);
+    },
+
+    fetchNext: async () => {
+      const { config, serverClient, manifest } = get();
+      if (config.autoAdvance === 'off' || !serverClient || !manifest) return;
+      try {
+        const nb = await serverClient.nextBook(manifest.bookId, config.autoAdvance);
+        if (nb) {
+          const label = nb.title || (nb.number ? `Issue ${nb.number}` : 'Next issue');
+          set({ nextBook: { id: nb.id, label } });
+        } else {
+          set({ nextBook: null });
+        }
+      } catch {
+        set({ nextBook: null });
+      }
+    },
+
+    loadNext: () => {
+      const { serverClient, nextBook } = get();
+      if (!serverClient || !nextBook) return;
+      teardownCurrent();
+      set({ status: 'loading' });
+      void applyLaunch(connectedLaunch(serverClient, nextBook.id));
+    },
+
+    clearNext: () => set({ nextBook: null }),
 
     setZoom: (zoom) => {
       const z = clamp(zoom, MIN_ZOOM, MAX_ZOOM);
