@@ -21,6 +21,10 @@ export const qk = {
   discover: (libraryId?: string) => ['discover', libraryId ?? 'all'] as const,
   continueReading: ['continue'] as const,
   job: (id: string) => ['job', id] as const,
+  collections: ['collections'] as const,
+  collection: (id: string) => ['collection', id] as const,
+  readingLists: ['readingLists'] as const,
+  readingList: (id: string) => ['readingList', id] as const,
 };
 
 /** App-wide QueryClient. Covers are immutable + content-addressed, so list data can be
@@ -128,6 +132,118 @@ export function useLibrarySeriesCounts(): Map<string, number> {
     if (data) map.set(id, data.length);
   });
   return map;
+}
+
+// ── Collections (shared, ordered shelves) ───────────────────────────────────────────
+
+export function useCollections() {
+  const client = useClient();
+  return useQuery({ queryKey: qk.collections, queryFn: () => client.listCollections() });
+}
+
+export function useCollection(id: string) {
+  const client = useClient();
+  return useQuery({ queryKey: qk.collection(id), queryFn: () => client.collection(id) });
+}
+
+export function useCreateCollection() {
+  const client = useClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => client.createCollection({ name }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.collections }),
+  });
+}
+
+export function useDeleteCollection() {
+  const client = useClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => client.deleteCollection(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.collections }),
+  });
+}
+
+export function useAddToCollection() {
+  const client = useClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, bookIds }: { id: string; bookIds: string[] }) =>
+      client.addToCollection(id, bookIds),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: qk.collection(id) });
+      qc.invalidateQueries({ queryKey: qk.collections });
+    },
+  });
+}
+
+export function useRemoveFromCollection() {
+  const client = useClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, bookId }: { id: string; bookId: string }) =>
+      client.removeFromCollection(id, bookId),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: qk.collection(id) });
+      qc.invalidateQueries({ queryKey: qk.collections });
+    },
+  });
+}
+
+// ── Reading lists (per-user, ordered) ───────────────────────────────────────────────
+
+export function useReadingLists() {
+  const client = useClient();
+  return useQuery({ queryKey: qk.readingLists, queryFn: () => client.listReadingLists() });
+}
+
+export function useReadingList(id: string) {
+  const client = useClient();
+  return useQuery({ queryKey: qk.readingList(id), queryFn: () => client.readingList(id) });
+}
+
+export function useCreateReadingList() {
+  const client = useClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => client.createReadingList(name),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.readingLists }),
+  });
+}
+
+export function useDeleteReadingList() {
+  const client = useClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => client.deleteReadingList(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.readingLists }),
+  });
+}
+
+export function useAddToReadingList() {
+  const client = useClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, bookIds }: { id: string; bookIds: string[] }) =>
+      client.addToReadingList(id, bookIds),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: qk.readingList(id) });
+      qc.invalidateQueries({ queryKey: qk.readingLists });
+    },
+  });
+}
+
+export function useRemoveFromReadingList() {
+  const client = useClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, bookId }: { id: string; bookId: string }) =>
+      client.removeFromReadingList(id, bookId),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: qk.readingList(id) });
+      qc.invalidateQueries({ queryKey: qk.readingLists });
+    },
+  });
 }
 
 /** Toggle a book's read state, then refresh the surfaces that show it. */

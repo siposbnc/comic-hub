@@ -162,6 +162,22 @@ export function Sidebar() {
             />
           ))}
 
+          <NavSection>Lists</NavSection>
+          <SpineTab
+            index={next()}
+            icon="collection"
+            label="Collections"
+            active={pathname.startsWith('/collections')}
+            onClick={() => navigate({ to: '/collections' })}
+          />
+          <SpineTab
+            index={next()}
+            icon="bookmark"
+            label="Reading Lists"
+            active={pathname.startsWith('/reading-lists')}
+            onClick={() => navigate({ to: '/reading-lists' })}
+          />
+
           <NavSection>System</NavSection>
           <SpineTab
             index={next()}

@@ -38,12 +38,40 @@ const settingsRoute = createRoute({
   component: lazyRouteComponent(() => import('./routes/Settings.js'), 'Settings'),
 });
 
+const collectionsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/collections',
+  component: lazyRouteComponent(() => import('./routes/Collections.js'), 'Collections'),
+});
+
+const collectionDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/collections/$id',
+  component: lazyRouteComponent(() => import('./routes/CollectionDetail.js'), 'CollectionDetail'),
+});
+
+const readingListsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/reading-lists',
+  component: lazyRouteComponent(() => import('./routes/ReadingLists.js'), 'ReadingLists'),
+});
+
+const readingListDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/reading-lists/$id',
+  component: lazyRouteComponent(() => import('./routes/ReadingListDetail.js'), 'ReadingListDetail'),
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   libraryRoute,
   seriesRoute,
   bookRoute,
   settingsRoute,
+  collectionsRoute,
+  collectionDetailRoute,
+  readingListsRoute,
+  readingListDetailRoute,
 ]);
 
 export const router = createRouter({

@@ -1,11 +1,20 @@
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
 import { Button, Badge, ProgressBar } from '@comichub/ui';
 import type { BookDetail } from '@comichub/api-client';
 import { useClient } from '../lib/client.js';
-import { useBookDetail, useMarkBook } from '../lib/queries.js';
+import {
+  useBookDetail,
+  useMarkBook,
+  useCollections,
+  useReadingLists,
+  useAddToCollection,
+  useAddToReadingList,
+} from '../lib/queries.js';
 import { useReadLaunch } from '../lib/launch.js';
+import { useUiStore } from '../store/ui.js';
 import { LoadingState, ErrorState } from '../components/Page.js';
+import { AddToListDialog } from '../components/lists.js';
 import { issueLabel, resumePage } from '../lib/format.js';
 
 const route = getRouteApi('/book/$id');
@@ -162,7 +171,7 @@ function BookView({ detail }: { detail: BookDetail }) {
 
           <Facts detail={detail} />
 
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <Button
               variant="primary"
               icon="book-open"
@@ -179,6 +188,7 @@ function BookView({ detail }: { detail: BookDetail }) {
             >
               {isRead ? 'Mark unread' : 'Mark read'}
             </Button>
+            <AddToActions bookId={detail.id} />
           </div>
         </div>
       </section>
@@ -197,6 +207,62 @@ function BookView({ detail }: { detail: BookDetail }) {
       </h2>
       <PageStrip detail={detail} onOpen={(idx) => launch(detail.id, idx)} />
     </div>
+  );
+}
+
+/** "Add to…" actions: drop the issue into a collection or a personal reading list. */
+function AddToActions({ bookId }: { bookId: string }) {
+  const collections = useCollections();
+  const lists = useReadingLists();
+  const addCollection = useAddToCollection();
+  const addList = useAddToReadingList();
+  const addToast = useUiStore((s) => s.addToast);
+  const [open, setOpen] = useState<null | 'collection' | 'list'>(null);
+
+  const add = async (kind: 'collection' | 'list', id: string, label: string) => {
+    try {
+      if (kind === 'collection') await addCollection.mutateAsync({ id, bookIds: [bookId] });
+      else await addList.mutateAsync({ id, bookIds: [bookId] });
+      addToast({ tone: 'success', title: `Added to ${label}` });
+    } catch (err) {
+      addToast({
+        tone: 'danger',
+        title: 'Could not add',
+        message: err instanceof Error ? err.message : 'Unknown error.',
+      });
+    }
+    setOpen(null);
+  };
+
+  return (
+    <>
+      <Button variant="ghost" icon="collection" onClick={() => setOpen('collection')}>
+        Add to collection
+      </Button>
+      <Button variant="ghost" icon="bookmark" onClick={() => setOpen('list')}>
+        Add to list
+      </Button>
+      {open === 'collection' && (
+        <AddToListDialog
+          title="Add to collection"
+          options={(collections.data ?? []).map((c) => ({ id: c.id, name: c.name }))}
+          onPick={(id) => add('collection', id, 'collection')}
+          onClose={() => setOpen(null)}
+          busy={addCollection.isPending}
+          emptyHint="No collections yet — create one from the Collections screen."
+        />
+      )}
+      {open === 'list' && (
+        <AddToListDialog
+          title="Add to reading list"
+          options={(lists.data ?? []).map((l) => ({ id: l.id, name: l.name }))}
+          onPick={(id) => add('list', id, 'reading list')}
+          onClose={() => setOpen(null)}
+          busy={addList.isPending}
+          emptyHint="No reading lists yet — create one from the Reading Lists screen."
+        />
+      )}
+    </>
   );
 }
 
