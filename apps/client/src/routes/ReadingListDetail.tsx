@@ -19,7 +19,48 @@ import { issueLabel, resumePage } from '../lib/format.js';
 
 const route = getRouteApi('/reading-lists/$id');
 
-/** A reading list as an ordered, reorderable queue that can be set as the active list. */
+type RState = 'read' | 'reading' | 'unread';
+
+/** Per-state spine-tab colors + the row action verb/variant (from the design handoff). */
+const RL_STATE: Record<
+  RState,
+  {
+    tab: string;
+    tabText: string;
+    label: string;
+    action: string;
+    variant: 'ghost' | 'primary' | 'secondary';
+  }
+> = {
+  read: {
+    tab: 'var(--ink-800)',
+    tabText: 'var(--paper-400)',
+    label: 'Read',
+    action: 'Reread',
+    variant: 'ghost',
+  },
+  reading: {
+    tab: 'var(--accent)',
+    tabText: 'var(--text-on-accent)',
+    label: 'In progress',
+    action: 'Resume',
+    variant: 'primary',
+  },
+  unread: {
+    tab: 'var(--unread)',
+    tabText: 'var(--text-on-accent)',
+    label: 'Unread',
+    action: 'Read',
+    variant: 'secondary',
+  },
+};
+
+function stateOf(b: BookCard): RState {
+  const s = b.progress?.status;
+  return s === 'read' ? 'read' : s === 'in_progress' ? 'reading' : 'unread';
+}
+
+/** A reading list as an ordered, drag-to-reorder queue (matches the design handoff). */
 export function ReadingListDetail() {
   const { id } = route.useParams();
   const q = useReadingList(id);
@@ -58,33 +99,60 @@ function QueueView({ data, listId }: { data: ReadingListDetailData; listId: stri
   const [adding, setAdding] = useState(false);
 
   const { readingList, books } = data;
-  const next = books.find((b) => b.progress?.status !== 'read') ?? books[0];
 
-  // Native drag-and-drop reordering: drag a row's handle onto another row; dropping in its
-  // top/bottom half inserts above/below it. The dragged id lives in a ref so the drop
-  // handler never reads stale state; the visual state drives row highlighting.
-  const dragRef = useRef<string | null>(null);
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [over, setOver] = useState<{ id: string; pos: 'before' | 'after' } | null>(null);
+  // Smart resume target + next unread for the header CTAs.
+  const nextItem =
+    books.find((b) => stateOf(b) === 'reading') ?? books.find((b) => stateOf(b) === 'unread');
+  const firstUnread = books.find((b) => stateOf(b) === 'unread');
+  const hasReading = books.some((b) => stateOf(b) === 'reading');
 
-  const startDrag = (id: string) => {
-    dragRef.current = id;
-    setDragId(id);
+  // Overall progress (by pages): read = all pages, reading = current page, unread = 0.
+  const readCount = books.filter((b) => stateOf(b) === 'read').length;
+  const readingCount = books.filter((b) => stateOf(b) === 'reading').length;
+  const toGo = books.length - readCount - readingCount;
+  const totalPages = books.reduce((a, b) => a + (b.pageCount || 0), 0);
+  const pagesRead = books.reduce((a, b) => {
+    const s = stateOf(b);
+    return a + (s === 'read' ? b.pageCount || 0 : s === 'reading' ? b.progress?.page || 0 : 0);
+  }, 0);
+  const pct = totalPages ? Math.round((pagesRead / totalPages) * 100) : 0;
+  const mins = Math.round((totalPages - pagesRead) * 0.4);
+  const timeLeft =
+    mins >= 60 ? `${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, '0')}m` : `${mins}m`;
+
+  const openReader = (b: BookCard) =>
+    launch(b.id, stateOf(b) === 'reading' ? resumePage(b.progress) : 0);
+  const openIssue = (b: BookCard) => navigate({ to: '/book/$id', params: { id: b.id } });
+
+  // Native drag-and-drop. The dragged index + insertion slot live in refs so the drop
+  // handler never reads stale state; the slot also drives the insertion indicator.
+  const dragRef = useRef<number | null>(null);
+  const overRef = useRef<number | null>(null);
+  const [drag, setDrag] = useState<number | null>(null);
+  const [over, setOver] = useState<number | null>(null);
+
+  const setOverSlot = (slot: number | null) => {
+    overRef.current = slot;
+    setOver(slot);
+  };
+  const startDrag = (idx: number) => {
+    dragRef.current = idx;
+    setDrag(idx);
   };
   const endDrag = () => {
     dragRef.current = null;
-    setDragId(null);
+    overRef.current = null;
+    setDrag(null);
     setOver(null);
   };
-  const hover = (id: string, pos: 'before' | 'after') => {
-    if (dragRef.current && dragRef.current !== id) setOver({ id, pos });
-  };
-  const dropOn = (id: string, pos: 'before' | 'after') => {
-    const dragged = dragRef.current;
+  const drop = () => {
+    const d = dragRef.current;
+    const o = overRef.current;
     endDrag();
-    if (!dragged) return;
-    const beforeId = beforeIdForDrop(books, dragged, { id, pos });
-    if (beforeId !== dragged) reorder.mutate({ id: listId, bookId: dragged, beforeId });
+    if (d == null || o == null) return;
+    const beforeId = o < books.length ? books[o]!.id : undefined; // undefined → move to end
+    if (beforeId === books[d]!.id) return; // dropped onto itself
+    reorder.mutate({ id: listId, bookId: books[d]!.id, beforeId });
   };
 
   const onDelete = async () => {
@@ -103,6 +171,7 @@ function QueueView({ data, listId }: { data: ReadingListDetailData; listId: stri
           onClose={() => setAdding(false)}
         />
       )}
+
       <button
         type="button"
         onClick={() => navigate({ to: '/reading-lists' })}
@@ -122,38 +191,29 @@ function QueueView({ data, listId }: { data: ReadingListDetailData; listId: stri
         ← Reading lists
       </button>
 
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'flex-end',
-          justifyContent: 'space-between',
-          gap: 16,
-          marginBottom: 22,
-        }}
-      >
-        <div style={{ minWidth: 0 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 24, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 280 }}>
           <div
             className="ch-mono"
             style={{
-              fontSize: 'var(--text-label)',
+              fontSize: '0.66rem',
+              fontWeight: 600,
+              letterSpacing: '0.16em',
               textTransform: 'uppercase',
-              letterSpacing: 'var(--tracking-label)',
-              color: 'var(--text-tertiary)',
-              marginBottom: 6,
+              color: 'var(--accent)',
             }}
           >
-            Reading list · {readingList.bookCount}{' '}
-            {readingList.bookCount === 1 ? 'issue' : 'issues'}
+            Reading list
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '8px 0 0' }}>
             <h1
               style={{
                 margin: 0,
                 fontFamily: 'var(--font-display)',
-                fontSize: 'var(--text-display-l)',
-                lineHeight: 'var(--leading-display-l)',
                 fontWeight: 800,
-                letterSpacing: 'var(--tracking-tight)',
+                fontSize: 'var(--text-display-l)',
+                letterSpacing: '-0.01em',
                 color: 'var(--text-primary)',
               }}
             >
@@ -166,22 +226,25 @@ function QueueView({ data, listId }: { data: ReadingListDetailData; listId: stri
             )}
           </div>
         </div>
-        <div style={{ flex: 'none', display: 'flex', gap: 10 }}>
-          {next && (
-            <Button
-              variant="primary"
-              icon="book-open"
-              onClick={() => launch(next.id, resumePage(next.progress))}
-            >
-              {next.progress?.status === 'in_progress' ? 'Continue' : 'Read next'}
+        <div style={{ flex: 'none', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          {nextItem && (
+            <Button icon="book-open" onClick={() => openReader(nextItem)}>
+              {hasReading
+                ? `Resume · ${issueLabel(nextItem.number) ?? ''}`
+                : `Start · ${issueLabel(nextItem.number) ?? ''}`}
+            </Button>
+          )}
+          {firstUnread && (
+            <Button variant="secondary" onClick={() => openReader(firstUnread)}>
+              Next unread →
             </Button>
           )}
           {!readingList.active && (
-            <Button variant="secondary" icon="check" onClick={() => setActive.mutate(listId)}>
+            <Button variant="ghost" icon="check" onClick={() => setActive.mutate(listId)}>
               Set active
             </Button>
           )}
-          <Button variant="secondary" icon="plus" onClick={() => setAdding(true)}>
+          <Button variant="ghost" icon="plus" onClick={() => setAdding(true)}>
             Add issues
           </Button>
           <Button variant="ghost" icon="trash" onClick={onDelete}>
@@ -190,192 +253,381 @@ function QueueView({ data, listId }: { data: ReadingListDetailData; listId: stri
         </div>
       </div>
 
+      {/* Stats + overall progress */}
+      <div
+        style={{
+          marginTop: 22,
+          padding: '16px 18px',
+          background: 'var(--surface-raised)',
+          border: '1px solid var(--border-hairline)',
+          borderRadius: 8,
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 16,
+            flexWrap: 'wrap',
+            marginBottom: 12,
+          }}
+        >
+          <span className="ch-mono" style={{ fontSize: '0.74rem', color: 'var(--text-primary)' }}>
+            {books.length} issues
+          </span>
+          <span style={{ width: 1, height: 14, background: 'var(--border-hairline)' }} />
+          <span className="ch-mono" style={{ fontSize: '0.74rem', color: 'var(--paper-400)' }}>
+            {readCount} read · {readingCount} reading · {toGo} to go
+          </span>
+          <span style={{ width: 1, height: 14, background: 'var(--border-hairline)' }} />
+          <span
+            className="ch-mono"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: '0.74rem',
+              color: 'var(--paper-400)',
+            }}
+          >
+            <Icon name="clock" size={13} color="var(--paper-400)" /> ~{timeLeft} left
+          </span>
+          <div style={{ flex: 1 }} />
+          <Badge tone="accent" mono>
+            {pct}% complete
+          </Badge>
+        </div>
+        <div className="ch-progress" style={{ borderRadius: 999, height: 6 }}>
+          <span style={{ width: `${pct}%`, borderRadius: 999 }} />
+        </div>
+      </div>
+
+      {/* Reading-order toolbar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '24px 0 6px' }}>
+        <span
+          className="ch-mono"
+          style={{
+            fontSize: '0.62rem',
+            fontWeight: 600,
+            letterSpacing: '0.16em',
+            textTransform: 'uppercase',
+            color: 'var(--paper-600)',
+          }}
+        >
+          Reading order
+        </span>
+        <span style={{ flex: 1, height: 1, background: 'var(--border-hairline)' }} />
+        <span
+          className="ch-mono"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            fontSize: '0.64rem',
+            color: 'var(--paper-600)',
+          }}
+        >
+          <Grip /> Drag to reorder
+        </span>
+      </div>
+
+      {/* Rows with insertion indicators */}
       {books.length === 0 ? (
         <EmptyState title="This queue is empty">
           Use “Add issues” to build your queue, then drag issues to reorder them.
         </EmptyState>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {books.map((book, i) => (
-            <QueueRow
-              key={book.id}
-              index={i}
-              book={book}
-              seriesName={seriesNames.get(book.seriesId)}
-              cover={client.coverUrl(book.id, 80)}
-              dragging={dragId === book.id}
-              over={over?.id === book.id ? over.pos : null}
-              onOpen={() => launch(book.id, resumePage(book.progress))}
-              onDetails={() => navigate({ to: '/book/$id', params: { id: book.id } })}
-              onRemove={() => removeItem.mutate({ id: listId, bookId: book.id })}
-              onDragStart={() => startDrag(book.id)}
-              onDragEnd={endDrag}
-              onDragOver={(pos) => hover(book.id, pos)}
-              onDrop={(pos) => dropOn(book.id, pos)}
-            />
+        <div onDragOver={(e) => e.preventDefault()}>
+          {books.map((b, idx) => (
+            <div key={b.id}>
+              <DropLine active={drag != null && over === idx} />
+              <ReadingRow
+                book={b}
+                order={String(idx + 1).padStart(2, '0')}
+                cover={client.coverUrl(b.id, 80)}
+                seriesName={seriesNames.get(b.seriesId)}
+                dragging={drag === idx}
+                onOpenIssue={() => openIssue(b)}
+                onOpenReader={() => openReader(b)}
+                onRemove={() => removeItem.mutate({ id: listId, bookId: b.id })}
+                onGripDragStart={(e) => {
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('text/plain', String(idx));
+                  startDrag(idx);
+                }}
+                onGripDragEnd={endDrag}
+                onRowDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  const r = e.currentTarget.getBoundingClientRect();
+                  setOverSlot(e.clientY < r.top + r.height / 2 ? idx : idx + 1);
+                }}
+                onRowDrop={(e) => {
+                  e.preventDefault();
+                  drop();
+                }}
+              />
+            </div>
           ))}
+          <DropLine active={drag != null && over === books.length} />
         </div>
       )}
     </div>
   );
 }
 
-function QueueRow({
-  index,
-  book,
-  seriesName,
-  cover,
-  dragging,
-  over,
-  onOpen,
-  onDetails,
-  onRemove,
-  onDragStart,
-  onDragEnd,
-  onDragOver,
-  onDrop,
-}: {
-  index: number;
-  book: BookCard;
-  seriesName?: string;
-  cover: string;
-  dragging: boolean;
-  over: 'before' | 'after' | null;
-  onOpen: () => void;
-  onDetails: () => void;
-  onRemove: () => void;
-  onDragStart: () => void;
-  onDragEnd: () => void;
-  onDragOver: (pos: 'before' | 'after') => void;
-  onDrop: (pos: 'before' | 'after') => void;
-}) {
-  const isRead = book.progress?.status === 'read';
-  const meta = [issueLabel(book.number), seriesName].filter(Boolean).join(' · ');
-  const accent = '2px solid var(--accent)';
-  const posOf = (e: React.DragEvent<HTMLDivElement>): 'before' | 'after' => {
-    const r = e.currentTarget.getBoundingClientRect();
-    return e.clientY < r.top + r.height / 2 ? 'before' : 'after';
-  };
+function DropLine({ active }: { active: boolean }) {
   return (
     <div
-      onDragOver={(e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        onDragOver(posOf(e));
+      style={{
+        height: 2,
+        margin: '1px 8px',
+        borderRadius: 2,
+        background: active ? 'var(--accent)' : 'transparent',
       }}
-      onDrop={(e) => {
-        e.preventDefault();
-        onDrop(posOf(e));
-      }}
+    />
+  );
+}
+
+/** A 2×3 dot grip — the drag affordance from the design handoff. */
+function Grip({ active }: { active?: boolean }) {
+  return (
+    <span
+      aria-hidden
+      style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 3px)', gap: 3, cursor: 'grab' }}
+    >
+      {Array.from({ length: 6 }).map((_, i) => (
+        <span
+          key={i}
+          style={{
+            width: 3,
+            height: 3,
+            borderRadius: '50%',
+            background: active ? 'var(--paper-100)' : 'var(--paper-600)',
+          }}
+        />
+      ))}
+    </span>
+  );
+}
+
+function ReadingRow({
+  book,
+  order,
+  cover,
+  seriesName,
+  dragging,
+  onOpenIssue,
+  onOpenReader,
+  onRemove,
+  onGripDragStart,
+  onGripDragEnd,
+  onRowDragOver,
+  onRowDrop,
+}: {
+  book: BookCard;
+  order: string;
+  cover: string;
+  seriesName?: string;
+  dragging: boolean;
+  onOpenIssue: () => void;
+  onOpenReader: () => void;
+  onRemove: () => void;
+  onGripDragStart: (e: React.DragEvent) => void;
+  onGripDragEnd: () => void;
+  onRowDragOver: (e: React.DragEvent<HTMLDivElement>) => void;
+  onRowDrop: (e: React.DragEvent<HTMLDivElement>) => void;
+}) {
+  const [hover, setHover] = useState(false);
+  const st = stateOf(book);
+  const meta = RL_STATE[st];
+  const pages = book.pageCount || 0;
+  const page = book.progress?.page || 0;
+  const pct = pages ? Math.round((page / pages) * 100) : 0;
+  const title = seriesName || book.title || issueLabel(book.number) || 'Untitled';
+
+  return (
+    <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onDragOver={onRowDragOver}
+      onDrop={onRowDrop}
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 8,
-        padding: '4px 8px',
-        background: 'var(--surface-raised)',
-        border: '1px solid var(--border-hairline)',
-        borderTop: over === 'before' ? accent : '1px solid var(--border-hairline)',
-        borderBottom: over === 'after' ? accent : '1px solid var(--border-hairline)',
-        borderRadius: 'var(--radius-sm)',
-        opacity: dragging ? 0.4 : isRead ? 0.6 : 1,
+        gap: 14,
+        padding: '10px 12px 10px 8px',
+        borderRadius: 6,
+        background: hover ? 'var(--ink-700)' : 'transparent',
+        opacity: dragging ? 0.35 : 1,
+        border: '1px solid',
+        borderColor: hover ? 'var(--border-hairline)' : 'transparent',
+        transition: 'background 110ms',
       }}
     >
       <span
         draggable
-        onDragStart={(e) => {
-          e.dataTransfer.effectAllowed = 'move';
-          e.dataTransfer.setData('text/plain', book.id);
-          onDragStart();
-        }}
-        onDragEnd={onDragEnd}
+        onDragStart={onGripDragStart}
+        onDragEnd={onGripDragEnd}
         title="Drag to reorder"
+        style={{ flex: 'none', padding: '6px 2px' }}
+      >
+        <Grip active={hover} />
+      </span>
+
+      <span
+        className="ch-mono"
         style={{
           flex: 'none',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          cursor: 'grab',
-          color: 'var(--text-tertiary)',
+          width: 22,
+          textAlign: 'right',
+          fontSize: '0.78rem',
+          fontVariantNumeric: 'tabular-nums',
+          color: 'var(--paper-600)',
         }}
       >
-        <Icon name="sort" size={14} />
-        <span className="ch-mono" style={{ width: 18, textAlign: 'right' }}>
-          {index + 1}
-        </span>
+        {order}
       </span>
-      <button
-        type="button"
-        onClick={onOpen}
-        style={{
-          flex: 1,
-          minWidth: 0,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          padding: 0,
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          color: 'var(--text-primary)',
-          textAlign: 'left',
-        }}
+
+      {/* Cover with registration ticks + state spine tab */}
+      <div
+        className="ch-reg"
+        onClick={onOpenIssue}
+        style={{ position: 'relative', flex: 'none', cursor: 'pointer' }}
       >
         <img
           src={cover}
           alt=""
-          width={24}
-          height={36}
           draggable={false}
           style={{
-            flex: 'none',
+            width: 46,
+            height: 69,
             objectFit: 'cover',
-            borderRadius: 'var(--radius-sm)',
-            background: 'var(--surface-cover)',
+            display: 'block',
+            boxShadow: '0 2px 8px rgba(0,0,0,.5)',
           }}
         />
         <span
+          className="ch-mono"
           style={{
-            flex: 1,
-            minWidth: 0,
-            fontSize: 'var(--text-small)',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
+            position: 'absolute',
+            left: 0,
+            bottom: 0,
+            fontSize: '0.52rem',
+            fontWeight: 600,
+            letterSpacing: '0.02em',
+            padding: '1px 7px 1px 4px',
+            background: meta.tab,
+            color: meta.tabText,
+            clipPath: 'polygon(0 0, 100% 0, calc(100% - 6px) 100%, 0 100%)',
           }}
         >
-          {book.title || seriesName || issueLabel(book.number) || 'Untitled'}
+          {issueLabel(book.number) ?? ''}
         </span>
-        {meta && (
+      </div>
+
+      {/* Title block */}
+      <div style={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={onOpenIssue}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
           <span
-            className="ch-mono"
             style={{
-              flex: 'none',
-              fontSize: 'var(--text-label)',
-              color: 'var(--text-tertiary)',
+              fontFamily: 'var(--font-body)',
+              fontWeight: 600,
+              fontSize: '0.95rem',
+              color: 'var(--paper-100)',
               whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
             }}
           >
-            {isRead ? 'Read' : meta}
+            {title}
           </span>
+          {issueLabel(book.number) && (
+            <span
+              className="ch-mono"
+              style={{ flex: 'none', fontSize: '0.8rem', color: 'var(--accent)' }}
+            >
+              {issueLabel(book.number)}
+            </span>
+          )}
+        </div>
+        <div
+          className="ch-mono"
+          style={{ fontSize: '0.68rem', color: 'var(--paper-600)', marginTop: 3 }}
+        >
+          {[pages ? `${pages} pp` : null, book.format?.toUpperCase()].filter(Boolean).join(' · ')}
+        </div>
+      </div>
+
+      {/* State / progress */}
+      <div style={{ flex: 'none', width: 150 }}>
+        {st === 'reading' ? (
+          <div>
+            <div
+              className="ch-mono"
+              style={{
+                fontSize: '0.66rem',
+                color: 'var(--text-secondary)',
+                marginBottom: 5,
+                display: 'flex',
+                justifyContent: 'space-between',
+              }}
+            >
+              <span>
+                p.{page}/{pages}
+              </span>
+              <span style={{ color: 'var(--accent)' }}>{pct}%</span>
+            </div>
+            <div className="ch-progress" style={{ borderRadius: 999 }}>
+              <span style={{ width: `${pct}%`, borderRadius: 999 }} />
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            {st === 'read' ? (
+              <Icon name="check" size={15} color="var(--paper-400)" />
+            ) : (
+              <span
+                style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--unread)' }}
+              />
+            )}
+            <span
+              className="ch-mono"
+              style={{
+                fontSize: '0.68rem',
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                color: st === 'unread' ? 'var(--unread)' : 'var(--paper-400)',
+              }}
+            >
+              {meta.label}
+            </span>
+          </div>
         )}
-      </button>
-      <IconButton icon="info" label="Issue details" variant="ghost" size="sm" onClick={onDetails} />
-      <IconButton icon="x" label="Remove" variant="ghost" size="sm" onClick={onRemove} />
+      </div>
+
+      {/* Actions */}
+      <div
+        style={{
+          flex: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+          opacity: hover ? 1 : 0.85,
+        }}
+      >
+        <Button size="sm" variant={meta.variant} icon="book-open" onClick={onOpenReader}>
+          {meta.action}
+        </Button>
+        <IconButton
+          icon="chevron-right"
+          label="Issue details"
+          variant="ghost"
+          size="sm"
+          onClick={onOpenIssue}
+        />
+        <IconButton icon="x" label="Remove" variant="ghost" size="sm" onClick={onRemove} />
+      </div>
     </div>
   );
-}
-
-/** Resolves the "place before" id for a drop: dropping in a row's top half inserts before
- *  it, bottom half after it. Returns undefined to move to the end, or the dragged id itself
- *  when the drop is a no-op. */
-function beforeIdForDrop(
-  books: BookCard[],
-  dragId: string,
-  over: { id: string; pos: 'before' | 'after' },
-): string | undefined {
-  const overIdx = books.findIndex((b) => b.id === over.id);
-  if (overIdx < 0) return dragId;
-  let target = books[over.pos === 'before' ? overIdx : overIdx + 1];
-  if (target?.id === dragId) target = books[overIdx + 2]; // skip the dragged row itself
-  return target?.id === dragId ? dragId : target?.id;
 }
