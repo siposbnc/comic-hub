@@ -60,6 +60,26 @@ ComicHub Design System** on claude.ai/design (project
 [`.prettierignore`](.prettierignore) to stay byte-faithful so re-syncs diff cleanly.
 `src/index.ts` (the barrel apps import from) **is** authored here.
 
+### Designing any UI — preview-screen first (REQUIRED, not optional)
+
+A **design kit** lives in the design-system project (`c0e1bfbe…`). It is the source of
+truth for how the app looks. Before writing or changing **anything that touches UI** —
+screens, components, layouts, dialogs, empty states, or styling in `apps/client` or
+`apps/reader` — follow this, every time:
+
+1. **Look for a preview screen of it in the design-system project first.** Use the
+   `DesignSync` read API (`list_files` → `get_file` against `c0e1bfbe…`, e.g. under
+   `ui_kits/**` / the design kit). Build the UI to match that preview, using the design
+   kit's components and tokens.
+2. **If no preview screen exists for what you're building, stop and ask the user to make
+   one** in the design system that you can reference — then build against it. Do **not**
+   invent the layout/visuals yourself.
+3. **Only design UI yourself when the user explicitly approves** it for that specific
+   piece. Absent that approval, the preview screen is mandatory.
+
+This is a hard rule: no improvising UI from scratch. When in doubt whether something
+"touches UI", treat it as yes and check the design kit.
+
 ### Workflow: syncing from the design system
 
 1. Pull with the `DesignSync` read API (or the `/design-sync` skill), **one component at a
