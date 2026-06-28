@@ -7,4 +7,7 @@ export interface EmptyStateProps {
   style?: React.CSSProperties;
 }
 
+/**
+ * @startingPoint section="Feedback" subtitle="Empty state with the signature halftone field" viewport="700x320"
+ */
 export function EmptyState(props: EmptyStateProps): JSX.Element;

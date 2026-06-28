@@ -12,4 +12,7 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   children?: React.ReactNode;
 }
 
+/**
+ * @startingPoint section="Core" subtitle="Buttons — primary, secondary, ghost, danger" viewport="700x200"
+ */
 export function Button(props: ButtonProps): JSX.Element;

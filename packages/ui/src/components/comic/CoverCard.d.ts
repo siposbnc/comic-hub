@@ -23,4 +23,7 @@ export interface CoverCardProps {
   style?: React.CSSProperties;
 }
 
+/**
+ * @startingPoint section="Comic" subtitle="The cover atom — spine tab, ticks, progress" viewport="240x420"
+ */
 export function CoverCard(props: CoverCardProps): JSX.Element;
