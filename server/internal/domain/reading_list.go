@@ -33,4 +33,6 @@ type ReadingListRepository interface {
 	AddItems(ctx context.Context, listID string, bookIDs []string) error
 	RemoveItem(ctx context.Context, listID, bookID string) error
 	SetPosition(ctx context.Context, listID, bookID string, position float64) error
+	// IDsForBook returns the ids of the user's reading lists that already contain a book.
+	IDsForBook(ctx context.Context, userID, bookID string) ([]string, error)
 }

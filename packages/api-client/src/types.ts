@@ -164,6 +164,10 @@ export interface BookDetail {
   characters?: string[];
   /** User-applied organizational tags. */
   tags?: Tag[];
+  /** Collections this book already belongs to. */
+  collectionIds?: string[];
+  /** The acting user's reading lists this book already belongs to. */
+  readingListIds?: string[];
 }
 
 /** A free-form label applied across books. */

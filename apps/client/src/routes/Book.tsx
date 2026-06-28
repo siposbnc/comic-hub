@@ -189,7 +189,11 @@ function BookView({ detail }: { detail: BookDetail }) {
             >
               {isRead ? 'Mark unread' : 'Mark read'}
             </Button>
-            <AddToActions bookId={detail.id} />
+            <AddToActions
+              bookId={detail.id}
+              inCollections={detail.collectionIds ?? []}
+              inReadingLists={detail.readingListIds ?? []}
+            />
           </div>
 
           <BookTags detail={detail} />
@@ -213,14 +217,26 @@ function BookView({ detail }: { detail: BookDetail }) {
   );
 }
 
-/** "Add to…" actions: drop the issue into a collection or a personal reading list. */
-function AddToActions({ bookId }: { bookId: string }) {
+/** "Add to…" actions: drop the issue into a collection or a personal reading list.
+ *  Lists the book already belongs to are filtered out so it can't be added twice. */
+function AddToActions({
+  bookId,
+  inCollections,
+  inReadingLists,
+}: {
+  bookId: string;
+  inCollections: string[];
+  inReadingLists: string[];
+}) {
   const collections = useCollections();
   const lists = useReadingLists();
   const addCollection = useAddToCollection();
   const addList = useAddToReadingList();
   const addToast = useUiStore((s) => s.addToast);
   const [open, setOpen] = useState<null | 'collection' | 'list'>(null);
+
+  const collectionSet = new Set(inCollections);
+  const readingListSet = new Set(inReadingLists);
 
   const add = async (kind: 'collection' | 'list', id: string, label: string) => {
     try {
@@ -248,21 +264,33 @@ function AddToActions({ bookId }: { bookId: string }) {
       {open === 'collection' && (
         <AddToListDialog
           title="Add to collection"
-          options={(collections.data ?? []).map((c) => ({ id: c.id, name: c.name }))}
+          options={(collections.data ?? [])
+            .filter((c) => !collectionSet.has(c.id))
+            .map((c) => ({ id: c.id, name: c.name }))}
           onPick={(id) => add('collection', id, 'collection')}
           onClose={() => setOpen(null)}
           busy={addCollection.isPending}
-          emptyHint="No collections yet — create one from the Collections screen."
+          emptyHint={
+            (collections.data?.length ?? 0) === 0
+              ? 'No collections yet — create one from the Collections screen.'
+              : 'Already in every collection.'
+          }
         />
       )}
       {open === 'list' && (
         <AddToListDialog
           title="Add to reading list"
-          options={(lists.data ?? []).map((l) => ({ id: l.id, name: l.name }))}
+          options={(lists.data ?? [])
+            .filter((l) => !readingListSet.has(l.id))
+            .map((l) => ({ id: l.id, name: l.name }))}
           onPick={(id) => add('list', id, 'reading list')}
           onClose={() => setOpen(null)}
           busy={addList.isPending}
-          emptyHint="No reading lists yet — create one from the Reading Lists screen."
+          emptyHint={
+            (lists.data?.length ?? 0) === 0
+              ? 'No reading lists yet — create one from the Reading Lists screen.'
+              : 'Already in every reading list.'
+          }
         />
       )}
     </>

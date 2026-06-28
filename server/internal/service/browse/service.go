@@ -80,6 +80,10 @@ type BookDetail struct {
 
 	// User-applied organizational tags (omitted when none).
 	Tags []TagView `json:"tags,omitempty"`
+
+	// Memberships so the client can avoid offering to add the book where it already is.
+	CollectionIDs  []string `json:"collectionIds,omitempty"`
+	ReadingListIDs []string `json:"readingListIds,omitempty"`
 }
 
 // TagView is a tag on the book detail screen.
@@ -188,26 +192,31 @@ func (s *Service) BookDetail(ctx context.Context, bookID, userID string) (BookDe
 		}
 	}
 
+	collectionIDs, _ := s.repo.Collections().IDsForBook(ctx, bookID)
+	readingListIDs, _ := s.repo.ReadingLists().IDsForBook(ctx, userID, bookID)
+
 	return BookDetail{
-		ID:          b.ID,
-		SeriesID:    b.SeriesID,
-		SeriesName:  seriesName,
-		Number:      b.Number,
-		Title:       b.Title,
-		Volume:      b.Volume,
-		PageCount:   b.PageCount,
-		Format:      b.FileFormat,
-		ReadingDir:  readingDir,
-		ReleaseDate: b.ReleaseDate,
-		AgeRating:   b.AgeRating,
-		Language:    b.Language,
-		Summary:     b.Summary,
-		IsCorrupt:   b.IsCorrupt,
-		Progress:    s.progressView(ctx, b, userID),
-		Credits:     credits,
-		Genres:      genres,
-		Characters:  characters,
-		Tags:        tags,
+		ID:             b.ID,
+		SeriesID:       b.SeriesID,
+		SeriesName:     seriesName,
+		Number:         b.Number,
+		Title:          b.Title,
+		Volume:         b.Volume,
+		PageCount:      b.PageCount,
+		Format:         b.FileFormat,
+		ReadingDir:     readingDir,
+		ReleaseDate:    b.ReleaseDate,
+		AgeRating:      b.AgeRating,
+		Language:       b.Language,
+		Summary:        b.Summary,
+		IsCorrupt:      b.IsCorrupt,
+		Progress:       s.progressView(ctx, b, userID),
+		Credits:        credits,
+		Genres:         genres,
+		Characters:     characters,
+		Tags:           tags,
+		CollectionIDs:  collectionIDs,
+		ReadingListIDs: readingListIDs,
 	}, nil
 }
 

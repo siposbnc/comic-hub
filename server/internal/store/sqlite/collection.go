@@ -150,6 +150,25 @@ func (r *collectionRepo) SetPosition(ctx context.Context, collectionID, bookID s
 	return mustAffect(res)
 }
 
+func (r *collectionRepo) IDsForBook(ctx context.Context, bookID string) ([]string, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT collection_id FROM collection_item WHERE book_id = ?`, bookID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
 func scanCollection(row rowScanner) (domain.Collection, error) {
 	var (
 		c     domain.Collection

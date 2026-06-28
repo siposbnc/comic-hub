@@ -38,4 +38,6 @@ type CollectionRepository interface {
 	RemoveItem(ctx context.Context, collectionID, bookID string) error
 	// SetPosition repositions one existing item.
 	SetPosition(ctx context.Context, collectionID, bookID string, position float64) error
+	// IDsForBook returns the ids of collections that already contain a book.
+	IDsForBook(ctx context.Context, bookID string) ([]string, error)
 }

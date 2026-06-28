@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
-import { Button, ProgressBar, Tabs, CoverCard, EmptyState } from '@comichub/ui';
+import { Button, ProgressBar, Tabs, CoverCard, EmptyState, IconButton } from '@comichub/ui';
 import type { BookCard, SeriesDetail } from '@comichub/api-client';
 import { useClient } from '../lib/client.js';
 import { useSeriesDetail } from '../lib/queries.js';
@@ -40,7 +40,6 @@ export function Series() {
 
 function SeriesView({ detail }: { detail: SeriesDetail }) {
   const client = useClient();
-  const navigate = useNavigate();
   const launch = useReadLaunch();
   const [tab, setTab] = useState('issues');
   const [matching, setMatching] = useState(false);
@@ -169,12 +168,6 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
                     ? `Continue · ${issueLabel(resumeBook.number) ?? ''}`
                     : 'Read first issue'}
                 </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => navigate({ to: '/book/$id', params: { id: resumeBook.id } })}
-                >
-                  Issue details
-                </Button>
                 <Button variant="ghost" icon="search" onClick={() => setMatching(true)}>
                   Match
                 </Button>
@@ -258,23 +251,46 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
   );
 }
 
-/** One issue as a small CoverCard that opens the reader at its resume page. */
+/** One issue as a small CoverCard: clicking it opens the reader at its resume page; a
+ *  Details button appears on hover to open the issue's detail page. */
 function IssueCover({ book, seriesName }: { book: BookCard; seriesName: string }) {
   const client = useClient();
+  const navigate = useNavigate();
   const launch = useReadLaunch();
+  const [hover, setHover] = useState(false);
   const number = issueLabel(book.number);
   return (
-    <CoverCard
-      cover={client.coverUrl(book.id, 300)}
-      title={number ?? book.title ?? seriesName}
-      subtitle={`${book.pageCount} pp`}
-      number={number}
-      status={toCoverStatus(book.progress?.status)}
-      progress={progressFraction(book.progress)}
-      size="s"
-      style={{ width: '100%' }}
-      onClick={() => launch(book.id, resumePage(book.progress))}
-    />
+    <div
+      style={{ position: 'relative' }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      <CoverCard
+        cover={client.coverUrl(book.id, 300)}
+        title={number ?? book.title ?? seriesName}
+        subtitle={`${book.pageCount} pp`}
+        number={number}
+        status={toCoverStatus(book.progress?.status)}
+        progress={progressFraction(book.progress)}
+        size="s"
+        style={{ width: '100%' }}
+        onClick={() => launch(book.id, resumePage(book.progress))}
+      />
+      {hover && (
+        <div style={{ position: 'absolute', top: 6, right: 6, zIndex: 1 }}>
+          <IconButton
+            icon="info"
+            label="Issue details"
+            variant="solid"
+            size="sm"
+            onClick={(e: React.MouseEvent) => {
+              e.stopPropagation();
+              navigate({ to: '/book/$id', params: { id: book.id } });
+            }}
+          />
+        </div>
+      )}
+    </div>
   );
 }
 

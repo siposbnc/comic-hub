@@ -145,6 +145,27 @@ func (r *readingListRepo) SetPosition(ctx context.Context, listID, bookID string
 	return mustAffect(res)
 }
 
+func (r *readingListRepo) IDsForBook(ctx context.Context, userID, bookID string) ([]string, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT li.list_id FROM reading_list_item li
+		JOIN reading_list l ON l.id = li.list_id
+		WHERE li.book_id = ? AND l.user_id = ?`, bookID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
 func scanReadingList(row rowScanner) (domain.ReadingList, error) {
 	var l domain.ReadingList
 	if err := row.Scan(&l.ID, &l.UserID, &l.Name, &l.CreatedAt, &l.UpdatedAt, &l.BookCount); err != nil {
