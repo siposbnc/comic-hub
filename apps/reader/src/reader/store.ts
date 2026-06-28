@@ -212,10 +212,18 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
     set({ spreads: buildSpreads(manifest, settings.layout, settings.coverAlone) });
   }
 
+  /** True once the reader has a place worth recording: past the first page, or finished
+   *  (a single-page book opens already finished). Opening and closing on the first page
+   *  therefore never marks a book "in progress". */
+  function persistsPlace(): boolean {
+    const { currentPage, finished } = get();
+    return currentPage > 0 || finished;
+  }
+
   /** Saves the current book's place and tears down its caches before swapping books. */
   function teardownCurrent(): void {
     const { provider, manifest, currentPage, finished } = get();
-    if (provider && manifest) {
+    if (provider && manifest && persistsPlace()) {
       provider.saveProgress({
         bookId: manifest.bookId,
         page: currentPage,
@@ -613,6 +621,10 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
     flushProgress: () => {
       const { provider, manifest, currentPage, finished } = get();
       if (!provider || !manifest) return;
+      // Merely opening a book shouldn't mark it "in progress": skip persisting while still
+      // on the first page and not finished. (A single-page book opens already finished, so
+      // it is still recorded as read.) See persistsPlace().
+      if (!persistsPlace()) return;
       provider.saveProgress({
         bookId: manifest.bookId,
         page: currentPage,
