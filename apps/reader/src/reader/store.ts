@@ -69,6 +69,8 @@ export interface ReaderState {
 
   setLayout: (layout: LayoutMode) => void;
   toggleLayout: () => void;
+  /** Switch between continuous (webtoon) scroll and paged single mode. */
+  toggleContinuous: () => void;
   setFit: (fit: FitMode) => void;
   cycleFit: () => void;
   setDirection: (dir: ReadingDirection) => void;
@@ -306,6 +308,11 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
 
     toggleLayout: () => {
       const next = get().settings.layout === 'single' ? 'double' : 'single';
+      get().setLayout(next);
+    },
+
+    toggleContinuous: () => {
+      const next = get().settings.layout === 'continuous' ? 'single' : 'continuous';
       get().setLayout(next);
     },
 

@@ -55,6 +55,11 @@ export function useKeyboard(): void {
           e.preventDefault();
           s.toggleLayout();
           break;
+        case 'c':
+        case 'C':
+          e.preventDefault();
+          s.toggleContinuous();
+          break;
         case '+':
         case '=':
           e.preventDefault();

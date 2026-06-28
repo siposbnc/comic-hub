@@ -1,7 +1,8 @@
 import type { ReadingDirection } from '@comichub/reader-core';
 
-/** How pages are laid out on screen. */
-export type LayoutMode = 'single' | 'double';
+/** How pages are laid out on screen. `continuous` is a vertical, fit-to-width scroll
+ *  (webtoon-style); `single`/`double` are paged. */
+export type LayoutMode = 'single' | 'double' | 'continuous';
 
 /** How a page is sized within the reading area. */
 export type FitMode = 'width' | 'height' | 'screen' | 'original' | 'smart';

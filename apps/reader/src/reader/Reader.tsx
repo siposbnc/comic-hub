@@ -4,6 +4,7 @@ import { useKeyboard } from './useKeyboard.js';
 import { Toolbar } from './Toolbar.js';
 import { Scrubber } from './Scrubber.js';
 import { PageView } from './PageView.js';
+import { ContinuousView } from './ContinuousView.js';
 import { Button } from '@comichub/ui';
 import { Icon } from '@comichub/ui';
 
@@ -15,6 +16,7 @@ export function Reader() {
   useKeyboard();
 
   const background = useReaderStore((s) => s.settings.background);
+  const continuous = useReaderStore((s) => s.settings.layout === 'continuous');
   const chromeVisible = useReaderStore((s) => s.chromeVisible);
   const showChrome = useReaderStore((s) => s.showChrome);
   const hideChrome = useReaderStore((s) => s.hideChrome);
@@ -67,7 +69,7 @@ export function Reader() {
         <Toolbar />
       </div>
 
-      <PageView />
+      {continuous ? <ContinuousView /> : <PageView />}
 
       <div className="chrome chrome--bottom" onPointerEnter={showChrome}>
         <Scrubber />

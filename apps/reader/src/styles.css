@@ -315,6 +315,45 @@ body {
   color: var(--paper-400);
 }
 
+/* ── Continuous (webtoon) scroll ────────────────────────────────────── */
+.continuous-area {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 64px;
+  scrollbar-width: thin;
+}
+
+.continuous-page {
+  position: relative;
+  flex: none;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.55);
+}
+
+.continuous-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.continuous-ph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: #0a0a0a;
+  color: var(--paper-600);
+}
+
 /* ── Scrubber ───────────────────────────────────────────────────────── */
 .scrubber {
   position: relative;

@@ -22,7 +22,8 @@ export function buildSpreads(
   coverAlone: boolean,
 ): Spread[] {
   const count = manifest.pageCount;
-  if (layout === 'single') {
+  // Single and continuous are both one page per unit; only double pairs pages.
+  if (layout !== 'double') {
     return Array.from({ length: count }, (_, i) => [i]);
   }
 

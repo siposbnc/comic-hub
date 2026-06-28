@@ -32,6 +32,7 @@ export function Toolbar() {
   const pageCount = useReaderStore((s) => s.manifest?.pageCount ?? 0);
 
   const toggleLayout = useReaderStore((s) => s.toggleLayout);
+  const toggleContinuous = useReaderStore((s) => s.toggleContinuous);
   const cycleFit = useReaderStore((s) => s.cycleFit);
   const toggleDirection = useReaderStore((s) => s.toggleDirection);
   const zoomBy = useReaderStore((s) => s.zoomBy);
@@ -64,6 +65,13 @@ export function Toolbar() {
           hint="D"
           active={layout === 'double'}
           onClick={toggleLayout}
+        />
+        <IconButton
+          icon="list"
+          label="Continuous scroll"
+          hint="C"
+          active={layout === 'continuous'}
+          onClick={toggleContinuous}
         />
         <IconButton icon="fit" label={FIT_LABEL[fit]} hint="cycle" onClick={cycleFit} />
         <IconButton
