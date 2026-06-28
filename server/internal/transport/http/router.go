@@ -94,6 +94,7 @@ func NewRouter(d Deps) http.Handler {
 		})
 
 		r.Get("/discover", handleDiscover(d.Browse))
+		r.Get("/search", handleSearch(d.Browse))
 
 		// Progress & reading state (acting user = implicit owner in embedded mode).
 		r.Route("/me", func(r chi.Router) {

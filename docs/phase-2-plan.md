@@ -95,8 +95,9 @@ Accessibility gate per screen; CI bench thresholds; docs kept in lockstep (03-ap
 | M3 — Metadata API (candidates / apply / job) | ✅ done |
 | M4 — Metadata client UI (candidate picker) | ✅ done — **metadata track complete** |
 | F1 — CB7 + CBT | ✅ done |
-| F2 — PDF (MuPDF + C toolchain) | ⏳ pending |
-| S / O / W / R — search, organization, watch/health, reader | ⏳ pending |
+| F2 — PDF (MuPDF + C toolchain) | ⏳ deferred (skipped for now) |
+| S — Search (FTS5 + `/search` + TopBar type-ahead) | ✅ done |
+| O / W / R — organization, watch/health, reader | ⏳ pending |
 
 Remaining metadata polish (non-blocking): GCD as a second provider, ComicInfo
 `write-sidecar`, per-field lock toggles in the UI, and a book-level candidate picker.

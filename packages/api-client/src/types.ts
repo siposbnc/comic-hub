@@ -170,6 +170,34 @@ export interface Discover {
   recentlyAdded: BookCard[];
 }
 
+/** A series matched by full-text search. */
+export interface SeriesHit {
+  id: string;
+  name: string;
+  year?: number;
+  coverBookId?: string;
+}
+
+/** A book matched by full-text search (carries its series name for display). */
+export interface BookHit {
+  id: string;
+  seriesId: string;
+  seriesName?: string;
+  number?: string;
+  title?: string;
+  format: string;
+}
+
+/** Grouped, ranked results from `GET /search`. */
+export interface SearchResults {
+  query: string;
+  series: SeriesHit[];
+  books: BookHit[];
+}
+
+/** What to search for; omit for all. */
+export type SearchType = 'all' | 'series' | 'book';
+
 /** One page in a book manifest. */
 export interface ManifestPage {
   idx: number;

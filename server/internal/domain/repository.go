@@ -14,6 +14,7 @@ type Repository interface {
 	Progress() ProgressRepository
 	Jobs() JobRepository
 	Metadata() MetadataRepository
+	Search() SearchRepository
 }
 
 // LibraryRepository persists libraries and their roots.

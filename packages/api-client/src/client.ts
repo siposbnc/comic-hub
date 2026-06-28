@@ -13,6 +13,8 @@ import type {
   ProviderStatus,
   ReadStatus,
   ScanMode,
+  SearchResults,
+  SearchType,
   SeriesCard,
   SeriesDetail,
   SeriesMatchCandidate,
@@ -183,6 +185,18 @@ export class ComicHubClient {
   discover(libraryId?: string): Promise<Discover> {
     const qs = libraryId ? `?library=${encodeURIComponent(libraryId)}` : '';
     return this.request<Discover>('GET', `/api/v1/discover${qs}`);
+  }
+
+  /** Full-text search across series and books, grouped and ranked best-first. */
+  search(
+    query: string,
+    opts: { type?: SearchType; libraryId?: string; limit?: number } = {},
+  ): Promise<SearchResults> {
+    const p = new URLSearchParams({ q: query });
+    if (opts.type && opts.type !== 'all') p.set('type', opts.type);
+    if (opts.libraryId) p.set('library', opts.libraryId);
+    if (opts.limit) p.set('limit', String(opts.limit));
+    return this.request<SearchResults>('GET', `/api/v1/search?${p.toString()}`);
   }
 
   // ── Progress ─────────────────────────────────────────────────────────────────

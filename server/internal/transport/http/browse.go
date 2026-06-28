@@ -78,3 +78,21 @@ func handleDiscover(b *browse.Service) http.HandlerFunc {
 		writeJSON(w, http.StatusOK, feed)
 	}
 }
+
+// handleSearch runs a full-text catalog search (docs/03-api.md §8). `q` is the raw query,
+// `type` filters to series/book (default all), `library` optionally scopes it.
+func handleSearch(b *browse.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		limit := 0
+		if v, err := strconv.Atoi(q.Get("limit")); err == nil {
+			limit = v
+		}
+		results, err := b.Search(r.Context(), q.Get("library"), q.Get("q"), q.Get("type"), limit)
+		if err != nil {
+			writeDomainError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, results)
+	}
+}
