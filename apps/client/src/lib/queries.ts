@@ -241,6 +241,7 @@ export function useAddToReadingList() {
     onSuccess: (_data, { id }) => {
       qc.invalidateQueries({ queryKey: qk.readingList(id) });
       qc.invalidateQueries({ queryKey: qk.readingLists });
+      qc.invalidateQueries({ queryKey: ['discover'] });
     },
   });
 }
@@ -254,6 +255,33 @@ export function useRemoveFromReadingList() {
     onSuccess: (_data, { id }) => {
       qc.invalidateQueries({ queryKey: qk.readingList(id) });
       qc.invalidateQueries({ queryKey: qk.readingLists });
+      qc.invalidateQueries({ queryKey: ['discover'] });
+    },
+  });
+}
+
+export function useReorderReadingList() {
+  const client = useClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, bookId, beforeId }: { id: string; bookId: string; beforeId?: string }) =>
+      client.reorderReadingList(id, bookId, beforeId),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: qk.readingList(id) });
+      qc.invalidateQueries({ queryKey: ['discover'] });
+    },
+  });
+}
+
+export function useSetActiveReadingList() {
+  const client = useClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => client.setActiveReadingList(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.readingLists });
+      qc.invalidateQueries({ queryKey: ['readingList'] });
+      qc.invalidateQueries({ queryKey: ['discover'] });
     },
   });
 }

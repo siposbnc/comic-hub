@@ -1,10 +1,14 @@
 import { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { Button, Rail, EmptyState } from '@comichub/ui';
+import type { NextUp } from '@comichub/api-client';
 import { useContinueReading, useDiscover, useLibraries, useSeriesNames } from '../lib/queries.js';
+import { useClient } from '../lib/client.js';
+import { useReadLaunch } from '../lib/launch.js';
 import { Page, LoadingState, ErrorState } from '../components/Page.js';
 import { BookCover } from '../components/cards.js';
 import { AddLibraryDialog } from '../components/AddLibraryDialog.js';
+import { issueLabel, resumePage } from '../lib/format.js';
 
 /** The Home feed: pick-up-where-you-left-off and what's new across every library. */
 export function Home() {
@@ -46,7 +50,8 @@ export function Home() {
 
   const cr = continueReading.data ?? [];
   const recent = discover.data?.recentlyAdded ?? [];
-  const nothingToShow = cr.length === 0 && recent.length === 0;
+  const nextUp = discover.data?.nextUp;
+  const nothingToShow = cr.length === 0 && recent.length === 0 && !nextUp;
   const libCount = libraries.data?.length ?? 0;
 
   return (
@@ -92,6 +97,8 @@ export function Home() {
         </Button>
       </div>
 
+      {nextUp && <NextUpCard nextUp={nextUp} seriesName={seriesNames.get(nextUp.book.seriesId)} />}
+
       {discover.isError ? (
         <ErrorState
           message={
@@ -136,6 +143,89 @@ export function Home() {
         </>
       )}
       {adding && <AddLibraryDialog onClose={() => setAdding(false)} />}
+    </div>
+  );
+}
+
+/** A prominent "up next" card sourced from the active reading list. */
+function NextUpCard({ nextUp, seriesName }: { nextUp: NextUp; seriesName?: string }) {
+  const client = useClient();
+  const navigate = useNavigate();
+  const launch = useReadLaunch();
+  const { book } = nextUp;
+  const inProgress = book.progress?.status === 'in_progress';
+  return (
+    <div
+      style={{
+        display: 'flex',
+        gap: 16,
+        alignItems: 'center',
+        padding: 16,
+        background: 'var(--surface-raised)',
+        border: '1px solid var(--border-hairline)',
+        borderRadius: 'var(--radius-lg)',
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => navigate({ to: '/book/$id', params: { id: book.id } })}
+        style={{
+          flex: 'none',
+          width: 64,
+          height: 96,
+          padding: 0,
+          border: 'none',
+          borderRadius: 'var(--radius-sm)',
+          overflow: 'hidden',
+          background: 'var(--surface-cover)',
+          cursor: 'pointer',
+        }}
+      >
+        <img
+          src={client.coverUrl(book.id, 200)}
+          alt=""
+          width={64}
+          height={96}
+          style={{ objectFit: 'cover' }}
+        />
+      </button>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          className="ch-mono"
+          style={{
+            fontSize: 'var(--text-label)',
+            textTransform: 'uppercase',
+            letterSpacing: 'var(--tracking-label)',
+            color: 'var(--accent)',
+            marginBottom: 4,
+          }}
+        >
+          Up next · {nextUp.listName}
+        </div>
+        <div
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontWeight: 700,
+            fontSize: 'var(--text-title)',
+            color: 'var(--text-primary)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {book.title || seriesName || issueLabel(book.number) || 'Untitled'}
+        </div>
+        <div style={{ fontSize: 'var(--text-small)', color: 'var(--text-tertiary)', marginTop: 2 }}>
+          {[seriesName, issueLabel(book.number)].filter(Boolean).join(' · ')}
+        </div>
+      </div>
+      <Button
+        variant="primary"
+        icon="book-open"
+        onClick={() => launch(book.id, resumePage(book.progress))}
+      >
+        {inProgress ? 'Continue' : 'Read'}
+      </Button>
     </div>
   );
 }
