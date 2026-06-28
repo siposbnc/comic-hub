@@ -74,6 +74,18 @@ const smartListDetailRoute = createRoute({
   component: lazyRouteComponent(() => import('./routes/SmartListDetail.js'), 'SmartListDetail'),
 });
 
+const tagsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/tags',
+  component: lazyRouteComponent(() => import('./routes/Tags.js'), 'Tags'),
+});
+
+const tagBooksRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/tags/$id',
+  component: lazyRouteComponent(() => import('./routes/TagBooks.js'), 'TagBooks'),
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   libraryRoute,
@@ -86,6 +98,8 @@ const routeTree = rootRoute.addChildren([
   readingListDetailRoute,
   smartListsRoute,
   smartListDetailRoute,
+  tagsRoute,
+  tagBooksRoute,
 ]);
 
 export const router = createRouter({

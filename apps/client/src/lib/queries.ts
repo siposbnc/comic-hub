@@ -256,6 +256,60 @@ export function useTags() {
   return useQuery({ queryKey: qk.tags, queryFn: () => client.listTags() });
 }
 
+export function useTagBooks(id: string) {
+  const client = useClient();
+  return useQuery({ queryKey: ['tagBooks', id], queryFn: () => client.tagBooks(id) });
+}
+
+export function useCreateTag() {
+  const client = useClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string; color?: string }) => client.createTag(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.tags }),
+  });
+}
+
+export function useDeleteTag() {
+  const client = useClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => client.deleteTag(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.tags });
+      qc.invalidateQueries({ queryKey: ['book'] });
+    },
+  });
+}
+
+/** Assign/unassign a tag, then refresh the tag list and the affected book. */
+export function useAssignTags() {
+  const client = useClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ bookId, tagIds }: { bookId: string; tagIds: string[] }) =>
+      client.assignTags(bookId, tagIds),
+    onSuccess: (_data, { bookId }) => {
+      qc.invalidateQueries({ queryKey: qk.tags });
+      qc.invalidateQueries({ queryKey: qk.book(bookId) });
+    },
+  });
+}
+
+export function useUnassignTag() {
+  const client = useClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ bookId, tagId }: { bookId: string; tagId: string }) =>
+      client.unassignTag(bookId, tagId),
+    onSuccess: (_data, { bookId, tagId }) => {
+      qc.invalidateQueries({ queryKey: qk.tags });
+      qc.invalidateQueries({ queryKey: qk.book(bookId) });
+      qc.invalidateQueries({ queryKey: ['tagBooks', tagId] });
+    },
+  });
+}
+
 // ── Smart lists (rule-based) ─────────────────────────────────────────────────────────
 
 export function useSmartLists() {

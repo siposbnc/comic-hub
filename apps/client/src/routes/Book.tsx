@@ -15,6 +15,7 @@ import { useReadLaunch } from '../lib/launch.js';
 import { useUiStore } from '../store/ui.js';
 import { LoadingState, ErrorState } from '../components/Page.js';
 import { AddToListDialog } from '../components/lists.js';
+import { TagChips, TagEditor } from '../components/tags.js';
 import { issueLabel, resumePage } from '../lib/format.js';
 
 const route = getRouteApi('/book/$id');
@@ -190,6 +191,8 @@ function BookView({ detail }: { detail: BookDetail }) {
             </Button>
             <AddToActions bookId={detail.id} />
           </div>
+
+          <BookTags detail={detail} />
         </div>
       </section>
 
@@ -263,6 +266,29 @@ function AddToActions({ bookId }: { bookId: string }) {
         />
       )}
     </>
+  );
+}
+
+/** The book's tags with an inline editor to assign/unassign/create. */
+function BookTags({ detail }: { detail: BookDetail }) {
+  const [editing, setEditing] = useState(false);
+  const tags = detail.tags ?? [];
+  return (
+    <div
+      style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 18 }}
+    >
+      <TagChips tags={tags} />
+      <Button variant="ghost" icon="edit" onClick={() => setEditing(true)}>
+        {tags.length ? 'Edit tags' : 'Add tags'}
+      </Button>
+      {editing && (
+        <TagEditor
+          bookId={detail.id}
+          assignedIds={new Set(tags.map((t) => t.id))}
+          onClose={() => setEditing(false)}
+        />
+      )}
+    </div>
   );
 }
 

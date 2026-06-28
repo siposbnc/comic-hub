@@ -184,6 +184,13 @@ export function Sidebar() {
             active={pathname.startsWith('/smart-lists')}
             onClick={() => navigate({ to: '/smart-lists' })}
           />
+          <SpineTab
+            index={next()}
+            icon="star"
+            label="Tags"
+            active={pathname.startsWith('/tags')}
+            onClick={() => navigate({ to: '/tags' })}
+          />
 
           <NavSection>System</NavSection>
           <SpineTab
