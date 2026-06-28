@@ -162,6 +162,16 @@ export interface BookDetail {
   credits?: Record<string, string[]>;
   genres?: string[];
   characters?: string[];
+  /** User-applied organizational tags. */
+  tags?: Tag[];
+}
+
+/** A free-form label applied across books. */
+export interface Tag {
+  id: string;
+  name: string;
+  color?: string;
+  bookCount: number;
 }
 
 /** The Home feed. */

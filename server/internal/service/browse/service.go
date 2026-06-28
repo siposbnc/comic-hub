@@ -77,6 +77,16 @@ type BookDetail struct {
 	Credits    map[string][]string `json:"credits,omitempty"`
 	Genres     []string            `json:"genres,omitempty"`
 	Characters []string            `json:"characters,omitempty"`
+
+	// User-applied organizational tags (omitted when none).
+	Tags []TagView `json:"tags,omitempty"`
+}
+
+// TagView is a tag on the book detail screen.
+type TagView struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Color string `json:"color,omitempty"`
 }
 
 // Discover is the Home feed.
@@ -171,6 +181,13 @@ func (s *Service) BookDetail(ctx context.Context, bookID, userID string) (BookDe
 	genres, _ := s.repo.Metadata().BookGenres(ctx, bookID)
 	characters, _ := s.repo.Metadata().BookCharacters(ctx, bookID)
 
+	var tags []TagView
+	if ts, err := s.repo.Tags().BookTags(ctx, bookID); err == nil {
+		for _, t := range ts {
+			tags = append(tags, TagView{ID: t.ID, Name: t.Name, Color: t.Color})
+		}
+	}
+
 	return BookDetail{
 		ID:          b.ID,
 		SeriesID:    b.SeriesID,
@@ -190,6 +207,7 @@ func (s *Service) BookDetail(ctx context.Context, bookID, userID string) (BookDe
 		Credits:     credits,
 		Genres:      genres,
 		Characters:  characters,
+		Tags:        tags,
 	}, nil
 }
 

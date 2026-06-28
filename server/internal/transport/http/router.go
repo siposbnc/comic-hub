@@ -93,6 +93,17 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/{id}/pages/{idx}/thumb", handlePageThumb(d.Reader))
 			r.Post("/{id}/prefetch", handlePrefetch(d.Reader))
 			r.Post("/{id}/match/apply", handleBookApply(d.Metadata))
+			r.Post("/{id}/tags", handleAssignTags(d.Organize))
+			r.Delete("/{id}/tags/{tagId}", handleUnassignTag(d.Organize))
+		})
+
+		// Tags: free-form labels applied across books.
+		r.Route("/tags", func(r chi.Router) {
+			r.Get("/", handleListTags(d.Organize))
+			r.Post("/", handleCreateTag(d.Organize))
+			r.Patch("/{id}", handleUpdateTag(d.Organize))
+			r.Delete("/{id}", handleDeleteTag(d.Organize))
+			r.Get("/{id}/books", handleTagBooks(d.Organize, d.Browse))
 		})
 
 		r.Get("/discover", handleDiscover(d.Browse))

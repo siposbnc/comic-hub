@@ -24,6 +24,7 @@ import type {
   SeriesMatchCandidate,
   ServerInfo,
   ServerStats,
+  Tag,
 } from './types.js';
 
 /** Thrown when the server returns a non-2xx response. */
@@ -381,6 +382,47 @@ export class ComicHubClient {
     await this.request<unknown>(
       'DELETE',
       `/api/v1/me/reading-lists/${encodeURIComponent(id)}/items/${encodeURIComponent(bookId)}`,
+    );
+  }
+
+  // ── Tags ───────────────────────────────────────────────────────────────────────
+
+  async listTags(): Promise<Tag[]> {
+    const res = await this.request<{ items: Tag[] }>('GET', '/api/v1/tags');
+    return res.items;
+  }
+
+  createTag(input: { name: string; color?: string }): Promise<Tag> {
+    return this.request<Tag>('POST', '/api/v1/tags', { body: input });
+  }
+
+  updateTag(id: string, patch: { name?: string; color?: string }): Promise<Tag> {
+    return this.request<Tag>('PATCH', `/api/v1/tags/${encodeURIComponent(id)}`, { body: patch });
+  }
+
+  async deleteTag(id: string): Promise<void> {
+    await this.request<unknown>('DELETE', `/api/v1/tags/${encodeURIComponent(id)}`);
+  }
+
+  /** Books carrying a tag (newest-added first). */
+  async tagBooks(id: string): Promise<BookCard[]> {
+    const res = await this.request<{ items: BookCard[] }>(
+      'GET',
+      `/api/v1/tags/${encodeURIComponent(id)}/books`,
+    );
+    return res.items;
+  }
+
+  async assignTags(bookId: string, tagIds: string[]): Promise<void> {
+    await this.request<unknown>('POST', `/api/v1/books/${encodeURIComponent(bookId)}/tags`, {
+      body: { tagIds },
+    });
+  }
+
+  async unassignTag(bookId: string, tagId: string): Promise<void> {
+    await this.request<unknown>(
+      'DELETE',
+      `/api/v1/books/${encodeURIComponent(bookId)}/tags/${encodeURIComponent(tagId)}`,
     );
   }
 

@@ -6,6 +6,7 @@ package organize
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -292,6 +293,94 @@ func (s *Service) ReorderReadingList(ctx context.Context, userID, id, bookID, be
 		return err
 	}
 	return s.repo.ReadingLists().SetPosition(ctx, id, bookID, newPos)
+}
+
+// ── Tags ─────────────────────────────────────────────────────────────────────────────
+
+// CreateTag adds a tag with a unique (case-insensitive) name and optional color.
+func (s *Service) CreateTag(ctx context.Context, name, color string) (domain.Tag, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return domain.Tag{}, fmt.Errorf("%w: name is required", domain.ErrValidation)
+	}
+	if _, err := s.repo.Tags().GetByName(ctx, name); err == nil {
+		return domain.Tag{}, fmt.Errorf("%w: a tag named %q already exists", domain.ErrValidation, name)
+	} else if !errors.Is(err, domain.ErrNotFound) {
+		return domain.Tag{}, err
+	}
+	t := domain.Tag{ID: ulid.New(), Name: name, Color: strings.TrimSpace(color)}
+	return s.repo.Tags().Create(ctx, t)
+}
+
+// ListTags returns all tags (with book counts), name-sorted.
+func (s *Service) ListTags(ctx context.Context) ([]domain.Tag, error) {
+	return s.repo.Tags().List(ctx)
+}
+
+// TagPatch carries optional tag edits; nil fields are left unchanged.
+type TagPatch struct {
+	Name  *string
+	Color *string
+}
+
+// UpdateTag renames/recolors a tag, keeping names unique.
+func (s *Service) UpdateTag(ctx context.Context, id string, patch TagPatch) (domain.Tag, error) {
+	t, err := s.repo.Tags().Get(ctx, id)
+	if err != nil {
+		return domain.Tag{}, err
+	}
+	if patch.Name != nil {
+		name := strings.TrimSpace(*patch.Name)
+		if name == "" {
+			return domain.Tag{}, fmt.Errorf("%w: name cannot be empty", domain.ErrValidation)
+		}
+		if existing, err := s.repo.Tags().GetByName(ctx, name); err == nil && existing.ID != id {
+			return domain.Tag{}, fmt.Errorf("%w: a tag named %q already exists", domain.ErrValidation, name)
+		} else if err != nil && !errors.Is(err, domain.ErrNotFound) {
+			return domain.Tag{}, err
+		}
+		t.Name = name
+	}
+	if patch.Color != nil {
+		t.Color = strings.TrimSpace(*patch.Color)
+	}
+	if err := s.repo.Tags().Update(ctx, t); err != nil {
+		return domain.Tag{}, err
+	}
+	return t, nil
+}
+
+// DeleteTag removes a tag and all its book assignments.
+func (s *Service) DeleteTag(ctx context.Context, id string) error {
+	return s.repo.Tags().Delete(ctx, id)
+}
+
+// TaggedBookIDs returns the ids of books carrying a tag (newest-added first).
+func (s *Service) TaggedBookIDs(ctx context.Context, tagID string) ([]string, error) {
+	if _, err := s.repo.Tags().Get(ctx, tagID); err != nil {
+		return nil, err
+	}
+	return s.repo.Tags().TaggedBookIDs(ctx, tagID)
+}
+
+// AssignTags tags a book with the given tag ids (idempotent).
+func (s *Service) AssignTags(ctx context.Context, bookID string, tagIDs []string) error {
+	clean := dedupeNonEmpty(tagIDs)
+	if len(clean) == 0 {
+		return fmt.Errorf("%w: tagIds is required", domain.ErrValidation)
+	}
+	// Validate each tag exists so an unknown id is a clear 400, not an FK error.
+	for _, id := range clean {
+		if _, err := s.repo.Tags().Get(ctx, id); err != nil {
+			return err
+		}
+	}
+	return s.repo.Tags().AssignToBook(ctx, bookID, clean)
+}
+
+// UnassignTag removes one tag from a book.
+func (s *Service) UnassignTag(ctx context.Context, bookID, tagID string) error {
+	return s.repo.Tags().UnassignFromBook(ctx, bookID, tagID)
 }
 
 func dedupeNonEmpty(in []string) []string {
