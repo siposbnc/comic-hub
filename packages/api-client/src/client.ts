@@ -1,5 +1,6 @@
 import type {
   AuthHandshakeResult,
+  Bookmark,
   BookCard,
   BookDetail,
   BookManifest,
@@ -255,6 +256,43 @@ export class ComicHubClient {
     return this.request<Progress>('POST', `/api/v1/me/books/${encodeURIComponent(bookId)}/mark`, {
       body: { status },
     });
+  }
+
+  // ── Bookmarks ────────────────────────────────────────────────────────────────
+
+  /** A book's bookmarks for the user, ordered by page ascending. */
+  async listBookmarks(bookId: string): Promise<Bookmark[]> {
+    const res = await this.request<{ items: Bookmark[] }>(
+      'GET',
+      `/api/v1/me/books/${encodeURIComponent(bookId)}/bookmarks`,
+    );
+    return res.items;
+  }
+
+  /** Bookmark a page (idempotent: re-adding a page updates its note). */
+  addBookmark(bookId: string, page: number, note = ''): Promise<Bookmark> {
+    return this.request<Bookmark>(
+      'POST',
+      `/api/v1/me/books/${encodeURIComponent(bookId)}/bookmarks`,
+      { body: { page, note } },
+    );
+  }
+
+  /** Replace a bookmark's note. */
+  updateBookmark(bookId: string, bookmarkId: string, note: string): Promise<Bookmark> {
+    return this.request<Bookmark>(
+      'PATCH',
+      `/api/v1/me/books/${encodeURIComponent(bookId)}/bookmarks/${encodeURIComponent(bookmarkId)}`,
+      { body: { note } },
+    );
+  }
+
+  /** Remove a bookmark. */
+  async removeBookmark(bookId: string, bookmarkId: string): Promise<void> {
+    await this.request<unknown>(
+      'DELETE',
+      `/api/v1/me/books/${encodeURIComponent(bookId)}/bookmarks/${encodeURIComponent(bookmarkId)}`,
+    );
   }
 
   // ── Metadata matching ──────────────────────────────────────────────────────────

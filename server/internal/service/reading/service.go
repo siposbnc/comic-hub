@@ -8,25 +8,38 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/siposbnc/comic-hub/server/internal/domain"
+	"github.com/siposbnc/comic-hub/server/internal/pkg/ulid"
 )
 
 // ProgressNotifier is called after a successful progress write so the transport layer
 // can broadcast it (e.g. over WebSocket). Optional.
 type ProgressNotifier func(userID string, p domain.Progress)
 
+// BookmarkNotifier is called after a bookmark add/update/delete so the transport layer
+// can broadcast that a book's bookmarks changed. Optional.
+type BookmarkNotifier func(userID, bookID string)
+
 // Service manages reading progress.
 type Service struct {
-	repo   domain.Repository
-	notify ProgressNotifier
+	repo     domain.Repository
+	notify   ProgressNotifier
+	bmNotify BookmarkNotifier
 }
 
 // New constructs the reading service. notify may be nil.
 func New(repo domain.Repository, notify ProgressNotifier) *Service {
 	return &Service{repo: repo, notify: notify}
 }
+
+// OnBookmarkChange registers a notifier fired after every bookmark add/update/delete.
+func (s *Service) OnBookmarkChange(fn BookmarkNotifier) { s.bmNotify = fn }
+
+// maxNoteLen caps a bookmark note (the UI keeps notes short; this is a safety bound).
+const maxNoteLen = 280
 
 // UpsertInput is a progress update from a reader/client.
 type UpsertInput struct {
@@ -131,6 +144,84 @@ func (s *Service) SetReaderPrefs(ctx context.Context, userID, bookID string, set
 		return fmt.Errorf("%w: settings must be a JSON object", domain.ErrValidation)
 	}
 	return s.repo.ReaderPrefs().Put(ctx, userID, bookID, string(settings))
+}
+
+// ListBookmarks returns the user's bookmarks for a book, ordered by page ascending.
+func (s *Service) ListBookmarks(ctx context.Context, userID, bookID string) ([]domain.Bookmark, error) {
+	return s.repo.Bookmarks().List(ctx, userID, bookID)
+}
+
+// AddBookmark bookmarks a page (clamped to the book's range). If the page is already
+// bookmarked, its note is updated instead — so the reader can safely "add" idempotently.
+func (s *Service) AddBookmark(ctx context.Context, userID, bookID string, page int, note string) (domain.Bookmark, error) {
+	book, err := s.repo.Books().Get(ctx, bookID)
+	if err != nil {
+		return domain.Bookmark{}, err
+	}
+	page = clamp(page, 0, lastIndex(book.PageCount))
+	note = trimNote(note)
+	now := time.Now().UnixMilli()
+
+	existing, err := s.repo.Bookmarks().GetByPage(ctx, userID, bookID, page)
+	switch {
+	case err == nil:
+		updated, uerr := s.repo.Bookmarks().UpdateNote(ctx, userID, existing.ID, note, now)
+		if uerr != nil {
+			return domain.Bookmark{}, uerr
+		}
+		s.notifyBookmark(userID, bookID)
+		return updated, nil
+	case errors.Is(err, domain.ErrNotFound):
+		created, cerr := s.repo.Bookmarks().Create(ctx, domain.Bookmark{
+			ID: ulid.New(), UserID: userID, BookID: bookID, Page: page, Note: note,
+			CreatedAt: now, UpdatedAt: now,
+		})
+		if cerr != nil {
+			return domain.Bookmark{}, cerr
+		}
+		s.notifyBookmark(userID, bookID)
+		return created, nil
+	default:
+		return domain.Bookmark{}, err
+	}
+}
+
+// UpdateBookmarkNote replaces a bookmark's note.
+func (s *Service) UpdateBookmarkNote(ctx context.Context, userID, id, note string) (domain.Bookmark, error) {
+	updated, err := s.repo.Bookmarks().UpdateNote(ctx, userID, id, trimNote(note), time.Now().UnixMilli())
+	if err != nil {
+		return domain.Bookmark{}, err
+	}
+	s.notifyBookmark(userID, updated.BookID)
+	return updated, nil
+}
+
+// DeleteBookmark removes a bookmark owned by the user.
+func (s *Service) DeleteBookmark(ctx context.Context, userID, id string) error {
+	// Resolve first so we can name the affected book in the change notification.
+	bm, err := s.repo.Bookmarks().Get(ctx, userID, id)
+	if err != nil {
+		return err
+	}
+	if err := s.repo.Bookmarks().Delete(ctx, userID, id); err != nil {
+		return err
+	}
+	s.notifyBookmark(userID, bm.BookID)
+	return nil
+}
+
+func (s *Service) notifyBookmark(userID, bookID string) {
+	if s.bmNotify != nil {
+		s.bmNotify(userID, bookID)
+	}
+}
+
+func trimNote(note string) string {
+	note = strings.TrimSpace(note)
+	if len(note) > maxNoteLen {
+		note = note[:maxNoteLen]
+	}
+	return note
 }
 
 func (s *Service) save(ctx context.Context, p domain.Progress) (domain.Progress, error) {

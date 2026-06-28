@@ -12,6 +12,7 @@ type Repository interface {
 	Series() SeriesRepository
 	Books() BookRepository
 	Progress() ProgressRepository
+	Bookmarks() BookmarkRepository
 	Jobs() JobRepository
 	Metadata() MetadataRepository
 	Search() SearchRepository

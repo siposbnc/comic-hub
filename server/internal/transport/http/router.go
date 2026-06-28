@@ -143,6 +143,12 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/books/{id}/reader-prefs", handleGetReaderPrefs(d.Reading))
 			r.Put("/books/{id}/reader-prefs", handlePutReaderPrefs(d.Reading))
 
+			// Per-book bookmarks (page + optional note).
+			r.Get("/books/{id}/bookmarks", handleListBookmarks(d.Reading))
+			r.Post("/books/{id}/bookmarks", handleAddBookmark(d.Reading))
+			r.Patch("/books/{id}/bookmarks/{bookmarkId}", handleUpdateBookmark(d.Reading))
+			r.Delete("/books/{id}/bookmarks/{bookmarkId}", handleDeleteBookmark(d.Reading))
+
 			// Personal reading lists (per-user, ordered).
 			r.Route("/reading-lists", func(r chi.Router) {
 				r.Get("/", handleListReadingLists(d.Organize))

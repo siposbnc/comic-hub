@@ -15,6 +15,7 @@ type Store struct {
 	series       *seriesRepo
 	books        *bookRepo
 	progress     *progressRepo
+	bookmarks    *bookmarkRepo
 	jobs         *jobRepo
 	metadata     *metadataRepo
 	search       *searchRepo
@@ -33,6 +34,7 @@ func NewStore(db *sql.DB) *Store {
 		series:       &seriesRepo{db: db},
 		books:        &bookRepo{db: db},
 		progress:     &progressRepo{db: db},
+		bookmarks:    &bookmarkRepo{db: db},
 		jobs:         &jobRepo{db: db},
 		metadata:     &metadataRepo{db: db},
 		search:       &searchRepo{db: db},
@@ -48,6 +50,7 @@ func (s *Store) Libraries() domain.LibraryRepository        { return s.libraries
 func (s *Store) Series() domain.SeriesRepository            { return s.series }
 func (s *Store) Books() domain.BookRepository               { return s.books }
 func (s *Store) Progress() domain.ProgressRepository        { return s.progress }
+func (s *Store) Bookmarks() domain.BookmarkRepository       { return s.bookmarks }
 func (s *Store) Jobs() domain.JobRepository                 { return s.jobs }
 func (s *Store) Metadata() domain.MetadataRepository        { return s.metadata }
 func (s *Store) Search() domain.SearchRepository            { return s.search }

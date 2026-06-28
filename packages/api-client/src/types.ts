@@ -107,6 +107,16 @@ export interface Progress {
   updatedAt: number;
 }
 
+/** A user's saved place in a book: a page with an optional short note. */
+export interface Bookmark {
+  id: string;
+  bookId: string;
+  page: number;
+  note: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 /** A series in the library grid. */
 export interface SeriesCard {
   id: string;

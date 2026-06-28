@@ -14,9 +14,10 @@ import (
 
 // Topics clients can subscribe to (docs/03-api.md §10).
 const (
-	TopicJobs     = "jobs"
-	TopicProgress = "progress"
-	TopicLibrary  = "library"
+	TopicJobs      = "jobs"
+	TopicProgress  = "progress"
+	TopicLibrary   = "library"
+	TopicBookmarks = "bookmarks"
 )
 
 const (
@@ -126,6 +127,12 @@ func (h *Hub) BroadcastJob(j domain.Job) {
 // BroadcastProgress publishes a progress update on the progress topic.
 func (h *Hub) BroadcastProgress(p domain.Progress) {
 	h.Broadcast(TopicProgress, "progress.updated", toProgressDTO(p))
+}
+
+// BroadcastBookmarks signals that a book's bookmarks changed (added/edited/removed), so
+// subscribers can refresh that book's bookmark list.
+func (h *Hub) BroadcastBookmarks(bookID string) {
+	h.Broadcast(TopicBookmarks, "bookmarks.updated", map[string]string{"bookId": bookID})
 }
 
 func (h *Hub) readPump(c *wsClient) {

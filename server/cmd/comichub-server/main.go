@@ -90,6 +90,7 @@ func run() error {
 	// WebSocket hub for push (jobs/progress); services broadcast through it.
 	hub := httptransport.NewHub(logger)
 	readingSvc := reading.New(store, func(_ string, p domain.Progress) { hub.BroadcastProgress(p) })
+	readingSvc.OnBookmarkChange(func(_ string, bookID string) { hub.BroadcastBookmarks(bookID) })
 
 	// Shared format registry for scanning and reading.
 	registry := archive.DefaultRegistry()
