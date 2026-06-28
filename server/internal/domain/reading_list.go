@@ -8,7 +8,8 @@ type ReadingList struct {
 	ID        string
 	UserID    string
 	Name      string
-	BookCount int // populated by reads; not a stored column
+	Active    bool // the user's current reading queue (at most one)
+	BookCount int  // populated by reads; not a stored column
 	CreatedAt int64
 	UpdatedAt int64
 }
@@ -28,6 +29,11 @@ type ReadingListRepository interface {
 	List(ctx context.Context, userID string) ([]ReadingList, error)
 	Update(ctx context.Context, l ReadingList) error
 	Delete(ctx context.Context, userID, id string) error
+
+	// SetActive marks one list active for the user, clearing any previous active list.
+	SetActive(ctx context.Context, userID, id string) error
+	// GetActive returns the user's active list (ErrNotFound if none).
+	GetActive(ctx context.Context, userID string) (ReadingList, error)
 
 	Items(ctx context.Context, listID string) ([]ReadingListItem, error)
 	AddItems(ctx context.Context, listID string, bookIDs []string) error

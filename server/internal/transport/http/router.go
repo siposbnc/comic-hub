@@ -139,6 +139,7 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/progress/{bookId}", handleGetProgress(d.Reading))
 			r.Put("/progress/{bookId}", handlePutProgress(d.Reading))
 			r.Post("/books/{id}/mark", handleMarkBook(d.Reading))
+			r.Get("/books/{id}/next", handleNextBook(d.Browse))
 			r.Get("/books/{id}/reader-prefs", handleGetReaderPrefs(d.Reading))
 			r.Put("/books/{id}/reader-prefs", handlePutReaderPrefs(d.Reading))
 
@@ -149,6 +150,7 @@ func NewRouter(d Deps) http.Handler {
 				r.Get("/{id}", handleGetReadingList(d.Organize, d.Browse))
 				r.Patch("/{id}", handleUpdateReadingList(d.Organize))
 				r.Delete("/{id}", handleDeleteReadingList(d.Organize))
+				r.Post("/{id}/active", handleSetActiveReadingList(d.Organize))
 				r.Post("/{id}/items", handleAddReadingListItems(d.Organize))
 				r.Patch("/{id}/items/reorder", handleReorderReadingListItem(d.Organize))
 				r.Delete("/{id}/items/{bookId}", handleRemoveReadingListItem(d.Organize))

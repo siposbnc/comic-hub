@@ -245,10 +245,21 @@ export interface LibraryHealth {
 }
 
 /** The Home feed. */
+/** The next issue to read from the active reading list. */
+export interface NextUp {
+  book: BookCard;
+  listId: string;
+  listName: string;
+}
+
 export interface Discover {
   continueReading: BookCard[];
   recentlyAdded: BookCard[];
+  nextUp?: NextUp;
 }
+
+/** Where to look for the issue after the current one. */
+export type NextContext = 'series' | 'readingList';
 
 /** A series matched by full-text search. */
 export interface SeriesHit {
@@ -299,6 +310,8 @@ export interface CollectionDetail {
 export interface ReadingList {
   id: string;
   name: string;
+  /** The user's active reading queue (at most one list is active). */
+  active: boolean;
   bookCount: number;
   createdAt: number;
   updatedAt: number;

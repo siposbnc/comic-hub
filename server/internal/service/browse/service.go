@@ -93,10 +93,18 @@ type TagView struct {
 	Color string `json:"color,omitempty"`
 }
 
+// NextUp is the next issue to read from the active reading list (Home screen).
+type NextUp struct {
+	Book     BookCard `json:"book"`
+	ListID   string   `json:"listId"`
+	ListName string   `json:"listName"`
+}
+
 // Discover is the Home feed.
 type Discover struct {
 	ContinueReading []BookCard `json:"continueReading"`
 	RecentlyAdded   []BookCard `json:"recentlyAdded"`
+	NextUp          *NextUp    `json:"nextUp,omitempty"`
 }
 
 const (
@@ -262,7 +270,94 @@ func (s *Service) Discover(ctx context.Context, libraryID, userID string) (Disco
 	if err != nil {
 		return Discover{}, err
 	}
-	return Discover{ContinueReading: cont, RecentlyAdded: recent}, nil
+	nextUp, _ := s.nextUpFromActiveList(ctx, userID) // best-effort; absent when no active list
+	return Discover{ContinueReading: cont, RecentlyAdded: recent, NextUp: nextUp}, nil
+}
+
+// nextUpFromActiveList returns the first not-yet-read issue, in queue order, of the user's
+// active reading list — the "next up" the Home screen offers. Nil when there's no active
+// list or every issue is read.
+func (s *Service) nextUpFromActiveList(ctx context.Context, userID string) (*NextUp, error) {
+	list, err := s.repo.ReadingLists().GetActive(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	items, err := s.repo.ReadingLists().Items(ctx, list.ID)
+	if err != nil {
+		return nil, err
+	}
+	for _, it := range items {
+		b, err := s.repo.Books().Get(ctx, it.BookID)
+		if err != nil {
+			continue
+		}
+		card := s.bookCard(ctx, b, userID)
+		if card.Progress == nil || card.Progress.Status != string(domain.StatusRead) {
+			return &NextUp{Book: card, ListID: list.ID, ListName: list.Name}, nil
+		}
+	}
+	return nil, nil
+}
+
+// NextAfter returns the issue to read after bookID. context "readingList" follows the
+// active list's order; anything else follows the series' issue order. Nil when there is no
+// next issue (or no active list, for the list context).
+func (s *Service) NextAfter(ctx context.Context, userID, bookID, context string) (*BookCard, error) {
+	if context == "readingList" {
+		list, err := s.repo.ReadingLists().GetActive(ctx, userID)
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		items, err := s.repo.ReadingLists().Items(ctx, list.ID)
+		if err != nil {
+			return nil, err
+		}
+		return s.cardAfter(ctx, userID, bookID, itemBookIDs(items))
+	}
+
+	cur, err := s.repo.Books().Get(ctx, bookID)
+	if err != nil {
+		return nil, err
+	}
+	books, err := s.repo.Books().ListBySeries(ctx, cur.SeriesID)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, len(books))
+	for i, b := range books {
+		ids[i] = b.ID
+	}
+	return s.cardAfter(ctx, userID, bookID, ids)
+}
+
+// cardAfter finds bookID in an ordered id list and returns a card for the following one.
+func (s *Service) cardAfter(ctx context.Context, userID, bookID string, ordered []string) (*BookCard, error) {
+	for i, id := range ordered {
+		if id != bookID {
+			continue
+		}
+		if i+1 >= len(ordered) {
+			return nil, nil
+		}
+		b, err := s.repo.Books().Get(ctx, ordered[i+1])
+		if err != nil {
+			return nil, nil
+		}
+		card := s.bookCard(ctx, b, userID)
+		return &card, nil
+	}
+	return nil, nil
+}
+
+func itemBookIDs(items []domain.ReadingListItem) []string {
+	out := make([]string, len(items))
+	for i, it := range items {
+		out[i] = it.BookID
+	}
+	return out
 }
 
 // ContinueReading returns the user's in-progress books, most-recent first.

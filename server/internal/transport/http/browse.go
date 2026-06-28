@@ -79,6 +79,21 @@ func handleDiscover(b *browse.Service) http.HandlerFunc {
 	}
 }
 
+// handleNextBook returns the issue to read after {id}: by series order, or — with
+// ?context=readingList — the next item in the user's active reading list. `book` is null
+// when there is no next issue.
+func handleNextBook(b *browse.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		card, err := b.NextAfter(r.Context(), currentUserID(r), chi.URLParam(r, "id"),
+			r.URL.Query().Get("context"))
+		if err != nil {
+			writeDomainError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"book": card})
+	}
+}
+
 // handleSearch runs a full-text catalog search (docs/03-api.md §8). `q` is the raw query,
 // `type` filters to series/book (default all), `library` optionally scopes it.
 func handleSearch(b *browse.Service) http.HandlerFunc {

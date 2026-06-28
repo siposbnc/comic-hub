@@ -27,7 +27,7 @@ func (r *readingListRepo) Create(ctx context.Context, l domain.ReadingList) (dom
 
 func (r *readingListRepo) Get(ctx context.Context, userID, id string) (domain.ReadingList, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT l.id, l.user_id, l.name, l.created_at, l.updated_at,
+		SELECT l.id, l.user_id, l.name, l.is_active, l.created_at, l.updated_at,
 			(SELECT COUNT(*) FROM reading_list_item li WHERE li.list_id = l.id)
 		FROM reading_list l WHERE l.id = ? AND l.user_id = ?`, id, userID)
 	l, err := scanReadingList(row)
@@ -39,7 +39,7 @@ func (r *readingListRepo) Get(ctx context.Context, userID, id string) (domain.Re
 
 func (r *readingListRepo) List(ctx context.Context, userID string) ([]domain.ReadingList, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT l.id, l.user_id, l.name, l.created_at, l.updated_at,
+		SELECT l.id, l.user_id, l.name, l.is_active, l.created_at, l.updated_at,
 			(SELECT COUNT(*) FROM reading_list_item li WHERE li.list_id = l.id)
 		FROM reading_list l WHERE l.user_id = ? ORDER BY l.name`, userID)
 	if err != nil {
@@ -56,6 +56,40 @@ func (r *readingListRepo) List(ctx context.Context, userID string) ([]domain.Rea
 		out = append(out, l)
 	}
 	return out, rows.Err()
+}
+
+func (r *readingListRepo) SetActive(ctx context.Context, userID, id string) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	res, err := tx.ExecContext(ctx,
+		`UPDATE reading_list SET is_active = 1 WHERE id = ? AND user_id = ?`, id, userID)
+	if err != nil {
+		return err
+	}
+	if err := mustAffect(res); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE reading_list SET is_active = 0 WHERE user_id = ? AND id <> ?`, userID, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (r *readingListRepo) GetActive(ctx context.Context, userID string) (domain.ReadingList, error) {
+	row := r.db.QueryRowContext(ctx, `
+		SELECT l.id, l.user_id, l.name, l.is_active, l.created_at, l.updated_at,
+			(SELECT COUNT(*) FROM reading_list_item li WHERE li.list_id = l.id)
+		FROM reading_list l WHERE l.user_id = ? AND l.is_active = 1 LIMIT 1`, userID)
+	l, err := scanReadingList(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.ReadingList{}, domain.ErrNotFound
+	}
+	return l, err
 }
 
 func (r *readingListRepo) Update(ctx context.Context, l domain.ReadingList) error {
@@ -167,9 +201,13 @@ func (r *readingListRepo) IDsForBook(ctx context.Context, userID, bookID string)
 }
 
 func scanReadingList(row rowScanner) (domain.ReadingList, error) {
-	var l domain.ReadingList
-	if err := row.Scan(&l.ID, &l.UserID, &l.Name, &l.CreatedAt, &l.UpdatedAt, &l.BookCount); err != nil {
+	var (
+		l      domain.ReadingList
+		active int
+	)
+	if err := row.Scan(&l.ID, &l.UserID, &l.Name, &active, &l.CreatedAt, &l.UpdatedAt, &l.BookCount); err != nil {
 		return domain.ReadingList{}, err
 	}
+	l.Active = active != 0
 	return l, nil
 }

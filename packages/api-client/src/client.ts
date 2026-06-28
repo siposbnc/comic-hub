@@ -12,6 +12,7 @@ import type {
   Job,
   Library,
   LibraryHealth,
+  NextContext,
   Progress,
   ProviderStatus,
   ReadingList,
@@ -385,6 +386,23 @@ export class ComicHubClient {
 
   async deleteReadingList(id: string): Promise<void> {
     await this.request<unknown>('DELETE', `/api/v1/me/reading-lists/${encodeURIComponent(id)}`);
+  }
+
+  /** Make a reading list the active reading queue (clears any previous active one). */
+  async setActiveReadingList(id: string): Promise<void> {
+    await this.request<unknown>(
+      'POST',
+      `/api/v1/me/reading-lists/${encodeURIComponent(id)}/active`,
+    );
+  }
+
+  /** The issue to read after `bookId` — by series order, or the active reading list. */
+  async nextBook(bookId: string, context: NextContext = 'series'): Promise<BookCard | null> {
+    const res = await this.request<{ book: BookCard | null }>(
+      'GET',
+      `/api/v1/me/books/${encodeURIComponent(bookId)}/next?context=${context}`,
+    );
+    return res.book;
   }
 
   async addToReadingList(id: string, bookIds: string[]): Promise<void> {

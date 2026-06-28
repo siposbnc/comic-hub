@@ -14,6 +14,7 @@ import (
 type readingListDTO struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
+	Active    bool   `json:"active"`
 	BookCount int    `json:"bookCount"`
 	CreatedAt int64  `json:"createdAt"`
 	UpdatedAt int64  `json:"updatedAt"`
@@ -23,6 +24,7 @@ func toReadingListDTO(l domain.ReadingList) readingListDTO {
 	return readingListDTO{
 		ID:        l.ID,
 		Name:      l.Name,
+		Active:    l.Active,
 		BookCount: l.BookCount,
 		CreatedAt: l.CreatedAt,
 		UpdatedAt: l.UpdatedAt,
@@ -106,6 +108,17 @@ func handleUpdateReadingList(svc *organize.Service) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, toReadingListDTO(l))
+	}
+}
+
+func handleSetActiveReadingList(svc *organize.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		err := svc.SetActiveReadingList(r.Context(), currentUserID(r), chi.URLParam(r, "id"))
+		if err != nil {
+			writeDomainError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 

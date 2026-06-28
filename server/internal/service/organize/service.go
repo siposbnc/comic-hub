@@ -255,6 +255,14 @@ func (s *Service) DeleteReadingList(ctx context.Context, userID, id string) erro
 	return s.repo.ReadingLists().Delete(ctx, userID, id)
 }
 
+// SetActiveReadingList makes one of the user's lists the active reading queue.
+func (s *Service) SetActiveReadingList(ctx context.Context, userID, id string) error {
+	if _, err := s.repo.ReadingLists().Get(ctx, userID, id); err != nil {
+		return err
+	}
+	return s.repo.ReadingLists().SetActive(ctx, userID, id)
+}
+
 // AddReadingListItems appends books to a user's list (existing members keep their place).
 func (s *Service) AddReadingListItems(ctx context.Context, userID, id string, bookIDs []string) error {
 	if _, err := s.repo.ReadingLists().Get(ctx, userID, id); err != nil {
