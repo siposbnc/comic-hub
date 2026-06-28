@@ -123,6 +123,15 @@ func (s *Scanner) processFile(ctx context.Context, lib domain.Library, full bool
 		return s.persistCorrupt(ctx, lib, existing, haveExisting, path, size, mtime, "")
 	}
 
+	// A file with no row at this path but matching the content of a row whose file has
+	// vanished is a move/rename: reuse that row (updating its path) instead of creating a
+	// new book and orphaning the old one.
+	if !haveExisting {
+		if moved, ok := s.reconcileMovedBook(ctx, lib.ID, path, hash); ok {
+			existing, haveExisting = moved, true
+		}
+	}
+
 	src, err := s.registry.Open(path)
 	if err != nil {
 		return s.persistCorrupt(ctx, lib, existing, haveExisting, path, size, mtime, hash)
@@ -274,6 +283,26 @@ func (s *Scanner) buildBook(
 		book.AddedAt = now
 	}
 	return book
+}
+
+// reconcileMovedBook looks for an existing book in the library with the same content hash
+// whose file no longer exists on disk — i.e. the same file under a new path. It returns
+// that row (so the caller reuses its id) and true. Genuine duplicates (both files still
+// present) are left alone, so they surface separately in Library Health.
+func (s *Scanner) reconcileMovedBook(ctx context.Context, libraryID, newPath, hash string) (domain.Book, bool) {
+	cands, err := s.repo.Books().ByContentHash(ctx, libraryID, hash)
+	if err != nil {
+		return domain.Book{}, false
+	}
+	for _, c := range cands {
+		if c.FilePath == newPath {
+			continue
+		}
+		if _, err := statFile(c.FilePath); err != nil {
+			return c, true // old file gone → this is a move
+		}
+	}
+	return domain.Book{}, false
 }
 
 // persistCorrupt records a file that could not be opened/hashed so it surfaces in

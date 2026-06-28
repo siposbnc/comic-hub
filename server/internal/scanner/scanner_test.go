@@ -143,6 +143,52 @@ func TestScanLibrary(t *testing.T) {
 	}
 }
 
+func TestScanReconcilesMovedFile(t *testing.T) {
+	ctx := context.Background()
+	store := newStore(t)
+	root := t.TempDir()
+	orig := filepath.Join(root, "Saga", "Saga 001.cbz")
+	writeCBZ(t, orig, map[string]string{"p1.jpg": "a", "p2.jpg": "b"})
+
+	lib := domain.Library{ID: ulid.New(), Name: "L", Kind: "comic", Roots: []string{root}, CreatedAt: 1, UpdatedAt: 1}
+	_, _ = store.Libraries().Create(ctx, lib)
+	sc := New(store, archive.DefaultRegistry(), slog.New(slog.NewTextHandler(io.Discard, nil)), 0)
+
+	if err := sc.Scan(ctx, lib.ID, true, nil); err != nil {
+		t.Fatalf("scan 1: %v", err)
+	}
+	saga := seriesByName(t, store, lib.ID, "Saga")
+	before, _ := store.Books().ListBySeries(ctx, saga.ID)
+	if len(before) != 1 {
+		t.Fatalf("expected 1 book, got %d", len(before))
+	}
+	origID := before[0].ID
+
+	// Move the file to a different series folder (rename on disk), then rescan.
+	moved := filepath.Join(root, "Image", "Saga 001.cbz")
+	if err := os.MkdirAll(filepath.Dir(moved), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.Rename(orig, moved); err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	if err := sc.Scan(ctx, lib.ID, false, nil); err != nil {
+		t.Fatalf("scan 2: %v", err)
+	}
+
+	// The same row should now point at the new path — one book total, id preserved.
+	all, _ := store.Books().ListByLibrary(ctx, lib.ID)
+	if len(all) != 1 {
+		t.Fatalf("expected 1 book after move (no duplicate/orphan), got %d", len(all))
+	}
+	if all[0].ID != origID {
+		t.Fatalf("move created a new row: id %s != %s", all[0].ID, origID)
+	}
+	if all[0].FilePath != moved {
+		t.Fatalf("path not updated: %s", all[0].FilePath)
+	}
+}
+
 func TestScanIncrementalIdempotent(t *testing.T) {
 	ctx := context.Background()
 	store := newStore(t)

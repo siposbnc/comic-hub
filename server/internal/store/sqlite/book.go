@@ -97,6 +97,25 @@ func (r *bookRepo) ListBySeries(ctx context.Context, seriesID string) ([]domain.
 	return out, rows.Err()
 }
 
+func (r *bookRepo) ByContentHash(ctx context.Context, libraryID, hash string) ([]domain.Book, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT `+bookColumns+` FROM book WHERE library_id = ? AND content_hash = ?`, libraryID, hash)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []domain.Book
+	for rows.Next() {
+		b, err := scanBook(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, b)
+	}
+	return out, rows.Err()
+}
+
 func (r *bookRepo) ListByLibrary(ctx context.Context, libraryID string) ([]domain.Book, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT `+bookColumns+` FROM book WHERE library_id = ? ORDER BY added_at DESC`, libraryID)

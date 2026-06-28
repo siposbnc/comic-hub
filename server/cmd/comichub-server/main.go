@@ -37,6 +37,7 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/store/sqlite"
 	httptransport "github.com/siposbnc/comic-hub/server/internal/transport/http"
 	"github.com/siposbnc/comic-hub/server/internal/version"
+	"github.com/siposbnc/comic-hub/server/internal/watch"
 )
 
 // hashLargeThreshold is the file size above which content hashing switches to sampled
@@ -142,6 +143,28 @@ func run() error {
 	// appCtx is cancelled either by an OS signal or the /admin/shutdown endpoint.
 	appCtx, appCancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer appCancel()
+
+	// File-watching: a debounced incremental rescan whenever a library's files change on
+	// disk. A moved/renamed file is reconciled by the scanner via content hash.
+	if watcher, werr := watch.New(logger, 2*time.Second, func(libraryID string) {
+		payload, _ := json.Marshal(scanner.JobPayload{LibraryID: libraryID, Full: false})
+		if _, err := runner.Submit(appCtx, domain.JobScan, string(payload)); err != nil {
+			logger.Warn("watch: enqueue scan failed", "library", libraryID, "err", err)
+		}
+	}); werr != nil {
+		logger.Warn("file-watching disabled", "err", werr)
+	} else {
+		defer watcher.Close()
+		if libs, err := store.Libraries().List(appCtx); err == nil {
+			for _, l := range libs {
+				watcher.Add(l.ID, l.Roots)
+			}
+		}
+		libraries.OnCreate(func(l domain.Library) { watcher.Add(l.ID, l.Roots) })
+		libraries.OnDelete(func(id string) { watcher.Remove(id) })
+		go watcher.Run(appCtx)
+		logger.Info("file-watching enabled")
+	}
 
 	handler := httptransport.NewRouter(httptransport.Deps{
 		Logger:   logger,

@@ -49,6 +49,9 @@ type BookRepository interface {
 	// GetByPath resolves a book by its absolute file path, so the scanner can
 	// change-detect and reuse ids across rescans (ErrNotFound if absent).
 	GetByPath(ctx context.Context, filePath string) (Book, error)
+	// ByContentHash returns books in a library sharing a content hash, so the scanner
+	// can recognize a moved/renamed file (same bytes, new path) instead of orphaning it.
+	ByContentHash(ctx context.Context, libraryID, hash string) ([]Book, error)
 	ReplacePages(ctx context.Context, bookID string, pages []Page) error
 	// ListPages returns a book's pages in index order (the reader's manifest source).
 	ListPages(ctx context.Context, bookID string) ([]Page, error)

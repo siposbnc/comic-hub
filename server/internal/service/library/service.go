@@ -17,13 +17,20 @@ import (
 
 // Service handles library use cases.
 type Service struct {
-	repo domain.Repository
+	repo     domain.Repository
+	onCreate func(domain.Library)
+	onDelete func(id string)
 }
 
 // New constructs the library service over a repository.
 func New(repo domain.Repository) *Service {
 	return &Service{repo: repo}
 }
+
+// OnCreate registers a hook run after a library is created (e.g. start watching its
+// folders). OnDelete registers one run after a library is removed.
+func (s *Service) OnCreate(fn func(domain.Library)) { s.onCreate = fn }
+func (s *Service) OnDelete(fn func(id string))      { s.onDelete = fn }
 
 // CreateInput is the validated request to create a library.
 type CreateInput struct {
@@ -61,7 +68,11 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (domain.Library, e
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
-	return s.repo.Libraries().Create(ctx, lib)
+	created, err := s.repo.Libraries().Create(ctx, lib)
+	if err == nil && s.onCreate != nil {
+		s.onCreate(created)
+	}
+	return created, err
 }
 
 // List returns all libraries.
@@ -76,7 +87,13 @@ func (s *Service) Get(ctx context.Context, id string) (domain.Library, error) {
 
 // Delete removes a library from the catalog. The files on disk are untouched.
 func (s *Service) Delete(ctx context.Context, id string) error {
-	return s.repo.Libraries().Delete(ctx, id)
+	if err := s.repo.Libraries().Delete(ctx, id); err != nil {
+		return err
+	}
+	if s.onDelete != nil {
+		s.onDelete(id)
+	}
+	return nil
 }
 
 // normalizeRoots cleans and de-duplicates root paths, requiring at least one. Paths

@@ -98,7 +98,8 @@ Accessibility gate per screen; CI bench thresholds; docs kept in lockstep (03-ap
 | F2 — PDF (MuPDF + C toolchain) | ⏳ deferred (skipped for now) |
 | S — Search (FTS5 + `/search` + TopBar type-ahead) | ✅ done |
 | O — Organization | ✅ done — collections, reading lists, tags, smart lists (rule engine) end-to-end: server + SDK + client (sidebar Lists/Tags nav, index/detail screens, smart-list rule builder, Add-to-list + Edit-tags on Book) |
-| W / R — watch/health, reader | ⏳ pending |
+| W — Watch + Health | ✅ done — `GET /libraries/{id}/health` (corrupt/orphan/unmatched/duplicate) + client panel; fsnotify watcher → debounced incremental rescan; scanner move/rename reconciliation by content hash |
+| R — Reader extras | ⏳ pending |
 
 Remaining metadata polish (non-blocking): GCD as a second provider, ComicInfo
 `write-sidecar`, per-field lock toggles in the UI, and a book-level candidate picker.
