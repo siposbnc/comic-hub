@@ -1,12 +1,14 @@
-// Prepares the comichub-server binary as a Tauri "externalBin" sidecar for the client.
-// Tauri requires the binary to exist at build time named with the Rust target triple
-// (e.g. binaries/comichub-server-x86_64-pc-windows-msvc.exe); at bundle time it is
-// copied next to the app executable (suffix stripped), where server.rs finds it.
+// Builds the comichub-server binary and places it where the client expects it:
+//   • server/bin/comichub-server[.exe]  — used by `tauri dev` (see client server.rs)
+//   • apps/client/src-tauri/binaries/comichub-server-<triple>[.exe] — the Tauri
+//     "externalBin" sidecar bundled into packaged builds.
 //
-// Run from anywhere; paths are resolved relative to the repo root. Invoked by the
-// client's tauri.conf.json `beforeBuildCommand`.
+// Invoked by the client's tauri.conf.json before{Dev,Build}Command. It builds to a unique
+// temp file first (Windows locks a running .exe, so we never build straight onto a path a
+// server might be holding open), then copies into both targets. If a target is in use by a
+// still-running server, we keep the existing binary and warn rather than failing the build.
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, mkdirSync } from 'node:fs';
+import { copyFileSync, mkdirSync, existsSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -22,15 +24,41 @@ function hostTriple() {
 }
 
 const triple = hostTriple();
-const serverBin = join(repoRoot, 'server', 'bin', `comichub-server${ext}`);
-const outDir = join(repoRoot, 'apps', 'client', 'src-tauri', 'binaries');
-const outBin = join(outDir, `comichub-server-${triple}${ext}`);
+const serverBinDir = join(repoRoot, 'server', 'bin');
+const devBin = join(serverBinDir, `comichub-server${ext}`); // tauri dev
+const sidecarDir = join(repoRoot, 'apps', 'client', 'src-tauri', 'binaries');
+const sidecarBin = join(sidecarDir, `comichub-server-${triple}${ext}`); // packaged
+const tmpBin = join(serverBinDir, `.comichub-server-${process.pid}${ext}`);
+
+mkdirSync(serverBinDir, { recursive: true });
+mkdirSync(sidecarDir, { recursive: true });
 
 console.log(`[prepare-sidecar] building server (${triple})…`);
-execFileSync('go', ['build', '-C', join(repoRoot, 'server'), '-o', join('bin', `comichub-server${ext}`), './cmd/comichub-server'], {
+execFileSync('go', ['build', '-C', join(repoRoot, 'server'), '-o', tmpBin, './cmd/comichub-server'], {
   stdio: 'inherit',
 });
 
-mkdirSync(outDir, { recursive: true });
-copyFileSync(serverBin, outBin);
-console.log(`[prepare-sidecar] sidecar ready: ${outBin}`);
+/** Copy the freshly built binary onto a target, tolerating a locked (in-use) destination. */
+function place(dest) {
+  try {
+    copyFileSync(tmpBin, dest);
+    console.log(`[prepare-sidecar] updated ${dest}`);
+  } catch (err) {
+    if (existsSync(dest)) {
+      console.warn(
+        `[prepare-sidecar] ${dest} is in use — keeping the existing binary. ` +
+          `Close any running ComicHub to pick up server changes.`,
+      );
+    } else {
+      rmSync(tmpBin, { force: true });
+      throw err;
+    }
+  }
+}
+
+try {
+  place(devBin);
+  place(sidecarBin);
+} finally {
+  rmSync(tmpBin, { force: true });
+}
