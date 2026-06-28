@@ -13,6 +13,8 @@ import type {
   Library,
   Progress,
   ProviderStatus,
+  ReadingList,
+  ReadingListDetail,
   ReadStatus,
   ScanMode,
   SearchResults,
@@ -323,6 +325,62 @@ export class ComicHubClient {
     await this.request<unknown>(
       'DELETE',
       `/api/v1/collections/${encodeURIComponent(id)}/items/${encodeURIComponent(bookId)}`,
+    );
+  }
+
+  // ── Reading lists (per-user) ─────────────────────────────────────────────────────
+
+  async listReadingLists(): Promise<ReadingList[]> {
+    const res = await this.request<{ items: ReadingList[] }>('GET', '/api/v1/me/reading-lists');
+    return res.items;
+  }
+
+  createReadingList(name: string): Promise<ReadingList> {
+    return this.request<ReadingList>('POST', '/api/v1/me/reading-lists', { body: { name } });
+  }
+
+  readingList(id: string): Promise<ReadingListDetail> {
+    return this.request<ReadingListDetail>(
+      'GET',
+      `/api/v1/me/reading-lists/${encodeURIComponent(id)}`,
+    );
+  }
+
+  renameReadingList(id: string, name: string): Promise<ReadingList> {
+    return this.request<ReadingList>(
+      'PATCH',
+      `/api/v1/me/reading-lists/${encodeURIComponent(id)}`,
+      {
+        body: { name },
+      },
+    );
+  }
+
+  async deleteReadingList(id: string): Promise<void> {
+    await this.request<unknown>('DELETE', `/api/v1/me/reading-lists/${encodeURIComponent(id)}`);
+  }
+
+  async addToReadingList(id: string, bookIds: string[]): Promise<void> {
+    await this.request<unknown>(
+      'POST',
+      `/api/v1/me/reading-lists/${encodeURIComponent(id)}/items`,
+      { body: { bookIds } },
+    );
+  }
+
+  /** Moves bookId before beforeId (omit beforeId to move it to the end). */
+  async reorderReadingList(id: string, bookId: string, beforeId?: string): Promise<void> {
+    await this.request<unknown>(
+      'PATCH',
+      `/api/v1/me/reading-lists/${encodeURIComponent(id)}/items/reorder`,
+      { body: { bookId, beforeId } },
+    );
+  }
+
+  async removeFromReadingList(id: string, bookId: string): Promise<void> {
+    await this.request<unknown>(
+      'DELETE',
+      `/api/v1/me/reading-lists/${encodeURIComponent(id)}/items/${encodeURIComponent(bookId)}`,
     );
   }
 

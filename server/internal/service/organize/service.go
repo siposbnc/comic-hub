@@ -135,46 +135,163 @@ func (s *Service) Reorder(ctx context.Context, id, bookID, beforeID string) erro
 	if err != nil {
 		return err
 	}
+	cur := make([]positioned, len(items))
+	for i, it := range items {
+		cur[i] = positioned{bookID: it.BookID, position: it.Position}
+	}
+	newPos, err := reorderPosition(cur, bookID, beforeID)
+	if err != nil {
+		return err
+	}
+	return s.repo.Collections().SetPosition(ctx, id, bookID, newPos)
+}
 
-	// The reference order excludes the item being moved.
-	rest := make([]domain.CollectionItem, 0, len(items))
+// positioned is a book id with its fractional sort position — the input to the shared
+// reorder math used by collections and reading lists.
+type positioned struct {
+	bookID   string
+	position float64
+}
+
+// reorderPosition computes the new fractional position for moving bookID before beforeID
+// (empty = move to the end), bisecting between the neighbours in the current order.
+func reorderPosition(items []positioned, bookID, beforeID string) (float64, error) {
+	rest := make([]positioned, 0, len(items))
 	found := false
 	for _, it := range items {
-		if it.BookID == bookID {
+		if it.bookID == bookID {
 			found = true
 			continue
 		}
 		rest = append(rest, it)
 	}
 	if !found {
-		return fmt.Errorf("%w: book is not in this collection", domain.ErrValidation)
+		return 0, fmt.Errorf("%w: book is not in this list", domain.ErrValidation)
 	}
 
-	var newPos float64
 	if beforeID == "" {
 		if len(rest) == 0 {
-			newPos = positionGap
-		} else {
-			newPos = rest[len(rest)-1].Position + positionGap
+			return positionGap, nil
 		}
-	} else {
-		idx := -1
-		for i, it := range rest {
-			if it.BookID == beforeID {
-				idx = i
-				break
+		return rest[len(rest)-1].position + positionGap, nil
+	}
+	for i, it := range rest {
+		if it.bookID == beforeID {
+			if i == 0 {
+				return rest[0].position - positionGap, nil
 			}
-		}
-		if idx < 0 {
-			return fmt.Errorf("%w: beforeId is not in this collection", domain.ErrValidation)
-		}
-		if idx == 0 {
-			newPos = rest[0].Position - positionGap
-		} else {
-			newPos = (rest[idx-1].Position + rest[idx].Position) / 2
+			return (rest[i-1].position + rest[i].position) / 2, nil
 		}
 	}
-	return s.repo.Collections().SetPosition(ctx, id, bookID, newPos)
+	return 0, fmt.Errorf("%w: beforeId is not in this list", domain.ErrValidation)
+}
+
+// ── Reading lists (per-user) ───────────────────────────────────────────────────────
+
+// CreateReadingList validates and persists a new list owned by userID.
+func (s *Service) CreateReadingList(ctx context.Context, userID, name string) (domain.ReadingList, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return domain.ReadingList{}, fmt.Errorf("%w: name is required", domain.ErrValidation)
+	}
+	now := time.Now().UnixMilli()
+	l := domain.ReadingList{
+		ID:        ulid.New(),
+		UserID:    userID,
+		Name:      name,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	return s.repo.ReadingLists().Create(ctx, l)
+}
+
+// ListReadingLists returns the user's lists (with item counts).
+func (s *Service) ListReadingLists(ctx context.Context, userID string) ([]domain.ReadingList, error) {
+	return s.repo.ReadingLists().List(ctx, userID)
+}
+
+// GetReadingList returns one of the user's lists (ErrNotFound if absent or not owned).
+func (s *Service) GetReadingList(ctx context.Context, userID, id string) (domain.ReadingList, error) {
+	return s.repo.ReadingLists().Get(ctx, userID, id)
+}
+
+// ReadingListItems returns the list's book ids in display order (owner-checked).
+func (s *Service) ReadingListItems(ctx context.Context, userID, id string) ([]string, error) {
+	if _, err := s.repo.ReadingLists().Get(ctx, userID, id); err != nil {
+		return nil, err
+	}
+	items, err := s.repo.ReadingLists().Items(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, len(items))
+	for i, it := range items {
+		ids[i] = it.BookID
+	}
+	return ids, nil
+}
+
+// RenameReadingList updates a list's name (the only editable field).
+func (s *Service) RenameReadingList(ctx context.Context, userID, id, name string) (domain.ReadingList, error) {
+	l, err := s.repo.ReadingLists().Get(ctx, userID, id)
+	if err != nil {
+		return domain.ReadingList{}, err
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return domain.ReadingList{}, fmt.Errorf("%w: name cannot be empty", domain.ErrValidation)
+	}
+	l.Name = name
+	l.UpdatedAt = time.Now().UnixMilli()
+	if err := s.repo.ReadingLists().Update(ctx, l); err != nil {
+		return domain.ReadingList{}, err
+	}
+	return l, nil
+}
+
+// DeleteReadingList removes a user's list and its items.
+func (s *Service) DeleteReadingList(ctx context.Context, userID, id string) error {
+	return s.repo.ReadingLists().Delete(ctx, userID, id)
+}
+
+// AddReadingListItems appends books to a user's list (existing members keep their place).
+func (s *Service) AddReadingListItems(ctx context.Context, userID, id string, bookIDs []string) error {
+	if _, err := s.repo.ReadingLists().Get(ctx, userID, id); err != nil {
+		return err
+	}
+	clean := dedupeNonEmpty(bookIDs)
+	if len(clean) == 0 {
+		return fmt.Errorf("%w: bookIds is required", domain.ErrValidation)
+	}
+	return s.repo.ReadingLists().AddItems(ctx, id, clean)
+}
+
+// RemoveReadingListItem drops one book from a user's list.
+func (s *Service) RemoveReadingListItem(ctx context.Context, userID, id, bookID string) error {
+	if _, err := s.repo.ReadingLists().Get(ctx, userID, id); err != nil {
+		return err
+	}
+	return s.repo.ReadingLists().RemoveItem(ctx, id, bookID)
+}
+
+// ReorderReadingList moves bookID before beforeID within a user's list (empty = to end).
+func (s *Service) ReorderReadingList(ctx context.Context, userID, id, bookID, beforeID string) error {
+	if _, err := s.repo.ReadingLists().Get(ctx, userID, id); err != nil {
+		return err
+	}
+	items, err := s.repo.ReadingLists().Items(ctx, id)
+	if err != nil {
+		return err
+	}
+	cur := make([]positioned, len(items))
+	for i, it := range items {
+		cur[i] = positioned{bookID: it.BookID, position: it.Position}
+	}
+	newPos, err := reorderPosition(cur, bookID, beforeID)
+	if err != nil {
+		return err
+	}
+	return s.repo.ReadingLists().SetPosition(ctx, id, bookID, newPos)
 }
 
 func dedupeNonEmpty(in []string) []string {

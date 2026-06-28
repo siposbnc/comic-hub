@@ -215,6 +215,21 @@ export interface CollectionDetail {
   books: BookCard[];
 }
 
+/** A personal, ordered reading list owned by one user. */
+export interface ReadingList {
+  id: string;
+  name: string;
+  bookCount: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** A reading list plus its books in display order. */
+export interface ReadingListDetail {
+  readingList: ReadingList;
+  books: BookCard[];
+}
+
 /** One page in a book manifest. */
 export interface ManifestPage {
   idx: number;

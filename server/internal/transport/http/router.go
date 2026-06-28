@@ -116,6 +116,18 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/progress/{bookId}", handleGetProgress(d.Reading))
 			r.Put("/progress/{bookId}", handlePutProgress(d.Reading))
 			r.Post("/books/{id}/mark", handleMarkBook(d.Reading))
+
+			// Personal reading lists (per-user, ordered).
+			r.Route("/reading-lists", func(r chi.Router) {
+				r.Get("/", handleListReadingLists(d.Organize))
+				r.Post("/", handleCreateReadingList(d.Organize))
+				r.Get("/{id}", handleGetReadingList(d.Organize, d.Browse))
+				r.Patch("/{id}", handleUpdateReadingList(d.Organize))
+				r.Delete("/{id}", handleDeleteReadingList(d.Organize))
+				r.Post("/{id}/items", handleAddReadingListItems(d.Organize))
+				r.Patch("/{id}/items/reorder", handleReorderReadingListItem(d.Organize))
+				r.Delete("/{id}/items/{bookId}", handleRemoveReadingListItem(d.Organize))
+			})
 		})
 
 		// Multiplexed push socket (jobs/progress topics).

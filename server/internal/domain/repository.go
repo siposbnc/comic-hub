@@ -16,6 +16,7 @@ type Repository interface {
 	Metadata() MetadataRepository
 	Search() SearchRepository
 	Collections() CollectionRepository
+	ReadingLists() ReadingListRepository
 }
 
 // LibraryRepository persists libraries and their roots.
