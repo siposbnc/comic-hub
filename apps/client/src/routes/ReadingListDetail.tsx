@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
 import { Button, Badge, Icon, IconButton, EmptyState } from '@comichub/ui';
 import type { BookCard, ReadingListDetail as ReadingListDetailData } from '@comichub/api-client';
@@ -61,17 +61,30 @@ function QueueView({ data, listId }: { data: ReadingListDetailData; listId: stri
   const next = books.find((b) => b.progress?.status !== 'read') ?? books[0];
 
   // Native drag-and-drop reordering: drag a row's handle onto another row; dropping in its
-  // top/bottom half inserts above/below it. The move is sent as "place bookId before X".
+  // top/bottom half inserts above/below it. The dragged id lives in a ref so the drop
+  // handler never reads stale state; the visual state drives row highlighting.
+  const dragRef = useRef<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [over, setOver] = useState<{ id: string; pos: 'before' | 'after' } | null>(null);
 
-  const drop = () => {
-    if (dragId && over) {
-      const beforeId = beforeIdForDrop(books, dragId, over);
-      if (beforeId !== dragId) reorder.mutate({ id: listId, bookId: dragId, beforeId });
-    }
+  const startDrag = (id: string) => {
+    dragRef.current = id;
+    setDragId(id);
+  };
+  const endDrag = () => {
+    dragRef.current = null;
     setDragId(null);
     setOver(null);
+  };
+  const hover = (id: string, pos: 'before' | 'after') => {
+    if (dragRef.current && dragRef.current !== id) setOver({ id, pos });
+  };
+  const dropOn = (id: string, pos: 'before' | 'after') => {
+    const dragged = dragRef.current;
+    endDrag();
+    if (!dragged) return;
+    const beforeId = beforeIdForDrop(books, dragged, { id, pos });
+    if (beforeId !== dragged) reorder.mutate({ id: listId, bookId: dragged, beforeId });
   };
 
   const onDelete = async () => {
@@ -195,15 +208,10 @@ function QueueView({ data, listId }: { data: ReadingListDetailData; listId: stri
               onOpen={() => launch(book.id, resumePage(book.progress))}
               onDetails={() => navigate({ to: '/book/$id', params: { id: book.id } })}
               onRemove={() => removeItem.mutate({ id: listId, bookId: book.id })}
-              onDragStart={() => setDragId(book.id)}
-              onDragEnd={() => {
-                setDragId(null);
-                setOver(null);
-              }}
-              onDragOver={(pos) => {
-                if (dragId && dragId !== book.id) setOver({ id: book.id, pos });
-              }}
-              onDrop={drop}
+              onDragStart={() => startDrag(book.id)}
+              onDragEnd={endDrag}
+              onDragOver={(pos) => hover(book.id, pos)}
+              onDrop={(pos) => dropOn(book.id, pos)}
             />
           ))}
         </div>
@@ -239,21 +247,25 @@ function QueueRow({
   onDragStart: () => void;
   onDragEnd: () => void;
   onDragOver: (pos: 'before' | 'after') => void;
-  onDrop: () => void;
+  onDrop: (pos: 'before' | 'after') => void;
 }) {
   const isRead = book.progress?.status === 'read';
   const meta = [issueLabel(book.number), seriesName].filter(Boolean).join(' · ');
   const accent = '2px solid var(--accent)';
+  const posOf = (e: React.DragEvent<HTMLDivElement>): 'before' | 'after' => {
+    const r = e.currentTarget.getBoundingClientRect();
+    return e.clientY < r.top + r.height / 2 ? 'before' : 'after';
+  };
   return (
     <div
       onDragOver={(e) => {
         e.preventDefault();
-        const r = e.currentTarget.getBoundingClientRect();
-        onDragOver(e.clientY < r.top + r.height / 2 ? 'before' : 'after');
+        e.dataTransfer.dropEffect = 'move';
+        onDragOver(posOf(e));
       }}
       onDrop={(e) => {
         e.preventDefault();
-        onDrop();
+        onDrop(posOf(e));
       }}
       style={{
         display: 'flex',
@@ -270,7 +282,11 @@ function QueueRow({
     >
       <span
         draggable
-        onDragStart={onDragStart}
+        onDragStart={(e) => {
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', book.id);
+          onDragStart();
+        }}
         onDragEnd={onDragEnd}
         title="Drag to reorder"
         style={{
@@ -309,6 +325,7 @@ function QueueRow({
           alt=""
           width={24}
           height={36}
+          draggable={false}
           style={{
             flex: 'none',
             objectFit: 'cover',
