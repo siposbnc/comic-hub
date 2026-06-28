@@ -63,8 +63,13 @@ export function useKeyboard(): void {
         case 'b':
         case 'B':
           // Bookmarks are server-backed (connected mode only); no-ops otherwise.
+          // Ctrl/⌘+B opens the list; plain B adds the current page (never removes).
           e.preventDefault();
-          void s.toggleBookmark();
+          if (e.ctrlKey || e.metaKey) {
+            s.setBookmarksOpen(!s.bookmarksOpen);
+          } else {
+            void s.bookmarkCurrentPage();
+          }
           break;
         case '+':
         case '=':

@@ -34,7 +34,7 @@ export function Toolbar() {
   const bookmarks = useReaderStore((s) => s.bookmarks);
   const bookmarksOpen = useReaderStore((s) => s.bookmarksOpen);
 
-  const toggleBookmark = useReaderStore((s) => s.toggleBookmark);
+  const bookmarkCurrentPage = useReaderStore((s) => s.bookmarkCurrentPage);
   const setBookmarksOpen = useReaderStore((s) => s.setBookmarksOpen);
   const toggleLayout = useReaderStore((s) => s.toggleLayout);
   const toggleContinuous = useReaderStore((s) => s.toggleContinuous);
@@ -84,6 +84,7 @@ export function Toolbar() {
           icon="direction"
           label={direction === 'rtl' ? 'Right to left' : 'Left to right'}
           active={direction === 'rtl'}
+          className={direction === 'rtl' ? 'is-flip' : undefined}
           onClick={toggleDirection}
         />
         <IconButton icon="settings" label="Reader settings" onClick={() => openSettings(true)} />
@@ -94,7 +95,7 @@ export function Toolbar() {
               label="Bookmark page"
               hint="B"
               active={bookmarks.some((b) => b.page === currentPage)}
-              onClick={() => void toggleBookmark()}
+              onClick={() => void bookmarkCurrentPage()}
             />
             <button
               type="button"

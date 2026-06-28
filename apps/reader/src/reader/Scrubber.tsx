@@ -62,7 +62,9 @@ export function Scrubber() {
   };
 
   const frac = count > 1 ? currentPage / (count - 1) : 0;
-  const fillPct = (rtl ? 1 - frac : frac) * 100;
+  // Fill is the proportion read; in RTL it's anchored to the right edge in CSS, so the
+  // width is the same `frac` either way (it grows from the right as you progress).
+  const fillPct = frac * 100;
 
   return (
     <footer className="scrubber" aria-label="Page navigation">

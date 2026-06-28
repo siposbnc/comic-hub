@@ -755,6 +755,11 @@ body {
   }
 }
 
+/* Direction toggle: mirror the arrow glyph when reading right-to-left. */
+.icon-btn.is-flip svg {
+  transform: scaleX(-1);
+}
+
 /* ── Bookmarks ──────────────────────────────────────────────────────── */
 /* toolbar cluster: toggle (the IconButton) + count pill that opens the list */
 .toolbar__bm {
@@ -863,8 +868,11 @@ body {
   text-align: left;
   font: inherit;
 }
-.bm-current:hover {
+.bm-current:hover:not(:disabled) {
   background: var(--ink-600);
+}
+.bm-current:disabled {
+  cursor: default;
 }
 .bm-current__label {
   flex: 1;

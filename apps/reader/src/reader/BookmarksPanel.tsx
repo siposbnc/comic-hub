@@ -28,7 +28,7 @@ export function BookmarksPanel() {
   const currentPage = useReaderStore((s) => s.currentPage);
   const mode = useReaderStore((s) => s.mode);
   const close = useReaderStore((s) => s.setBookmarksOpen);
-  const toggle = useReaderStore((s) => s.toggleBookmark);
+  const addCurrent = useReaderStore((s) => s.bookmarkCurrentPage);
   const goToPage = useReaderStore((s) => s.goToPage);
   const updateNote = useReaderStore((s) => s.updateBookmarkNote);
   const remove = useReaderStore((s) => s.removeBookmark);
@@ -63,10 +63,15 @@ export function BookmarksPanel() {
         <IconButton icon="x" label="Close" size={16} onClick={() => close(false)} />
       </div>
 
-      <button type="button" className="bm-current" onClick={() => void toggle()}>
+      <button
+        type="button"
+        className="bm-current"
+        disabled={onCurrent}
+        onClick={() => void addCurrent()}
+      >
         <Icon name="bookmark" size={16} color={onCurrent ? 'var(--accent)' : 'var(--paper-400)'} />
         <span className="bm-current__label">
-          {onCurrent ? 'Remove bookmark' : 'Bookmark this page'}
+          {onCurrent ? 'This page is bookmarked' : 'Bookmark this page'}
         </span>
         <span className={`bm-current__page${onCurrent ? ' is-on' : ''}`}>
           p.{String(currentPage + 1).padStart(2, '0')}

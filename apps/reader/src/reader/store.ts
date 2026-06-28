@@ -135,8 +135,8 @@ export interface ReaderState {
 
   /** Load the open book's bookmarks from the server (no-op outside connected mode). */
   loadBookmarks: () => Promise<void>;
-  /** Bookmark or un-bookmark the current page (the B-key / toolbar toggle). */
-  toggleBookmark: () => Promise<void>;
+  /** Bookmark the current page (add-only; removal is explicit, from the list). */
+  bookmarkCurrentPage: () => Promise<void>;
   /** Replace a bookmark's note. */
   updateBookmarkNote: (id: string, note: string) => Promise<void>;
   /** Remove a bookmark by id. */
@@ -562,19 +562,14 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
       }
     },
 
-    toggleBookmark: async () => {
+    bookmarkCurrentPage: async () => {
       const { serverClient, manifest, currentPage, bookmarks } = get();
       if (!serverClient || !manifest) return;
       const bookId = manifest.bookId;
-      const existing = bookmarks.find((b) => b.page === currentPage);
-      if (existing) {
-        set({ bookmarks: bookmarks.filter((b) => b.id !== existing.id) }); // optimistic
-        flashBookmark(`Removed bookmark · ${pageLabel(currentPage)}`);
-        try {
-          await serverClient.removeBookmark(bookId, existing.id);
-        } catch {
-          void get().loadBookmarks(); // reconcile on failure
-        }
+      // Add-only: never remove here (and never re-POST an existing page, which would
+      // wipe its note). Removal is explicit, from the list.
+      if (bookmarks.some((b) => b.page === currentPage)) {
+        flashBookmark(`Already bookmarked · ${pageLabel(currentPage)}`);
         return;
       }
       flashBookmark(`Bookmarked ${pageLabel(currentPage)}`);
