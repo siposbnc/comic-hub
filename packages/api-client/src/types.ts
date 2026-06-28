@@ -198,6 +198,23 @@ export interface SearchResults {
 /** What to search for; omit for all. */
 export type SearchType = 'all' | 'series' | 'book';
 
+/** A curated, ordered, shared shelf of books. */
+export interface Collection {
+  id: string;
+  name: string;
+  description?: string;
+  coverBookId?: string;
+  bookCount: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** A collection plus its books in display order. */
+export interface CollectionDetail {
+  collection: Collection;
+  books: BookCard[];
+}
+
 /** One page in a book manifest. */
 export interface ManifestPage {
   idx: number;

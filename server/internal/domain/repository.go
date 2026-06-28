@@ -15,6 +15,7 @@ type Repository interface {
 	Jobs() JobRepository
 	Metadata() MetadataRepository
 	Search() SearchRepository
+	Collections() CollectionRepository
 }
 
 // LibraryRepository persists libraries and their roots.

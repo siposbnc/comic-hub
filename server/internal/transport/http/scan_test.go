@@ -22,6 +22,7 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/scanner"
 	"github.com/siposbnc/comic-hub/server/internal/service/browse"
 	"github.com/siposbnc/comic-hub/server/internal/service/library"
+	"github.com/siposbnc/comic-hub/server/internal/service/organize"
 	"github.com/siposbnc/comic-hub/server/internal/service/reader"
 	"github.com/siposbnc/comic-hub/server/internal/service/reading"
 	"github.com/siposbnc/comic-hub/server/internal/store/sqlite"
@@ -65,16 +66,17 @@ func newScanServer(t *testing.T) (string, *sqlite.Store) {
 	})
 
 	router := NewRouter(Deps{
-		Logger:  logger,
-		DB:      db,
-		Config:  config.Config{Mode: config.ModeServer},
-		Library: library.New(store),
-		Repo:    store,
-		Runner:  runner,
-		Reader:  readerSvc,
-		Browse:  browse.New(store),
-		Reading: reading.New(store, func(_ string, p domain.Progress) { hub.BroadcastProgress(p) }),
-		Hub:     hub,
+		Logger:   logger,
+		DB:       db,
+		Config:   config.Config{Mode: config.ModeServer},
+		Library:  library.New(store),
+		Repo:     store,
+		Runner:   runner,
+		Reader:   readerSvc,
+		Browse:   browse.New(store),
+		Reading:  reading.New(store, func(_ string, p domain.Progress) { hub.BroadcastProgress(p) }),
+		Organize: organize.New(store),
+		Hub:      hub,
 	})
 	srv := httptest.NewServer(router)
 	t.Cleanup(func() { srv.Close(); runner.Shutdown(); _ = db.Close() })

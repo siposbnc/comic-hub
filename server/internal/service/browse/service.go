@@ -210,6 +210,21 @@ func (s *Service) RecentBooks(ctx context.Context, libraryID, userID string, lim
 	return cards, nil
 }
 
+// BooksByIDs returns book cards for the given ids, preserving the input order and
+// silently skipping ids that no longer resolve (e.g. a book removed since it was listed).
+// Used to render the ordered contents of a collection or reading list.
+func (s *Service) BooksByIDs(ctx context.Context, ids []string, userID string) ([]BookCard, error) {
+	cards := make([]BookCard, 0, len(ids))
+	for _, id := range ids {
+		b, err := s.repo.Books().Get(ctx, id)
+		if err != nil {
+			continue
+		}
+		cards = append(cards, s.bookCard(ctx, b, userID))
+	}
+	return cards, nil
+}
+
 // Discover builds the Home feed: Continue Reading + Recently Added.
 func (s *Service) Discover(ctx context.Context, libraryID, userID string) (Discover, error) {
 	cont, err := s.continueReading(ctx, userID)

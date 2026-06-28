@@ -19,6 +19,7 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/service/browse"
 	"github.com/siposbnc/comic-hub/server/internal/service/library"
 	"github.com/siposbnc/comic-hub/server/internal/service/metadata"
+	"github.com/siposbnc/comic-hub/server/internal/service/organize"
 	"github.com/siposbnc/comic-hub/server/internal/service/reader"
 	"github.com/siposbnc/comic-hub/server/internal/service/reading"
 )
@@ -36,6 +37,7 @@ type Deps struct {
 	Browse   *browse.Service
 	Reading  *reading.Service
 	Metadata *metadata.Service
+	Organize *organize.Service
 	Hub      *Hub
 }
 
@@ -95,6 +97,18 @@ func NewRouter(d Deps) http.Handler {
 
 		r.Get("/discover", handleDiscover(d.Browse))
 		r.Get("/search", handleSearch(d.Browse))
+
+		// Collections: curated, ordered, shared shelves.
+		r.Route("/collections", func(r chi.Router) {
+			r.Get("/", handleListCollections(d.Organize))
+			r.Post("/", handleCreateCollection(d.Organize))
+			r.Get("/{id}", handleGetCollection(d.Organize, d.Browse))
+			r.Patch("/{id}", handleUpdateCollection(d.Organize))
+			r.Delete("/{id}", handleDeleteCollection(d.Organize))
+			r.Post("/{id}/items", handleAddCollectionItems(d.Organize))
+			r.Patch("/{id}/items/reorder", handleReorderCollectionItem(d.Organize))
+			r.Delete("/{id}/items/{bookId}", handleRemoveCollectionItem(d.Organize))
+		})
 
 		// Progress & reading state (acting user = implicit owner in embedded mode).
 		r.Route("/me", func(r chi.Router) {

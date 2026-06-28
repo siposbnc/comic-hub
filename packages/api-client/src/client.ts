@@ -3,6 +3,8 @@ import type {
   BookCard,
   BookDetail,
   BookManifest,
+  Collection,
+  CollectionDetail,
   Connection,
   CreateLibraryInput,
   Discover,
@@ -272,6 +274,56 @@ export class ComicHubClient {
     await this.request<unknown>('POST', `/api/v1/books/${encodeURIComponent(bookId)}/match/apply`, {
       body: { providerId, provider: opts.provider, fields: opts.fields },
     });
+  }
+
+  // ── Collections ────────────────────────────────────────────────────────────────
+
+  async listCollections(): Promise<Collection[]> {
+    const res = await this.request<{ items: Collection[] }>('GET', '/api/v1/collections');
+    return res.items;
+  }
+
+  createCollection(input: { name: string; description?: string }): Promise<Collection> {
+    return this.request<Collection>('POST', '/api/v1/collections', { body: input });
+  }
+
+  collection(id: string): Promise<CollectionDetail> {
+    return this.request<CollectionDetail>('GET', `/api/v1/collections/${encodeURIComponent(id)}`);
+  }
+
+  updateCollection(
+    id: string,
+    patch: { name?: string; description?: string; coverBookId?: string },
+  ): Promise<Collection> {
+    return this.request<Collection>('PATCH', `/api/v1/collections/${encodeURIComponent(id)}`, {
+      body: patch,
+    });
+  }
+
+  async deleteCollection(id: string): Promise<void> {
+    await this.request<unknown>('DELETE', `/api/v1/collections/${encodeURIComponent(id)}`);
+  }
+
+  async addToCollection(id: string, bookIds: string[]): Promise<void> {
+    await this.request<unknown>('POST', `/api/v1/collections/${encodeURIComponent(id)}/items`, {
+      body: { bookIds },
+    });
+  }
+
+  /** Moves bookId before beforeId (omit beforeId to move it to the end). */
+  async reorderCollection(id: string, bookId: string, beforeId?: string): Promise<void> {
+    await this.request<unknown>(
+      'PATCH',
+      `/api/v1/collections/${encodeURIComponent(id)}/items/reorder`,
+      { body: { bookId, beforeId } },
+    );
+  }
+
+  async removeFromCollection(id: string, bookId: string): Promise<void> {
+    await this.request<unknown>(
+      'DELETE',
+      `/api/v1/collections/${encodeURIComponent(id)}/items/${encodeURIComponent(bookId)}`,
+    );
   }
 
   private async request<T>(

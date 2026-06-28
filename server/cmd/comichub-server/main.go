@@ -30,6 +30,7 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/service/browse"
 	"github.com/siposbnc/comic-hub/server/internal/service/library"
 	"github.com/siposbnc/comic-hub/server/internal/service/metadata"
+	"github.com/siposbnc/comic-hub/server/internal/service/organize"
 	"github.com/siposbnc/comic-hub/server/internal/service/reader"
 	"github.com/siposbnc/comic-hub/server/internal/service/reading"
 	"github.com/siposbnc/comic-hub/server/internal/store/sqlite"
@@ -81,6 +82,7 @@ func run() error {
 	store := sqlite.NewStore(db)
 	libraries := library.New(store)
 	browsing := browse.New(store)
+	organizing := organize.New(store)
 
 	// WebSocket hub for push (jobs/progress); services broadcast through it.
 	hub := httptransport.NewHub(logger)
@@ -151,6 +153,7 @@ func run() error {
 		Browse:   browsing,
 		Reading:  readingSvc,
 		Metadata: metaSvc,
+		Organize: organizing,
 		Hub:      hub,
 	})
 
