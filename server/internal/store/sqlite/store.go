@@ -21,6 +21,7 @@ type Store struct {
 	collections  *collectionRepo
 	readingLists *readingListRepo
 	tags         *tagRepo
+	smartLists   *smartListRepo
 }
 
 // NewStore wraps an open database in the catalog repositories.
@@ -37,6 +38,7 @@ func NewStore(db *sql.DB) *Store {
 		collections:  &collectionRepo{db: db},
 		readingLists: &readingListRepo{db: db},
 		tags:         &tagRepo{db: db},
+		smartLists:   &smartListRepo{db: db},
 	}
 }
 
@@ -50,6 +52,7 @@ func (s *Store) Search() domain.SearchRepository            { return s.search }
 func (s *Store) Collections() domain.CollectionRepository   { return s.collections }
 func (s *Store) ReadingLists() domain.ReadingListRepository { return s.readingLists }
 func (s *Store) Tags() domain.TagRepository                 { return s.tags }
+func (s *Store) SmartLists() domain.SmartListRepository     { return s.smartLists }
 
 // compile-time assertion that Store satisfies the domain boundary.
 var _ domain.Repository = (*Store)(nil)

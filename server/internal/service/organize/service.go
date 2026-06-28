@@ -383,6 +383,130 @@ func (s *Service) UnassignTag(ctx context.Context, bookID, tagID string) error {
 	return s.repo.Tags().UnassignFromBook(ctx, bookID, tagID)
 }
 
+// ── Smart lists (rule-based) ───────────────────────────────────────────────────────
+
+// validFields/validOps gate rule input so a bad rule is a clear 400 (the store also
+// whitelists as defense-in-depth).
+var validSmartFields = map[string]bool{
+	domain.SmartFieldTag: true, domain.SmartFieldSeries: true, domain.SmartFieldPublisher: true,
+	domain.SmartFieldFormat: true, domain.SmartFieldAgeRating: true, domain.SmartFieldReadStatus: true,
+}
+var validSmartOps = map[string]bool{
+	domain.SmartOpIs: true, domain.SmartOpIsNot: true, domain.SmartOpContains: true,
+}
+
+func validateSmartRules(rules domain.SmartRules) (domain.SmartRules, error) {
+	if rules.Match == "" {
+		rules.Match = domain.SmartMatchAll
+	}
+	if rules.Match != domain.SmartMatchAll && rules.Match != domain.SmartMatchAny {
+		return rules, fmt.Errorf("%w: match must be \"all\" or \"any\"", domain.ErrValidation)
+	}
+	if len(rules.Rules) == 0 {
+		return rules, fmt.Errorf("%w: at least one rule is required", domain.ErrValidation)
+	}
+	for _, r := range rules.Rules {
+		if !validSmartFields[r.Field] {
+			return rules, fmt.Errorf("%w: unknown rule field %q", domain.ErrValidation, r.Field)
+		}
+		if !validSmartOps[r.Op] {
+			return rules, fmt.Errorf("%w: unknown rule operator %q", domain.ErrValidation, r.Op)
+		}
+		if strings.TrimSpace(r.Value) == "" {
+			return rules, fmt.Errorf("%w: rule value is required", domain.ErrValidation)
+		}
+	}
+	return rules, nil
+}
+
+// CreateSmartList validates the rules and persists a new smart list owned by ownerID.
+func (s *Service) CreateSmartList(ctx context.Context, ownerID, name string, rules domain.SmartRules) (domain.SmartList, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return domain.SmartList{}, fmt.Errorf("%w: name is required", domain.ErrValidation)
+	}
+	rules, err := validateSmartRules(rules)
+	if err != nil {
+		return domain.SmartList{}, err
+	}
+	now := time.Now().UnixMilli()
+	l := domain.SmartList{
+		ID: ulid.New(), OwnerID: ownerID, Name: name, Rules: rules, CreatedAt: now, UpdatedAt: now,
+	}
+	return s.repo.SmartLists().Create(ctx, l)
+}
+
+// ListSmartLists returns all smart lists, each with its result count for the acting user.
+func (s *Service) ListSmartLists(ctx context.Context, userID string) ([]domain.SmartList, error) {
+	lists, err := s.repo.SmartLists().List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for i := range lists {
+		if n, err := s.repo.SmartLists().Count(ctx, lists[i].Rules, userID); err == nil {
+			lists[i].BookCount = n
+		}
+	}
+	return lists, nil
+}
+
+// GetSmartList returns one smart list (ErrNotFound if absent).
+func (s *Service) GetSmartList(ctx context.Context, id string) (domain.SmartList, error) {
+	return s.repo.SmartLists().Get(ctx, id)
+}
+
+// SmartListResults evaluates a smart list and returns matching book ids for the acting user.
+func (s *Service) SmartListResults(ctx context.Context, id, userID string, limit int) (domain.SmartList, []string, error) {
+	l, err := s.repo.SmartLists().Get(ctx, id)
+	if err != nil {
+		return domain.SmartList{}, nil, err
+	}
+	ids, err := s.repo.SmartLists().Evaluate(ctx, l.Rules, userID, limit)
+	if err != nil {
+		return domain.SmartList{}, nil, err
+	}
+	l.BookCount = len(ids)
+	return l, ids, nil
+}
+
+// SmartListPatch carries optional edits; nil fields are left unchanged.
+type SmartListPatch struct {
+	Name  *string
+	Rules *domain.SmartRules
+}
+
+// UpdateSmartList applies a partial edit (name and/or rules) and returns the result.
+func (s *Service) UpdateSmartList(ctx context.Context, id string, patch SmartListPatch) (domain.SmartList, error) {
+	l, err := s.repo.SmartLists().Get(ctx, id)
+	if err != nil {
+		return domain.SmartList{}, err
+	}
+	if patch.Name != nil {
+		name := strings.TrimSpace(*patch.Name)
+		if name == "" {
+			return domain.SmartList{}, fmt.Errorf("%w: name cannot be empty", domain.ErrValidation)
+		}
+		l.Name = name
+	}
+	if patch.Rules != nil {
+		rules, err := validateSmartRules(*patch.Rules)
+		if err != nil {
+			return domain.SmartList{}, err
+		}
+		l.Rules = rules
+	}
+	l.UpdatedAt = time.Now().UnixMilli()
+	if err := s.repo.SmartLists().Update(ctx, l); err != nil {
+		return domain.SmartList{}, err
+	}
+	return l, nil
+}
+
+// DeleteSmartList removes a smart list.
+func (s *Service) DeleteSmartList(ctx context.Context, id string) error {
+	return s.repo.SmartLists().Delete(ctx, id)
+}
+
 func dedupeNonEmpty(in []string) []string {
 	seen := make(map[string]struct{}, len(in))
 	var out []string

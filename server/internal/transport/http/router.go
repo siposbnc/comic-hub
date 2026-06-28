@@ -106,6 +106,15 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/{id}/books", handleTagBooks(d.Organize, d.Browse))
 		})
 
+		// Smart lists: rule-based, evaluated on demand.
+		r.Route("/smart-lists", func(r chi.Router) {
+			r.Get("/", handleListSmartLists(d.Organize))
+			r.Post("/", handleCreateSmartList(d.Organize))
+			r.Patch("/{id}", handleUpdateSmartList(d.Organize))
+			r.Delete("/{id}", handleDeleteSmartList(d.Organize))
+			r.Get("/{id}/results", handleSmartListResults(d.Organize, d.Browse))
+		})
+
 		r.Get("/discover", handleDiscover(d.Browse))
 		r.Get("/search", handleSearch(d.Browse))
 

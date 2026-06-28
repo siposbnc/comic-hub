@@ -174,6 +174,40 @@ export interface Tag {
   bookCount: number;
 }
 
+/** Fields a smart-list rule can test. */
+export type SmartField = 'tag' | 'series' | 'publisher' | 'format' | 'ageRating' | 'readStatus';
+/** Operators a smart-list rule can use. */
+export type SmartOp = 'is' | 'isNot' | 'contains';
+
+export interface SmartRule {
+  field: SmartField;
+  op: SmartOp;
+  value: string;
+}
+
+export interface SmartRules {
+  /** How to combine rules: all = AND, any = OR. */
+  match: 'all' | 'any';
+  rules: SmartRule[];
+}
+
+/** A saved rule set whose contents are evaluated on demand. */
+export interface SmartList {
+  id: string;
+  name: string;
+  rules: SmartRules;
+  /** Result count for the acting user. */
+  bookCount: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** A smart list plus its evaluated books. */
+export interface SmartListResults {
+  smartList: SmartList;
+  books: BookCard[];
+}
+
 /** The Home feed. */
 export interface Discover {
   continueReading: BookCard[];

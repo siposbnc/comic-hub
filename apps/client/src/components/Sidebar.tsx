@@ -177,6 +177,13 @@ export function Sidebar() {
             active={pathname.startsWith('/reading-lists')}
             onClick={() => navigate({ to: '/reading-lists' })}
           />
+          <SpineTab
+            index={next()}
+            icon="filter"
+            label="Smart Lists"
+            active={pathname.startsWith('/smart-lists')}
+            onClick={() => navigate({ to: '/smart-lists' })}
+          />
 
           <NavSection>System</NavSection>
           <SpineTab

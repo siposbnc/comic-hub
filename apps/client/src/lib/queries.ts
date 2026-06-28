@@ -5,7 +5,7 @@ import {
   useMutation,
   useQueryClient,
 } from '@tanstack/react-query';
-import type { ReadStatus } from '@comichub/api-client';
+import type { ReadStatus, SmartRules } from '@comichub/api-client';
 import { useClient } from './client.js';
 
 /**
@@ -25,6 +25,9 @@ export const qk = {
   collection: (id: string) => ['collection', id] as const,
   readingLists: ['readingLists'] as const,
   readingList: (id: string) => ['readingList', id] as const,
+  tags: ['tags'] as const,
+  smartLists: ['smartLists'] as const,
+  smartList: (id: string) => ['smartList', id] as const,
 };
 
 /** App-wide QueryClient. Covers are immutable + content-addressed, so list data can be
@@ -243,6 +246,43 @@ export function useRemoveFromReadingList() {
       qc.invalidateQueries({ queryKey: qk.readingList(id) });
       qc.invalidateQueries({ queryKey: qk.readingLists });
     },
+  });
+}
+
+// ── Tags ─────────────────────────────────────────────────────────────────────────────
+
+export function useTags() {
+  const client = useClient();
+  return useQuery({ queryKey: qk.tags, queryFn: () => client.listTags() });
+}
+
+// ── Smart lists (rule-based) ─────────────────────────────────────────────────────────
+
+export function useSmartLists() {
+  const client = useClient();
+  return useQuery({ queryKey: qk.smartLists, queryFn: () => client.listSmartLists() });
+}
+
+export function useSmartList(id: string) {
+  const client = useClient();
+  return useQuery({ queryKey: qk.smartList(id), queryFn: () => client.smartListResults(id) });
+}
+
+export function useCreateSmartList() {
+  const client = useClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string; rules: SmartRules }) => client.createSmartList(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.smartLists }),
+  });
+}
+
+export function useDeleteSmartList() {
+  const client = useClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => client.deleteSmartList(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.smartLists }),
   });
 }
 

@@ -18,6 +18,7 @@ type Repository interface {
 	Collections() CollectionRepository
 	ReadingLists() ReadingListRepository
 	Tags() TagRepository
+	SmartLists() SmartListRepository
 }
 
 // LibraryRepository persists libraries and their roots.

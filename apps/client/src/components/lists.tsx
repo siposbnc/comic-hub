@@ -7,7 +7,7 @@ import { BookCover } from './cards.js';
 import { useSeriesNames } from '../lib/queries.js';
 
 /** A row in a lists index: name on the left, item count + chevron on the right. */
-interface IndexItem {
+export interface IndexItem {
   id: string;
   name: string;
   bookCount: number;
@@ -75,7 +75,7 @@ export function ListIndexScreen({
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 720 }}>
           {items.map((it) => (
-            <IndexRow key={it.id} item={it} onOpen={() => onOpen(it.id)} />
+            <ListRow key={it.id} item={it} onOpen={() => onOpen(it.id)} />
           ))}
         </div>
       )}
@@ -83,7 +83,8 @@ export function ListIndexScreen({
   );
 }
 
-function IndexRow({ item, onOpen }: { item: IndexItem; onOpen: () => void }) {
+/** A clickable index row: name, item count, chevron. Shared by every lists index. */
+export function ListRow({ item, onOpen }: { item: IndexItem; onOpen: () => void }) {
   const [hover, setHover] = useState(false);
   return (
     <button
@@ -142,7 +143,8 @@ export function ListDetailScreen({
   onRetry: () => void;
   onBack: () => void;
   onDelete: () => void;
-  onRemoveBook: (bookId: string) => void;
+  /** When provided, each cover gets a corner remove button. Omit for rule-derived lists. */
+  onRemoveBook?: (bookId: string) => void;
   emptyText: string;
 }) {
   const seriesNames = useSeriesNames();
@@ -241,15 +243,17 @@ export function ListDetailScreen({
             renderItem={(b) => (
               <div style={{ position: 'relative' }}>
                 <BookCover book={b} seriesName={seriesNames.get(b.seriesId)} />
-                <div style={{ position: 'absolute', top: 6, right: 6 }}>
-                  <IconButton
-                    icon="x"
-                    label="Remove from list"
-                    variant="solid"
-                    size="sm"
-                    onClick={() => onRemoveBook(b.id)}
-                  />
-                </div>
+                {onRemoveBook && (
+                  <div style={{ position: 'absolute', top: 6, right: 6 }}>
+                    <IconButton
+                      icon="x"
+                      label="Remove from list"
+                      variant="solid"
+                      size="sm"
+                      onClick={() => onRemoveBook(b.id)}
+                    />
+                  </div>
+                )}
               </div>
             )}
           />

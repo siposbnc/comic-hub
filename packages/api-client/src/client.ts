@@ -24,6 +24,9 @@ import type {
   SeriesMatchCandidate,
   ServerInfo,
   ServerStats,
+  SmartList,
+  SmartListResults,
+  SmartRules,
   Tag,
 } from './types.js';
 
@@ -423,6 +426,35 @@ export class ComicHubClient {
     await this.request<unknown>(
       'DELETE',
       `/api/v1/books/${encodeURIComponent(bookId)}/tags/${encodeURIComponent(tagId)}`,
+    );
+  }
+
+  // ── Smart lists (rule-based) ─────────────────────────────────────────────────────
+
+  async listSmartLists(): Promise<SmartList[]> {
+    const res = await this.request<{ items: SmartList[] }>('GET', '/api/v1/smart-lists');
+    return res.items;
+  }
+
+  createSmartList(input: { name: string; rules: SmartRules }): Promise<SmartList> {
+    return this.request<SmartList>('POST', '/api/v1/smart-lists', { body: input });
+  }
+
+  updateSmartList(id: string, patch: { name?: string; rules?: SmartRules }): Promise<SmartList> {
+    return this.request<SmartList>('PATCH', `/api/v1/smart-lists/${encodeURIComponent(id)}`, {
+      body: patch,
+    });
+  }
+
+  async deleteSmartList(id: string): Promise<void> {
+    await this.request<unknown>('DELETE', `/api/v1/smart-lists/${encodeURIComponent(id)}`);
+  }
+
+  /** Evaluates a smart list and returns it with its matching books. */
+  smartListResults(id: string): Promise<SmartListResults> {
+    return this.request<SmartListResults>(
+      'GET',
+      `/api/v1/smart-lists/${encodeURIComponent(id)}/results`,
     );
   }
 

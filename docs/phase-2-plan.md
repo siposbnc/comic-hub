@@ -97,7 +97,7 @@ Accessibility gate per screen; CI bench thresholds; docs kept in lockstep (03-ap
 | F1 — CB7 + CBT | ✅ done |
 | F2 — PDF (MuPDF + C toolchain) | ⏳ deferred (skipped for now) |
 | S — Search (FTS5 + `/search` + TopBar type-ahead) | ✅ done |
-| O — Organization | 🚧 in progress — O1 Collections + O2 Reading lists + O3 Tags (server+SDK) and O5 client UI (sidebar Lists nav, index/detail screens, Add-to-list on Book) done; smart lists (O4) + a tag-browse screen pending |
+| O — Organization | 🚧 in progress — O1 Collections, O2 Reading lists, O3 Tags, O4 Smart lists (rule engine + evaluator), O5 client UI (Lists nav + index/detail + smart-list rule builder + Add-to-list) done; a tag-browse/assign screen still pending |
 | W / R — watch/health, reader | ⏳ pending |
 
 Remaining metadata polish (non-blocking): GCD as a second provider, ComicInfo
