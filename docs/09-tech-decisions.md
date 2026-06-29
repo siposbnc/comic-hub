@@ -153,6 +153,46 @@ clean seam to swap.
 
 ---
 
+## ADR-010 — Hosted GCD as the default, zero-config metadata provider
+
+**Decision:** Stand up a ComicHub-operated metadata service backed by a slimmed copy of the
+**Grand Comics Database** (GCD, comics.org) data dump, exposed through a thin read-only REST API
+that conforms to the existing `providers.Provider` interface. Ship it **default-on with no user
+credentials**. Keep Comic Vine and Metron as **optional enrichment** providers (the matcher
+already merges and ranks candidates across all configured providers).
+
+**Context:** Today metadata works only after a user obtains a Comic Vine API key or a Metron
+account — a real onboarding wall. GCD is the deepest bibliographic index in existence (≈228k
+series, ≈2.2M issues, ≈4.5M stories, ≈109k creators) and the strongest source for series/issue/
+publisher/date/credits/genres. Its dump is CC BY-SA 4.0 and regenerated bi-weekly. Self-hosting
+it centrally turns "get an API key first" into "metadata just works."
+
+**Alternatives rejected:**
+- _Local per-server import_ of the dump (8–15 GB + multi-hour imports + bi-weekly refresh on
+  every user's machine) — far too heavy for a desktop-first app.
+- _GCD-only, removing CV/Metron_ — loses normalized characters (GCD stores them as free text),
+  clean story-arc entities, and provider cover thumbnails. CV/Metron cost nothing (user keys) and
+  fill exactly these gaps, so they stay optional.
+- _Scraping comics.org_ — fragile and against the site's spirit; the dump is the sanctioned path.
+
+**Consequences:**
+- Zero-config metadata for everyone; CV/Metron become opt-in "extra character/arc data."
+- Introduces ComicHub-operated infrastructure: a slim Postgres (~5–8 GB) + thin API + a
+  cron that downloads the dump → loads a staging DB → atomic swap. Est. **~$10/mo** DIY VPS to
+  **~$25/mo** managed; reads are static between refreshes and **highly cacheable**, so DB load
+  stays low as usage grows. This mirrors the existing "call an external provider API" model — it
+  is not a new architectural dependency class.
+- **Attribution required** (CC BY-SA 4.0); surface a GCD credit in the UI/docs. **Do not** serve
+  GCD cover *images* (separate, unclear image rights) — ComicHub already draws covers from the
+  comic files themselves; provider cover URLs only feed the match-picker thumbnail.
+- Character/story-arc coverage from GCD is weaker; those tabs stay best-served by an enrichment
+  provider until/unless GCD free-text parsing proves good enough.
+
+See the implementation plan in [phase-2-plan.md](phase-2-plan.md#deferred-metadata-polish-backlog-future-updates)
+(the GCD backlog item) for the phased build.
+
+---
+
 ## Open questions / to revisit
 
 - **Product name** — "ComicHub" is provisional; revisit before public release (trademark check).

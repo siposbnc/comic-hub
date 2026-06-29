@@ -118,8 +118,27 @@ anytime.
    preview: per-field vs. grouped lock granularity; ship edit+lock together vs. lock-only first.
 2. **Book-level candidate picker** (UI — preview-gated). Match a single issue rather than the
    whole series. Needs a backend issue-search (candidates scoped to one book) + a picker dialog.
-3. **GCD as a third provider** (pure backend, same `providers.Provider` interface — not
-   preview-gated).
+3. **GCD as the default, hosted metadata provider** (mostly backend; see
+   [ADR-010](09-tech-decisions.md#adr-010--hosted-gcd-as-the-default-zero-config-metadata-provider)).
+   Decision: **host the Grand Comics Database centrally** behind a thin ComicHub API and ship it
+   **default-on, zero-config**; keep Comic Vine + Metron as **optional enrichment** (matcher
+   already merges across providers). Phased:
+   1. **Importer + slim schema** (offline, no ComicHub code). Script ingests the bi-weekly GCD
+      MySQL dump into a read-optimized Postgres (series / issue / story / creator / publisher +
+      credit/character/genre joins; ~5–8 GB). Automate refresh: download dump → load staging DB →
+      atomic swap. Handle the free-account login the dump download requires.
+   2. **Hosted read API.** Read-only endpoints mirroring `providers.Provider`
+      (`SearchSeries` / `SeriesMeta` / `Issues` / `Issue`), clean JSON, GCD attribution +
+      cache-friendly headers (data is static between refreshes). Deploy on a cheap VPS
+      (~$10/mo) or managed PG (~$25/mo). **Do not serve GCD cover images** (image-rights).
+   3. **`providers/gcd` client** in the server — thin HTTP client implementing
+      `providers.Provider`, wired into `buildProviders`, **default-on with no credentials**.
+      Reuses all existing match/merge/auto-match logic unchanged.
+   4. **Default-on UX** — Settings shows GCD as "connected (built-in)"; CV/Metron reframed as
+      "add for extra character / story-arc data." Surface the GCD attribution.
+
+   Known gaps to accept (per ADR-010): GCD characters are free-text (not normalized) and it has
+   no clean story-arc entity, so those stay best-served by an enrichment provider for now.
 
 ## Verification
 
