@@ -105,12 +105,19 @@ func (c *Client) SeriesMeta(ctx context.Context, seriesProviderID string) (provi
 	if err := c.getDetail(ctx, "/series/"+seriesProviderID+"/", &d); err != nil {
 		return providers.SeriesMeta{}, err
 	}
+	var genres []string
+	for _, g := range d.Genres {
+		if g.Name != "" {
+			genres = append(genres, g.Name)
+		}
+	}
 	return providers.SeriesMeta{
 		Name:        d.Name,
 		Year:        d.YearBegan,
 		Publisher:   d.Publisher.Name,
 		Description: cleanText(d.Desc),
 		CoverURL:    d.Image,
+		Genres:      genres,
 	}, nil
 }
 
@@ -291,12 +298,13 @@ type mSeriesList struct {
 }
 
 type mSeriesDetail struct {
-	ID        int      `json:"id"`
-	Name      string   `json:"name"`
-	YearBegan int      `json:"year_began"`
-	Publisher mGeneric `json:"publisher"`
-	Desc      string   `json:"desc"`
-	Image     string   `json:"image"`
+	ID        int        `json:"id"`
+	Name      string     `json:"name"`
+	YearBegan int        `json:"year_began"`
+	Publisher mGeneric   `json:"publisher"`
+	Desc      string     `json:"desc"`
+	Image     string     `json:"image"`
+	Genres    []mGeneric `json:"genres"`
 }
 
 type mIssueList struct {

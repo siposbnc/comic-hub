@@ -32,6 +32,7 @@ type SeriesMeta struct {
 	Publisher   string
 	Description string
 	CoverURL    string
+	Genres      []string
 }
 
 // ArcRef is a reference to a story arc an issue belongs to (id + display name).

@@ -28,7 +28,7 @@ func (fakeProvider) SeriesMeta(_ context.Context, vol string) (providers.SeriesM
 	if vol == "vol-1" {
 		return providers.SeriesMeta{
 			Name: "Wonder Woman", Year: 2016, Publisher: "DC Comics",
-			Description: "The Amazon warrior.",
+			Description: "The Amazon warrior.", Genres: []string{"Superhero", "Action"},
 		}, nil
 	}
 	return providers.SeriesMeta{}, nil
@@ -168,6 +168,12 @@ func TestMatchSeries(t *testing.T) {
 	ids, _ := store.Metadata().StoryArcBookIDs(ctx, arcs[0].ID)
 	if len(ids) != 2 {
 		t.Fatalf("arc book ids = %v", ids)
+	}
+
+	// Series genres (fallback from SeriesMeta) propagate to the matched books → aggregation.
+	genres, _ := store.Metadata().SeriesGenres(ctx, seriesID)
+	if len(genres) != 2 {
+		t.Fatalf("series genres = %v, want 2", genres)
 	}
 
 	// Re-matching rebuilds arcs without duplicating them.

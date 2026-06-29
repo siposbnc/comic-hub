@@ -241,6 +241,12 @@ func (s *Service) MatchSeries(ctx context.Context, seriesID, providerName, volum
 			if err != nil {
 				return err
 			}
+			// Genres are a series-level concept for most providers (e.g. Metron exposes them
+			// on the series, not the issue) — fall back to the series' genres so the Details
+			// tab is populated.
+			if len(im.Genres) == 0 {
+				im.Genres = sm.Genres
+			}
 			if err := s.applyIssueMeta(ctx, b.ID, p.Name(), iss.ProviderID, im, fields); err != nil {
 				return err
 			}
