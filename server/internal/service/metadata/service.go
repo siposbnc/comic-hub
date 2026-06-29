@@ -111,9 +111,10 @@ func (s *Service) ApplyBook(ctx context.Context, bookID, providerName, issueProv
 	return s.applyIssueMeta(ctx, bookID, p.Name(), issueProviderID, im, fields)
 }
 
-// MatchSeries links a series to a provider volume and applies each provider issue's
-// metadata to the local book with the matching issue number. progress, if non-nil, is
-// called after each book (done, total).
+// MatchSeries links a series to a provider volume: it writes the series-level metadata
+// (publisher/year/description + the provider link, state=matched) and applies each provider
+// issue's metadata to the local book with the matching issue number. progress, if non-nil,
+// is called after each book (done, total).
 func (s *Service) MatchSeries(ctx context.Context, seriesID, providerName, volumeProviderID string, fields []string, progress func(done, total int)) error {
 	p, err := s.provider(providerName)
 	if err != nil {
@@ -127,6 +128,23 @@ func (s *Service) MatchSeries(ctx context.Context, seriesID, providerName, volum
 	if err != nil {
 		return err
 	}
+
+	// Series-level metadata (best-effort: a provider that can't supply it still matches issues).
+	sm, smErr := p.SeriesMeta(ctx, volumeProviderID)
+	if smErr != nil {
+		return smErr
+	}
+	if err := s.repo.Series().WriteMatch(ctx, seriesID, domain.SeriesMatch{
+		Publisher:   sm.Publisher,
+		Year:        sm.Year,
+		Description: sm.Description,
+		State:       domain.MetaMatched,
+		Provider:    p.Name(),
+		ProviderID:  volumeProviderID,
+	}); err != nil {
+		return err
+	}
+
 	byNumber := make(map[string]providers.IssueCandidate, len(issues))
 	for _, iss := range issues {
 		byNumber[normalizeNumber(iss.Number)] = iss
@@ -146,6 +164,63 @@ func (s *Service) MatchSeries(ctx context.Context, seriesID, providerName, volum
 				return err
 			}
 		}
+		if progress != nil {
+			progress(i+1, total)
+		}
+	}
+	return nil
+}
+
+// HasProviders reports whether any metadata provider is configured (online matching is
+// possible). The scan pipeline checks this before enqueuing an auto-match.
+func (s *Service) HasProviders() bool { return len(s.providers) > 0 }
+
+// autoMatchThreshold is the minimum candidate score to auto-apply without user confirmation.
+// 1.0 means an exact, fully-confident match (see providers.ScoreSeries).
+const autoMatchThreshold = 1.0
+
+// AutoMatchSeries searches the default provider for a series and, if the best candidate is
+// a 100%-confidence match, applies it; otherwise the series is flagged incomplete so the
+// user can match it manually. A series with no configured provider is left untouched.
+func (s *Service) AutoMatchSeries(ctx context.Context, seriesID string) error {
+	if s.def == "" {
+		return nil
+	}
+	cands, err := s.Candidates(ctx, seriesID, s.def, "")
+	if err != nil {
+		return err
+	}
+	if len(cands) > 0 && cands[0].Score >= autoMatchThreshold {
+		return s.MatchSeries(ctx, seriesID, s.def, cands[0].ProviderID, nil, nil)
+	}
+	return s.repo.Series().SetMetadataState(ctx, seriesID, domain.MetaIncomplete)
+}
+
+// AutoMatchLibrary auto-matches every not-yet-matched series in a library (state "none"):
+// already-matched series and ones already flagged incomplete are skipped so repeated scans
+// don't re-hit the provider. progress, if non-nil, is called after each series.
+func (s *Service) AutoMatchLibrary(ctx context.Context, libraryID string, progress func(done, total int)) error {
+	if s.def == "" {
+		return nil
+	}
+	all, err := s.repo.Series().ListByLibrary(ctx, libraryID)
+	if err != nil {
+		return err
+	}
+	pending := make([]domain.Series, 0, len(all))
+	for _, ser := range all {
+		if ser.MetadataState == "" || ser.MetadataState == domain.MetaNone {
+			pending = append(pending, ser)
+		}
+	}
+	total := len(pending)
+	for i, ser := range pending {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		// A single series' failure (e.g. a transient provider error) shouldn't abort the
+		// whole library; leave it as-is to retry on a later scan.
+		_ = s.AutoMatchSeries(ctx, ser.ID)
 		if progress != nil {
 			progress(i+1, total)
 		}

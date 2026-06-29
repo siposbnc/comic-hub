@@ -23,6 +23,12 @@ type MatchJobPayload struct {
 	Fields           []string `json:"fields,omitempty"`
 }
 
+// AutoMatchJobPayload is the JSON body of a metadata_automatch job: auto-match every
+// not-yet-matched series in a library after a scan. Shared with the job runner in main.
+type AutoMatchJobPayload struct {
+	LibraryID string `json:"libraryId"`
+}
+
 // applyRequest is the body of the manual book/series apply endpoints.
 type applyRequest struct {
 	Provider   string   `json:"provider"`

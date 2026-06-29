@@ -24,6 +24,16 @@ func (fakeProvider) SearchSeries(context.Context, string) ([]providers.SeriesCan
 	}, nil
 }
 
+func (fakeProvider) SeriesMeta(_ context.Context, vol string) (providers.SeriesMeta, error) {
+	if vol == "vol-1" {
+		return providers.SeriesMeta{
+			Name: "Wonder Woman", Year: 2016, Publisher: "DC Comics",
+			Description: "The Amazon warrior.",
+		}, nil
+	}
+	return providers.SeriesMeta{}, nil
+}
+
 func (fakeProvider) Issues(_ context.Context, vol string) ([]providers.IssueCandidate, error) {
 	if vol != "vol-1" {
 		return nil, nil
@@ -133,6 +143,90 @@ func TestMatchSeries(t *testing.T) {
 	if b2.Title != "Year One Part One" {
 		t.Fatalf("book2 title = %q", b2.Title)
 	}
+
+	// The series itself is filled + linked + marked matched.
+	ser, _ := store.Series().Get(ctx, seriesID)
+	if ser.MetadataState != domain.MetaMatched {
+		t.Fatalf("series state = %q, want matched", ser.MetadataState)
+	}
+	if ser.Publisher != "DC Comics" || ser.Description != "The Amazon warrior." {
+		t.Fatalf("series metadata not written: %+v", ser)
+	}
+	if ser.MatchProvider != "fake" || ser.MatchProviderID != "vol-1" {
+		t.Fatalf("series provider link = %q/%q", ser.MatchProvider, ser.MatchProviderID)
+	}
+}
+
+func TestAutoMatchSeriesApplies100Percent(t *testing.T) {
+	ctx := context.Background()
+	store := newStore(t)
+	seriesID, book1, _ := seed(t, store) // "Wonder Woman" 2016, 2 issues → exact 100% match
+	svc := New(store, fakeProvider{})
+
+	if err := svc.AutoMatchSeries(ctx, seriesID); err != nil {
+		t.Fatalf("AutoMatchSeries: %v", err)
+	}
+	ser, _ := store.Series().Get(ctx, seriesID)
+	if ser.MetadataState != domain.MetaMatched {
+		t.Fatalf("series state = %q, want matched", ser.MetadataState)
+	}
+	if b1, _ := store.Books().Get(ctx, book1); b1.MetadataState != domain.MetaMatched {
+		t.Fatalf("book1 not matched by auto-match: %+v", b1)
+	}
+}
+
+func TestAutoMatchFlagsIncompleteWithoutPerfectMatch(t *testing.T) {
+	ctx := context.Background()
+	store := newStore(t)
+	// A series the fake provider's candidates can't perfectly match.
+	libID := ulid.New()
+	if _, err := store.Libraries().Create(ctx, domain.Library{ID: libID, Name: "DC", Kind: "comic", Roots: []string{`C:\DC`}, CreatedAt: 1, UpdatedAt: 1}); err != nil {
+		t.Fatal(err)
+	}
+	seriesID := ulid.New()
+	if _, err := store.Series().Upsert(ctx, domain.Series{ID: seriesID, LibraryID: libID, Name: "Batman", SortName: "Batman", Year: 2011, CreatedAt: 1, UpdatedAt: 1}); err != nil {
+		t.Fatal(err)
+	}
+	svc := New(store, fakeProvider{})
+
+	if err := svc.AutoMatchSeries(ctx, seriesID); err != nil {
+		t.Fatalf("AutoMatchSeries: %v", err)
+	}
+	ser, _ := store.Series().Get(ctx, seriesID)
+	if ser.MetadataState != domain.MetaIncomplete {
+		t.Fatalf("series state = %q, want incomplete", ser.MetadataState)
+	}
+}
+
+func TestAutoMatchLibrarySkipsAlreadyMatched(t *testing.T) {
+	ctx := context.Background()
+	store := newStore(t)
+	seriesID, _, _ := seed(t, store)
+	svc := New(store, fakeProvider{})
+
+	if err := svc.AutoMatchLibrary(ctx, seriesLibrary(t, store, seriesID), nil); err != nil {
+		t.Fatalf("AutoMatchLibrary: %v", err)
+	}
+	ser, _ := store.Series().Get(ctx, seriesID)
+	if ser.MetadataState != domain.MetaMatched {
+		t.Fatalf("series state = %q, want matched", ser.MetadataState)
+	}
+	// Re-running must not change a matched series (it's skipped, not re-matched).
+	if err := svc.AutoMatchLibrary(ctx, ser.LibraryID, nil); err != nil {
+		t.Fatalf("AutoMatchLibrary rerun: %v", err)
+	}
+	if again, _ := store.Series().Get(ctx, seriesID); again.MetadataState != domain.MetaMatched {
+		t.Fatalf("state changed on rerun: %q", again.MetadataState)
+	}
+}
+
+func seriesLibrary(t *testing.T, store *sqlite.Store, seriesID string) string {
+	t.Helper()
+	ser, err := store.Series().Get(context.Background(), seriesID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ser.LibraryID
 }
 
 func TestApplyBookRespectsLock(t *testing.T) {

@@ -28,7 +28,10 @@ const (
 
 // Comic Vine prefixes typed resource ids: volumes are 4050-, issues 4000-. We store the
 // bare numeric id in our candidates and re-apply the prefix when fetching detail.
-const issueResourcePrefix = "4000-"
+const (
+	issueResourcePrefix  = "4000-"
+	volumeResourcePrefix = "4050-"
+)
 
 // Client is a Comic Vine metadata provider. The zero value is not usable; use New.
 type Client struct {
@@ -97,6 +100,24 @@ func (c *Client) SearchSeries(ctx context.Context, query string) ([]providers.Se
 		})
 	}
 	return out, nil
+}
+
+// SeriesMeta fetches series-level (volume) detail: description, publisher, start year.
+func (c *Client) SeriesMeta(ctx context.Context, seriesProviderID string) (providers.SeriesMeta, error) {
+	params := url.Values{}
+	params.Set("field_list", "name,start_year,publisher,deck,description,image")
+
+	var v cvVolumeDetail
+	if err := c.get(ctx, "/volume/"+volumeResourcePrefix+seriesProviderID+"/", params, &v); err != nil {
+		return providers.SeriesMeta{}, err
+	}
+	return providers.SeriesMeta{
+		Name:        v.Name,
+		Year:        atoiSafe(v.StartYear),
+		Publisher:   v.Publisher.Name,
+		Description: summary(v.Deck, v.Description),
+		CoverURL:    v.Image.OriginalURL,
+	}, nil
 }
 
 // Issues lists the issues of a matched volume (series), in issue-number order.
@@ -240,6 +261,15 @@ type cvVolume struct {
 	CountOfIssues int     `json:"count_of_issues"`
 	Image         cvImage `json:"image"`
 	Publisher     cvNamed `json:"publisher"`
+}
+
+type cvVolumeDetail struct {
+	Name        string  `json:"name"`
+	StartYear   string  `json:"start_year"`
+	Publisher   cvNamed `json:"publisher"`
+	Deck        string  `json:"deck"`
+	Description string  `json:"description"`
+	Image       cvImage `json:"image"`
 }
 
 type cvIssue struct {

@@ -117,6 +117,10 @@ export interface Bookmark {
   updatedAt: number;
 }
 
+/** Where a series/book's metadata came from. `incomplete` = auto-match found no 100%
+ *  match and the user should match it manually. */
+export type MetadataState = 'none' | 'sidecar' | 'matched' | 'locked' | 'incomplete';
+
 /** A series in the library grid. */
 export interface SeriesCard {
   id: string;
@@ -126,6 +130,7 @@ export interface SeriesCard {
   bookCount: number;
   readCount: number;
   coverBookId?: string;
+  metadataState?: MetadataState;
 }
 
 /** A book in a list/rail/grid. */
@@ -149,6 +154,7 @@ export interface SeriesDetail {
   readingDir: 'ltr' | 'rtl';
   bookCount: number;
   readCount: number;
+  metadataState?: MetadataState;
   books: BookCard[];
 }
 

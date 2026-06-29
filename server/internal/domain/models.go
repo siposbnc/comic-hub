@@ -19,6 +19,9 @@ const (
 	MetaSidecar MetadataState = "sidecar" // from ComicInfo.xml
 	MetaMatched MetadataState = "matched" // from an online provider
 	MetaLocked  MetadataState = "locked"  // user-edited; never overwritten
+	// MetaIncomplete marks a series the auto-matcher tried but couldn't confidently match
+	// (no 100% candidate) — it's surfaced to the user to match manually.
+	MetaIncomplete MetadataState = "incomplete"
 )
 
 // ReadStatus is a user's reading state for a book.
@@ -52,8 +55,26 @@ type Series struct {
 	Description string
 	ReadingDir  ReadingDirection
 	CoverBookID string
-	CreatedAt   int64
-	UpdatedAt   int64
+	// MetadataState tracks online matching at the series level: none (not yet tried),
+	// matched (a provider volume applied), or incomplete (auto-match found no 100% match).
+	MetadataState MetadataState
+	// MatchProvider / MatchProviderID record the linked provider volume so a re-match or
+	// a story-arc/volume fetch reuses it. Empty until matched.
+	MatchProvider   string
+	MatchProviderID string
+	CreatedAt       int64
+	UpdatedAt       int64
+}
+
+// SeriesMatch is the series-level metadata an online match writes (the scalar fields plus
+// the provider link + resolved state). Issue-level fields are written per book separately.
+type SeriesMatch struct {
+	Publisher   string
+	Year        int
+	Description string
+	State       MetadataState
+	Provider    string
+	ProviderID  string
 }
 
 // Book is a single comic file — the atomic readable unit.

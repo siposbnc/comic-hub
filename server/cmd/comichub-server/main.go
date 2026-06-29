@@ -110,28 +110,51 @@ func run() error {
 	runner.OnUpdate(hub.BroadcastJob)
 	defer runner.Shutdown()
 	sc := scanner.New(store, registry, logger, hashLargeThreshold)
-	runner.Register(domain.JobScan, func(ctx context.Context, payload string, progress jobs.ProgressFunc) error {
-		var p scanner.JobPayload
-		if err := json.Unmarshal([]byte(payload), &p); err != nil {
-			return err
-		}
-		return sc.Scan(ctx, p.LibraryID, p.Full, scanner.ProgressFunc(progress))
-	})
 
 	// Online metadata matching (Comic Vine via COMICVINE_API_KEY). The metadata_match
-	// job batch-applies a chosen provider volume to a series' books.
+	// job batch-applies a chosen provider volume to a series' books; the metadata_automatch
+	// job (chained after a scan) auto-applies 100% matches and flags the rest incomplete.
 	var metaProviders []providers.Provider
 	if cfg.ComicVineAPIKey != "" {
 		metaProviders = append(metaProviders, comicvine.New(cfg.ComicVineAPIKey))
 		logger.Info("metadata provider configured", "provider", "comicvine")
 	}
 	metaSvc := metadata.New(store, metaProviders...)
+
+	runner.Register(domain.JobScan, func(ctx context.Context, payload string, progress jobs.ProgressFunc) error {
+		var p scanner.JobPayload
+		if err := json.Unmarshal([]byte(payload), &p); err != nil {
+			return err
+		}
+		if err := sc.Scan(ctx, p.LibraryID, p.Full, scanner.ProgressFunc(progress)); err != nil {
+			return err
+		}
+		// After a successful scan, auto-match newly-added series (100% matches applied; the
+		// rest flagged incomplete for manual matching) when a provider is configured.
+		if metaSvc.HasProviders() {
+			amPayload, _ := json.Marshal(httptransport.AutoMatchJobPayload{LibraryID: p.LibraryID})
+			if _, err := runner.Submit(ctx, domain.JobMetadataAutoMatch, string(amPayload)); err != nil {
+				logger.Warn("scan: enqueue auto-match failed", "library", p.LibraryID, "err", err)
+			}
+		}
+		return nil
+	})
+
 	runner.Register(domain.JobMetadataMatch, func(ctx context.Context, payload string, progress jobs.ProgressFunc) error {
 		var p httptransport.MatchJobPayload
 		if err := json.Unmarshal([]byte(payload), &p); err != nil {
 			return err
 		}
 		return metaSvc.MatchSeries(ctx, p.SeriesID, p.Provider, p.VolumeProviderID, p.Fields,
+			func(done, total int) { progress(int64(done), int64(total)) })
+	})
+
+	runner.Register(domain.JobMetadataAutoMatch, func(ctx context.Context, payload string, progress jobs.ProgressFunc) error {
+		var p httptransport.AutoMatchJobPayload
+		if err := json.Unmarshal([]byte(payload), &p); err != nil {
+			return err
+		}
+		return metaSvc.AutoMatchLibrary(ctx, p.LibraryID,
 			func(done, total int) { progress(int64(done), int64(total)) })
 	})
 

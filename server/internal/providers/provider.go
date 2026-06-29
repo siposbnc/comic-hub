@@ -24,6 +24,15 @@ type IssueCandidate struct {
 	CoverURL   string
 }
 
+// SeriesMeta is the series-level (provider "volume") metadata for a matched series.
+type SeriesMeta struct {
+	Name        string
+	Year        int
+	Publisher   string
+	Description string
+	CoverURL    string
+}
+
 // IssueMeta is the full metadata for a matched issue.
 type IssueMeta struct {
 	Title       string
@@ -43,6 +52,8 @@ type Provider interface {
 	Name() string
 	// SearchSeries finds candidate series for a query.
 	SearchSeries(ctx context.Context, query string) ([]SeriesCandidate, error)
+	// SeriesMeta fetches series-level detail (description, publisher, …) for a matched series.
+	SeriesMeta(ctx context.Context, seriesProviderID string) (SeriesMeta, error)
 	// Issues lists issues for a matched series.
 	Issues(ctx context.Context, seriesProviderID string) ([]IssueCandidate, error)
 	// Issue fetches full metadata for one issue.

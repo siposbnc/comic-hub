@@ -42,6 +42,11 @@ type SeriesRepository interface {
 	// Summaries lists a library's series with grid aggregates (book/read counts +
 	// resolved cover book) for the given user, in one query.
 	Summaries(ctx context.Context, libraryID, userID string) ([]SeriesSummary, error)
+	// WriteMatch records a series' online-match result: scalar metadata, provider link, and
+	// resolved metadata state. Scanner-owned columns (name, folder, …) are untouched.
+	WriteMatch(ctx context.Context, id string, m SeriesMatch) error
+	// SetMetadataState updates only a series' metadata state (e.g. marking it incomplete).
+	SetMetadataState(ctx context.Context, id string, state MetadataState) error
 }
 
 // BookRepository persists books and their pages.

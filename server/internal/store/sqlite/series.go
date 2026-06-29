@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/siposbnc/comic-hub/server/internal/domain"
 )
@@ -14,8 +15,14 @@ import (
 // the scanner in a later milestone).
 type seriesRepo struct{ db *sql.DB }
 
+// seriesColumns are the scanner-owned columns Upsert writes. The match columns
+// (metadata_state, match_provider, match_provider_id) are deliberately excluded so a
+// rescan never clobbers a series' match; they're written via WriteMatch/SetMetadataState.
 const seriesColumns = `id, library_id, folder_path, name, sort_name, year, publisher,
 	description, reading_dir, cover_book_id, created_at, updated_at`
+
+// seriesReadColumns is seriesColumns plus the match columns, for reads.
+const seriesReadColumns = seriesColumns + `, metadata_state, match_provider, match_provider_id`
 
 func (r *seriesRepo) Upsert(ctx context.Context, s domain.Series) (domain.Series, error) {
 	rd := s.ReadingDir
@@ -46,9 +53,44 @@ func (r *seriesRepo) Upsert(ctx context.Context, s domain.Series) (domain.Series
 	return s, nil
 }
 
+// WriteMatch records a series' online-match result without touching scanner-owned columns
+// (name, folder, reading_dir). Year/publisher/description are only overwritten when the
+// match supplies a value, so a partial match never blanks existing data.
+func (r *seriesRepo) WriteMatch(ctx context.Context, id string, m domain.SeriesMatch) error {
+	state := m.State
+	if state == "" {
+		state = domain.MetaMatched
+	}
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE series SET
+			year              = CASE WHEN ? > 0 THEN ? ELSE year END,
+			publisher         = CASE WHEN ? <> '' THEN ? ELSE publisher END,
+			description       = CASE WHEN ? <> '' THEN ? ELSE description END,
+			metadata_state    = ?,
+			match_provider    = ?,
+			match_provider_id = ?,
+			updated_at        = ?
+		WHERE id = ?`,
+		m.Year, m.Year,
+		m.Publisher, m.Publisher,
+		m.Description, m.Description,
+		string(state), m.Provider, m.ProviderID,
+		time.Now().UnixMilli(), id,
+	)
+	return err
+}
+
+// SetMetadataState updates only a series' metadata state.
+func (r *seriesRepo) SetMetadataState(ctx context.Context, id string, state domain.MetadataState) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE series SET metadata_state = ?, updated_at = ? WHERE id = ?`,
+		string(state), time.Now().UnixMilli(), id)
+	return err
+}
+
 func (r *seriesRepo) Get(ctx context.Context, id string) (domain.Series, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT `+seriesColumns+` FROM series WHERE id = ?`, id)
+		`SELECT `+seriesReadColumns+` FROM series WHERE id = ?`, id)
 	s, err := scanSeries(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.Series{}, domain.ErrNotFound
@@ -58,7 +100,7 @@ func (r *seriesRepo) Get(ctx context.Context, id string) (domain.Series, error) 
 
 func (r *seriesRepo) GetByFolder(ctx context.Context, libraryID, folderPath string) (domain.Series, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT `+seriesColumns+` FROM series WHERE library_id = ? AND folder_path = ?`,
+		`SELECT `+seriesReadColumns+` FROM series WHERE library_id = ? AND folder_path = ?`,
 		libraryID, folderPath)
 	s, err := scanSeries(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -69,7 +111,7 @@ func (r *seriesRepo) GetByFolder(ctx context.Context, libraryID, folderPath stri
 
 func (r *seriesRepo) ListByLibrary(ctx context.Context, libraryID string) ([]domain.Series, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT `+seriesColumns+` FROM series WHERE library_id = ? ORDER BY sort_name`, libraryID)
+		`SELECT `+seriesReadColumns+` FROM series WHERE library_id = ? ORDER BY sort_name`, libraryID)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +163,8 @@ func (r *seriesRepo) Summaries(ctx context.Context, libraryID, userID string) ([
 // prefixedSeriesColumns returns seriesColumns with a table alias prefix.
 func prefixedSeriesColumns(alias string) string {
 	cols := []string{"id", "library_id", "folder_path", "name", "sort_name", "year",
-		"publisher", "description", "reading_dir", "cover_book_id", "created_at", "updated_at"}
+		"publisher", "description", "reading_dir", "cover_book_id", "created_at", "updated_at",
+		"metadata_state", "match_provider", "match_provider_id"}
 	for i, c := range cols {
 		cols[i] = alias + "." + c
 	}
@@ -137,6 +180,9 @@ func scanSeriesSummary(rows *sql.Rows) (domain.SeriesSummary, error) {
 		desc     sql.NullString
 		readDir  string
 		coverBID sql.NullString
+		mState   string
+		mProv    string
+		mProvID  string
 		bookCnt  int
 		readCnt  int
 		cover    sql.NullString
@@ -144,6 +190,7 @@ func scanSeriesSummary(rows *sql.Rows) (domain.SeriesSummary, error) {
 	if err := rows.Scan(
 		&s.ID, &s.LibraryID, &folder, &s.Name, &s.SortName, &year, &pub,
 		&desc, &readDir, &coverBID, &s.CreatedAt, &s.UpdatedAt,
+		&mState, &mProv, &mProvID,
 		&bookCnt, &readCnt, &cover,
 	); err != nil {
 		return domain.SeriesSummary{}, err
@@ -154,6 +201,9 @@ func scanSeriesSummary(rows *sql.Rows) (domain.SeriesSummary, error) {
 	s.Description = str(desc)
 	s.ReadingDir = domain.ReadingDirection(readDir)
 	s.CoverBookID = str(coverBID)
+	s.MetadataState = domain.MetadataState(mState)
+	s.MatchProvider = mProv
+	s.MatchProviderID = mProvID
 	return domain.SeriesSummary{Series: s, BookCount: bookCnt, ReadCount: readCnt, CoverBookID: str(cover)}, nil
 }
 
@@ -171,10 +221,14 @@ func scanSeries(row rowScanner) (domain.Series, error) {
 		desc     sql.NullString
 		readDir  string
 		coverBID sql.NullString
+		mState   string
+		mProv    string
+		mProvID  string
 	)
 	if err := row.Scan(
 		&s.ID, &s.LibraryID, &folder, &s.Name, &s.SortName, &year, &pub,
 		&desc, &readDir, &coverBID, &s.CreatedAt, &s.UpdatedAt,
+		&mState, &mProv, &mProvID,
 	); err != nil {
 		return domain.Series{}, err
 	}
@@ -184,5 +238,8 @@ func scanSeries(row rowScanner) (domain.Series, error) {
 	s.Description = str(desc)
 	s.ReadingDir = domain.ReadingDirection(readDir)
 	s.CoverBookID = str(coverBID)
+	s.MetadataState = domain.MetadataState(mState)
+	s.MatchProvider = mProv
+	s.MatchProviderID = mProvID
 	return s, nil
 }

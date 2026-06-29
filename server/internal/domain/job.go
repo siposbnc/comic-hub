@@ -15,9 +15,10 @@ const (
 
 // Job types.
 const (
-	JobScan          = "scan"
-	JobThumbnail     = "thumbnail"
-	JobMetadataMatch = "metadata_match"
+	JobScan              = "scan"
+	JobThumbnail         = "thumbnail"
+	JobMetadataMatch     = "metadata_match"
+	JobMetadataAutoMatch = "metadata_automatch"
 )
 
 // Job is a unit of background work (scan, thumbnail, …). Progress is reported as

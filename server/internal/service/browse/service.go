@@ -13,13 +13,14 @@ import (
 
 // SeriesCard is a series in the library grid.
 type SeriesCard struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Year        int    `json:"year,omitempty"`
-	ReadingDir  string `json:"readingDir"`
-	BookCount   int    `json:"bookCount"`
-	ReadCount   int    `json:"readCount"`
-	CoverBookID string `json:"coverBookId,omitempty"`
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	Year          int    `json:"year,omitempty"`
+	ReadingDir    string `json:"readingDir"`
+	BookCount     int    `json:"bookCount"`
+	ReadCount     int    `json:"readCount"`
+	CoverBookID   string `json:"coverBookId,omitempty"`
+	MetadataState string `json:"metadataState,omitempty"`
 }
 
 // ProgressView is a user's progress for a book.
@@ -44,15 +45,16 @@ type BookCard struct {
 
 // SeriesDetail is a series header + its issues.
 type SeriesDetail struct {
-	ID         string     `json:"id"`
-	Name       string     `json:"name"`
-	Year       int        `json:"year,omitempty"`
-	Publisher  string     `json:"publisher,omitempty"`
-	Summary    string     `json:"summary,omitempty"`
-	ReadingDir string     `json:"readingDir"`
-	BookCount  int        `json:"bookCount"`
-	ReadCount  int        `json:"readCount"`
-	Books      []BookCard `json:"books"`
+	ID            string     `json:"id"`
+	Name          string     `json:"name"`
+	Year          int        `json:"year,omitempty"`
+	Publisher     string     `json:"publisher,omitempty"`
+	Summary       string     `json:"summary,omitempty"`
+	ReadingDir    string     `json:"readingDir"`
+	BookCount     int        `json:"bookCount"`
+	ReadCount     int        `json:"readCount"`
+	MetadataState string     `json:"metadataState,omitempty"`
+	Books         []BookCard `json:"books"`
 }
 
 // BookDetail is the book detail screen payload.
@@ -129,13 +131,14 @@ func (s *Service) ListSeries(ctx context.Context, libraryID, userID string) ([]S
 	cards := make([]SeriesCard, 0, len(sums))
 	for _, su := range sums {
 		cards = append(cards, SeriesCard{
-			ID:          su.ID,
-			Name:        su.Name,
-			Year:        su.Year,
-			ReadingDir:  string(su.ReadingDir),
-			BookCount:   su.BookCount,
-			ReadCount:   su.ReadCount,
-			CoverBookID: su.CoverBookID,
+			ID:            su.ID,
+			Name:          su.Name,
+			Year:          su.Year,
+			ReadingDir:    string(su.ReadingDir),
+			BookCount:     su.BookCount,
+			ReadCount:     su.ReadCount,
+			CoverBookID:   su.CoverBookID,
+			MetadataState: string(su.MetadataState),
 		})
 	}
 	return cards, nil
@@ -153,14 +156,15 @@ func (s *Service) SeriesDetail(ctx context.Context, seriesID, userID string) (Se
 	}
 
 	detail := SeriesDetail{
-		ID:         ser.ID,
-		Name:       ser.Name,
-		Year:       ser.Year,
-		Publisher:  ser.Publisher,
-		Summary:    ser.Description,
-		ReadingDir: string(ser.ReadingDir),
-		BookCount:  len(books),
-		Books:      make([]BookCard, 0, len(books)),
+		ID:            ser.ID,
+		Name:          ser.Name,
+		Year:          ser.Year,
+		Publisher:     ser.Publisher,
+		Summary:       ser.Description,
+		ReadingDir:    string(ser.ReadingDir),
+		BookCount:     len(books),
+		MetadataState: string(ser.MetadataState),
+		Books:         make([]BookCard, 0, len(books)),
 	}
 	for _, b := range books {
 		card := s.bookCard(ctx, b, userID)
