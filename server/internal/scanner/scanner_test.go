@@ -143,6 +143,37 @@ func TestScanLibrary(t *testing.T) {
 	}
 }
 
+func TestScanGroupsSubfoldersUnderOneSeries(t *testing.T) {
+	ctx := context.Background()
+	store := newStore(t)
+	root := t.TempDir()
+
+	// A series folder whose issues live in subfolders (variant covers, a volume, annuals).
+	writeCBZ(t, filepath.Join(root, "Nova Tide", "Nova Tide 001.cbz"), map[string]string{"p.jpg": "a"})
+	writeCBZ(t, filepath.Join(root, "Nova Tide", "Variant Covers", "Nova Tide 001 var.cbz"), map[string]string{"p.jpg": "b"})
+	writeCBZ(t, filepath.Join(root, "Nova Tide", "Vol. 2", "Nova Tide 007.cbz"), map[string]string{"p.jpg": "c"})
+	writeCBZ(t, filepath.Join(root, "Nova Tide", "Annuals", "Nova Tide Annual 1.cbz"), map[string]string{"p.jpg": "d"})
+
+	lib := domain.Library{ID: ulid.New(), Name: "L", Kind: "comic", Roots: []string{root}, CreatedAt: 1, UpdatedAt: 1}
+	if _, err := store.Libraries().Create(ctx, lib); err != nil {
+		t.Fatalf("create lib: %v", err)
+	}
+	sc := New(store, archive.DefaultRegistry(), slog.New(slog.NewTextHandler(io.Discard, nil)), 0)
+	if err := sc.Scan(ctx, lib.ID, true, nil); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+
+	// One series, not four — subfolders don't fragment it.
+	allSeries, _ := store.Series().ListByLibrary(ctx, lib.ID)
+	if len(allSeries) != 1 || allSeries[0].Name != "Nova Tide" {
+		t.Fatalf("expected 1 'Nova Tide' series, got %+v", allSeries)
+	}
+	books, _ := store.Books().ListBySeries(ctx, allSeries[0].ID)
+	if len(books) != 4 {
+		t.Fatalf("expected all 4 issues under the series, got %d", len(books))
+	}
+}
+
 func TestScanReconcilesMovedFile(t *testing.T) {
 	ctx := context.Background()
 	store := newStore(t)

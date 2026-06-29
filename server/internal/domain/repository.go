@@ -47,6 +47,9 @@ type SeriesRepository interface {
 	WriteMatch(ctx context.Context, id string, m SeriesMatch) error
 	// SetMetadataState updates only a series' metadata state (e.g. marking it incomplete).
 	SetMetadataState(ctx context.Context, id string, state MetadataState) error
+	// DeleteEmpty removes a library's series that have no books (e.g. left behind when the
+	// series-folder grouping changes), returning how many were deleted.
+	DeleteEmpty(ctx context.Context, libraryID string) (int, error)
 }
 
 // BookRepository persists books and their pages.

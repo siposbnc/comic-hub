@@ -70,6 +70,14 @@ func (s *Scanner) Scan(ctx context.Context, libraryID string, full bool, progres
 			progress(int64(i+1), total)
 		}
 	}
+
+	// Drop series left empty (e.g. old per-subfolder series after the grouping rule changed,
+	// or a series whose every file was moved/removed). Best-effort; never fail the scan.
+	if n, err := s.repo.Series().DeleteEmpty(ctx, libraryID); err != nil {
+		s.logger.Warn("scan: prune empty series failed", "library", libraryID, "err", err)
+	} else if n > 0 {
+		s.logger.Info("scan: pruned empty series", "library", libraryID, "count", n)
+	}
 	return nil
 }
 
@@ -181,12 +189,11 @@ func buildPages(infos []archive.PageInfo, ci ComicInfo) []domain.Page {
 }
 
 func (s *Scanner) resolveSeries(ctx context.Context, lib domain.Library, path string, ci ComicInfo, haveCI bool) (domain.Series, error) {
-	folder := filepath.Dir(path)
-
-	// Series name comes from the folder (the "parent dir = series" rule), so every issue
-	// in a folder groups under one stable name. ComicInfo.Series overrides it. The
-	// filename is only used for per-issue fields (number/year/volume), never the series
-	// name — a single oddly-named or corrupt file must not rename the series.
+	// The series is the first folder beneath a library root, NOT the file's immediate
+	// parent — so subfolders inside a series (variant covers, volumes, annuals) all group
+	// under the one series instead of fragmenting into separate ones. ComicInfo.Series
+	// still overrides the name. The filename only supplies per-issue fields.
+	folder := seriesFolder(lib.Roots, path)
 	name := filepath.Base(folder)
 	if haveCI && ci.Series != "" {
 		name = ci.Series
@@ -342,6 +349,29 @@ func (s *Scanner) persistCorrupt(
 	}
 	_, err = s.repo.Books().Upsert(ctx, book)
 	return err
+}
+
+// seriesFolder returns the folder that defines a file's series: the first directory beneath
+// the matching library root. Files sitting directly in a root use the root itself. This is
+// what makes nested folders (variant covers, volumes, annuals) part of their parent series.
+func seriesFolder(roots []string, filePath string) string {
+	for _, root := range roots {
+		root = filepath.Clean(root)
+		rel, err := filepath.Rel(root, filePath)
+		if err != nil {
+			continue
+		}
+		if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			continue // filePath is not under this root
+		}
+		parts := strings.Split(rel, string(filepath.Separator))
+		if len(parts) <= 1 {
+			return root // file is directly in the root
+		}
+		return filepath.Join(root, parts[0])
+	}
+	// No root matched (shouldn't happen for scanned files): fall back to the parent folder.
+	return filepath.Dir(filePath)
 }
 
 func formatOf(path string) string {
