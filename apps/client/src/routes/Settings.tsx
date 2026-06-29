@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Button, Badge } from '@comichub/ui';
+import { Button, Badge, Switch } from '@comichub/ui';
 import type { ProviderSettingsUpdate } from '@comichub/api-client';
 import { useClient, useConnection } from '../lib/client.js';
 import { useUiStore, type Accent, type Theme } from '../store/ui.js';
@@ -120,14 +120,18 @@ function ProvidersCard() {
   const [cvKey, setCvKey] = useState('');
   const [mUser, setMUser] = useState('');
   const [mPass, setMPass] = useState('');
+  const [writeSidecar, setWriteSidecar] = useState(false);
 
   useEffect(() => {
-    if (q.data) setMUser(q.data.metron.username);
+    if (q.data) {
+      setMUser(q.data.metron.username);
+      setWriteSidecar(q.data.writeSidecar);
+    }
   }, [q.data]);
 
   const save = useMutation({
     mutationFn: () => {
-      const update: ProviderSettingsUpdate = { metronUsername: mUser.trim() };
+      const update: ProviderSettingsUpdate = { metronUsername: mUser.trim(), writeSidecar };
       if (cvKey.trim()) update.comicVineApiKey = cvKey.trim();
       if (mPass) update.metronPassword = mPass;
       return client.updateProviderSettings(update);
@@ -195,6 +199,33 @@ function ProvidersCard() {
               placeholder={metron ? '•••••••• (saved — leave blank to keep)' : 'Metron password'}
             />
           </ProviderBlock>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 14,
+              justifyContent: 'space-between',
+            }}
+          >
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.9rem' }}>
+                Write metadata into files
+              </div>
+              <p
+                style={{
+                  margin: '4px 0 0',
+                  fontSize: 'var(--text-small)',
+                  color: 'var(--text-secondary)',
+                  lineHeight: 1.5,
+                }}
+              >
+                On match, save a ComicInfo.xml inside each <span className="ch-mono">.cbz</span> so
+                metadata travels with the file. Modifies your comics; off by default.
+              </p>
+            </div>
+            <Switch checked={writeSidecar} onChange={setWriteSidecar} />
+          </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <Button icon="check" disabled={save.isPending} onClick={() => save.mutate()}>

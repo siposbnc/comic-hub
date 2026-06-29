@@ -35,6 +35,7 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/service/organize"
 	"github.com/siposbnc/comic-hub/server/internal/service/reader"
 	"github.com/siposbnc/comic-hub/server/internal/service/reading"
+	"github.com/siposbnc/comic-hub/server/internal/service/sidecar"
 	"github.com/siposbnc/comic-hub/server/internal/store/sqlite"
 	httptransport "github.com/siposbnc/comic-hub/server/internal/transport/http"
 	"github.com/siposbnc/comic-hub/server/internal/version"
@@ -145,6 +146,18 @@ func run() error {
 		logger.Info("metadata providers reloaded", "providers", metaSvc.Names())
 		return nil
 	}
+
+	// Opt-in: after applying metadata to a book, write it back into the archive as a
+	// ComicInfo.xml when the user has enabled it in settings (checked live per book).
+	sidecarWriter := sidecar.New(store, hashLargeThreshold)
+	metaSvc.OnApply(func(ctx context.Context, bookID string) {
+		if v, _ := store.Settings().Get(ctx, domain.SettingWriteSidecar); v != "true" {
+			return
+		}
+		if err := sidecarWriter.Write(ctx, bookID); err != nil {
+			logger.Warn("write sidecar failed", "book", bookID, "err", err)
+		}
+	})
 
 	runner.Register(domain.JobScan, func(ctx context.Context, payload string, progress jobs.ProgressFunc) error {
 		var p scanner.JobPayload

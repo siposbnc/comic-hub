@@ -8,6 +8,9 @@ const (
 	SettingComicVineAPIKey = "provider.comicvine.apikey"
 	SettingMetronUsername  = "provider.metron.username"
 	SettingMetronPassword  = "provider.metron.password"
+	// SettingWriteSidecar ("true"/"false") opts into writing matched metadata back into each
+	// book's archive as a ComicInfo.xml. Default off.
+	SettingWriteSidecar = "metadata.write_sidecar"
 )
 
 // SettingsRepository persists app key/value settings.

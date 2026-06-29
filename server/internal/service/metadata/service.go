@@ -36,7 +36,14 @@ type Service struct {
 	providers map[string]providers.Provider
 	order     []string // registration order; order[0] is the default
 	def       string   // default provider name (first registered)
+
+	// afterApply, if set, runs after a book's metadata is written (e.g. to export a
+	// ComicInfo.xml sidecar). Optional.
+	afterApply func(ctx context.Context, bookID string)
 }
+
+// OnApply registers a hook fired after each book's metadata is applied.
+func (s *Service) OnApply(fn func(ctx context.Context, bookID string)) { s.afterApply = fn }
 
 // New builds the service over the catalog repository and zero or more providers; the
 // first provider registered is the default when a request doesn't name one.
@@ -408,6 +415,9 @@ func (s *Service) applyIssueMeta(ctx context.Context, bookID, providerName, issu
 		if err := s.repo.Metadata().ReplaceBookCharacters(ctx, bookID, im.Characters); err != nil {
 			return err
 		}
+	}
+	if s.afterApply != nil {
+		s.afterApply(ctx, bookID)
 	}
 	return nil
 }

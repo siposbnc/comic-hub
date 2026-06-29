@@ -16,13 +16,15 @@ type providerSettingsReq struct {
 	ComicVineAPIKey *string `json:"comicVineApiKey"`
 	MetronUsername  *string `json:"metronUsername"`
 	MetronPassword  *string `json:"metronPassword"`
+	WriteSidecar    *bool   `json:"writeSidecar"`
 }
 
 // providerSettingsDTO is the GET response: editable, non-secret state only. Secrets are
 // never returned — only whether each is set.
 type providerSettingsDTO struct {
-	ComicVine providerCV     `json:"comicvine"`
-	Metron    providerMetron `json:"metron"`
+	ComicVine    providerCV     `json:"comicvine"`
+	Metron       providerMetron `json:"metron"`
+	WriteSidecar bool           `json:"writeSidecar"`
 }
 type providerCV struct {
 	Configured bool `json:"configured"`
@@ -32,17 +34,23 @@ type providerMetron struct {
 	Username   string `json:"username"`
 }
 
+// currentProviderSettings builds the settings DTO from live provider status + stored values.
+func currentProviderSettings(ctx context.Context, repo domain.Repository, meta *metadata.Service, cfg providerEnv) providerSettingsDTO {
+	return providerSettingsDTO{
+		ComicVine: providerCV{Configured: meta.Has("comicvine")},
+		Metron: providerMetron{
+			Configured: meta.Has("metron"),
+			// Username isn't secret — echo the effective value so the field is prefilled.
+			Username: settingOr(ctx, repo, domain.SettingMetronUsername, cfg.MetronUsername),
+		},
+		WriteSidecar: settingOr(ctx, repo, domain.SettingWriteSidecar, "") == "true",
+	}
+}
+
 // handleGetProviderSettings returns provider configuration for the settings screen.
 func handleGetProviderSettings(repo domain.Repository, meta *metadata.Service, cfg providerEnv) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, providerSettingsDTO{
-			ComicVine: providerCV{Configured: meta.Has("comicvine")},
-			Metron: providerMetron{
-				Configured: meta.Has("metron"),
-				// Username isn't secret — echo the effective value so the field is prefilled.
-				Username: settingOr(r.Context(), repo, domain.SettingMetronUsername, cfg.MetronUsername),
-			},
-		})
+		writeJSON(w, http.StatusOK, currentProviderSettings(r.Context(), repo, meta, cfg))
 	}
 }
 
@@ -68,17 +76,21 @@ func handlePutProviderSettings(repo domain.Repository, meta *metadata.Service, c
 			!set(domain.SettingMetronPassword, req.MetronPassword) {
 			return
 		}
+		if req.WriteSidecar != nil {
+			val := "false"
+			if *req.WriteSidecar {
+				val = "true"
+			}
+			if err := repo.Settings().Set(r.Context(), domain.SettingWriteSidecar, val); err != nil {
+				writeDomainError(w, err)
+				return
+			}
+		}
 		if err := reload(r.Context()); err != nil {
 			writeError(w, http.StatusInternalServerError, "reload_failed", err.Error())
 			return
 		}
-		writeJSON(w, http.StatusOK, providerSettingsDTO{
-			ComicVine: providerCV{Configured: meta.Has("comicvine")},
-			Metron: providerMetron{
-				Configured: meta.Has("metron"),
-				Username:   settingOr(r.Context(), repo, domain.SettingMetronUsername, cfg.MetronUsername),
-			},
-		})
+		writeJSON(w, http.StatusOK, currentProviderSettings(r.Context(), repo, meta, cfg))
 	}
 }
 

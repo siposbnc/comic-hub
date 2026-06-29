@@ -405,6 +405,8 @@ export interface ProviderStatus {
 export interface ProviderSettings {
   comicvine: { configured: boolean };
   metron: { configured: boolean; username: string };
+  /** Write matched metadata back into each book's .cbz as a ComicInfo.xml. */
+  writeSidecar: boolean;
 }
 
 /** Provider credential update. Omitted fields are left unchanged; "" clears a field. */
@@ -412,6 +414,7 @@ export interface ProviderSettingsUpdate {
   comicVineApiKey?: string;
   metronUsername?: string;
   metronPassword?: string;
+  writeSidecar?: boolean;
 }
 
 export interface SeriesMatchCandidate {
