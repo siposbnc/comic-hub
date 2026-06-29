@@ -113,9 +113,15 @@ added). Mock-only elements (genre filters, writer/artist, the Lists/Stats nav) a
 until the data/features exist.
 
 Remaining (follow-on, none blocking the core loop):
-- **Verification:** a GUI end-to-end run on a desktop session (window spawns sidecar →
-  browse → one-click → reader); the 5 MVP success criteria measured on a ~10k library;
-  accessibility audit.
+- **Verification:** ✅ _API-surface end-to-end done_ — drove the real server socket on a
+  generated 1000-book/50-series library (add library → full scan → browse → manifest/cover/
+  page/prefetch → progress → mark/Continue-Reading). MVP criteria 2 (browse <100ms cached),
+  3 (page serve sub-ms + ETag immutable cache + prefetch), 4 (progress reflected in Continue
+  Reading) all confirmed. The run surfaced and **fixed** a concurrent-scan data-integrity bug
+  (duplicate series), scan double-processing, all-zero manifest dims, and read-percent <100%
+  (commit `0553e00`). _Still to do:_ a GUI pixel run on a desktop session (window spawns
+  sidecar → one-click → reader), MVP #5 (standalone double-click) at the GUI surface, the
+  ~10k-library throughput/latency benchmark, and the accessibility audit.
 - **Standalone CBR/CB7/PDF** in the reader (need native unrar/7z/mupdf; CBZ/CBT work today).
 - **govips** image-pipeline swap (WebP/AVIF + scan-time thumbnail prewarm).
 - ✅ _Done:_ the reader's control glyphs were folded into the design-system `Icon` and re-synced;
