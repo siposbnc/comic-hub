@@ -3,10 +3,12 @@
 //   • apps/client/src-tauri/binaries/comichub-server-<triple>[.exe] — the Tauri
 //     "externalBin" sidecar bundled into packaged builds.
 //
-// Invoked by the client's tauri.conf.json before{Dev,Build}Command. It builds to a unique
-// temp file first (Windows locks a running .exe, so we never build straight onto a path a
-// server might be holding open), then copies into both targets. If a target is in use by a
-// still-running server, we keep the existing binary and warn rather than failing the build.
+// Invoked by the client's tauri.conf.json before{Dev,Build}Command. On Windows it first
+// stops any stray comichub-server processes (a hard-killed or crashed dev client can orphan
+// its sidecar, and a running .exe is locked — so a leftover server would otherwise keep this
+// script copying the OLD binary and new endpoints would 404). It builds to a unique temp file
+// first, then copies into both targets. If a target is somehow still in use, we keep the
+// existing binary and warn rather than failing the build.
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, existsSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -32,6 +34,22 @@ const tmpBin = join(serverBinDir, `.comichub-server-${process.pid}${ext}`);
 
 mkdirSync(serverBinDir, { recursive: true });
 mkdirSync(sidecarDir, { recursive: true });
+
+// On Windows, stop any leftover servers so the build can replace the (otherwise locked)
+// binaries. Best-effort: taskkill exits non-zero when nothing matches, which we ignore.
+function killStrayServers() {
+  if (!isWin) return; // POSIX can overwrite a running binary; no lock trap to clear
+  for (const name of [`comichub-server${ext}`, `comichub-server-${triple}${ext}`]) {
+    try {
+      execFileSync('taskkill', ['/IM', name, '/F'], { stdio: 'ignore' });
+      console.log(`[prepare-sidecar] stopped stray ${name}`);
+    } catch {
+      // none running — fine
+    }
+  }
+}
+
+killStrayServers();
 
 console.log(`[prepare-sidecar] building server (${triple})…`);
 execFileSync('go', ['build', '-C', join(repoRoot, 'server'), '-o', tmpBin, './cmd/comichub-server'], {
