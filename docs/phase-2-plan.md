@@ -103,9 +103,23 @@ Accessibility gate per screen; CI bench thresholds; docs kept in lockstep (03-ap
 
 Metadata polish: ✅ Metron added as a second provider (matching searches all providers,
 ranked together) + in-app provider settings; ✅ genres pulled into series Details; ✅ ComicInfo
-`write-sidecar` (opt-in, .cbz). Remaining (UI, needs Design Preview v2 screens): per-field
-lock toggles on the book screen (backend already supports locks), and a book-level candidate
-picker. Also open: GCD as a third provider.
+`write-sidecar` (opt-in, .cbz).
+
+### Deferred metadata-polish backlog (future updates)
+
+Parked intentionally — revisit in a later update. The two UI items are **gated on Design
+Preview v2 screens** (per the binding design rule); GCD is pure backend and can be picked up
+anytime.
+
+1. **Per-field lock toggles** (UI — preview-gated). Backend foundation exists (`locked_fields`
+   JSON col; apply respects locks). To finish: a `PATCH /books|series/{id}` that sets which
+   fields are locked (ideally with inline field editing so a user can correct-then-pin a
+   value), plus the lock UI on the Book/Series detail screen. Open design decisions for the
+   preview: per-field vs. grouped lock granularity; ship edit+lock together vs. lock-only first.
+2. **Book-level candidate picker** (UI — preview-gated). Match a single issue rather than the
+   whole series. Needs a backend issue-search (candidates scoped to one book) + a picker dialog.
+3. **GCD as a third provider** (pure backend, same `providers.Provider` interface — not
+   preview-gated).
 
 ## Verification
 
