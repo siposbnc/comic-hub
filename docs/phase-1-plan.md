@@ -118,8 +118,8 @@ Remaining (follow-on, none blocking the core loop):
   accessibility audit.
 - **Standalone CBR/CB7/PDF** in the reader (need native unrar/7z/mupdf; CBZ/CBT work today).
 - **govips** image-pipeline swap (WebP/AVIF + scan-time thumbnail prewarm).
-- Add the reader's control glyphs (`single-page`, `double-page`, `fullscreen-exit`,
-  `zoom-in/out`) to the design-system `Icon` + re-sync, then drop the reader's local `Icon`.
+- ✅ _Done:_ the reader's control glyphs were folded into the design-system `Icon` and re-synced;
+  the reader now uses DS `Icon` (only its `IconButton` stays local).
 - Swap the Tauri **shell-outs** (folder dialog, URL open) for `tauri-plugin-dialog`/`-opener`.
 - CI bench thresholds.
 
