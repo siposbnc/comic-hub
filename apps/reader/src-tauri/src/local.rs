@@ -18,7 +18,7 @@ use tauri::Manager;
 
 const IMAGE_EXTS: &[&str] = &["jpg", "jpeg", "png", "gif", "webp", "bmp", "avif"];
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 enum Format {
     Zip,
     Tar,
@@ -495,7 +495,49 @@ mod tests {
     }
 
     #[test]
+    fn open_cbt_builds_sorted_manifest() {
+        let dir = std::env::temp_dir().join(format!("chtest_cbt_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("test.cbt");
+        {
+            let file = File::create(&path).unwrap();
+            let mut tb = tar::Builder::new(file);
+            for name in ["page10.png", "page2.png", "page1.png", ".hidden.png"] {
+                let wide = name == "page10.png";
+                let data = png_bytes(if wide { 40 } else { 20 }, 30);
+                let mut header = tar::Header::new_gnu();
+                header.set_size(data.len() as u64);
+                header.set_mode(0o644);
+                header.set_cksum();
+                tb.append_data(&mut header, name, data.as_slice()).unwrap();
+            }
+            tb.finish().unwrap();
+        }
+
+        let format = detect_format(&path).unwrap();
+        assert_eq!(format, Format::Tar);
+        let entries = list_entries(&path, format).unwrap();
+        assert_eq!(entries, vec!["page1.png", "page2.png", "page10.png"]);
+
+        let manifest = build_manifest(&path, format, &entries).unwrap();
+        assert_eq!(manifest.page_count, 3);
+        assert_eq!(manifest.reading_dir, "ltr");
+        assert_eq!((manifest.pages[0].w, manifest.pages[0].h), (20, 30));
+        assert!(!manifest.pages[0].double);
+        assert!(manifest.pages[2].double, "40x30 page should be flagged wide");
+        assert_eq!(content_hash(&path).unwrap().len(), 64);
+
+        let bytes = read_entry(&path, format, "page1.png").unwrap();
+        assert!(!bytes.is_empty());
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
     fn unsupported_format_is_reported() {
+        // CBR and CB7 need native libraries; standalone reading errors with a helpful
+        // message pointing the user at a server (file associations still advertise them).
         assert!(detect_format(Path::new("x.cbr")).is_err());
+        assert!(detect_format(Path::new("x.cb7")).is_err());
     }
 }
