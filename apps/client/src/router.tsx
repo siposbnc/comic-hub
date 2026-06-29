@@ -26,6 +26,18 @@ const seriesRoute = createRoute({
   component: lazyRouteComponent(() => import('./routes/Series.js'), 'Series'),
 });
 
+const storyArcRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/series/$id/story-arcs/$arcId',
+  component: lazyRouteComponent(() => import('./routes/Grouping.js'), 'StoryArc'),
+});
+
+const volumeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/series/$id/volumes/$volume',
+  component: lazyRouteComponent(() => import('./routes/Grouping.js'), 'Volume'),
+});
+
 const bookRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/book/$id',
@@ -90,6 +102,8 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   libraryRoute,
   seriesRoute,
+  storyArcRoute,
+  volumeRoute,
   bookRoute,
   settingsRoute,
   collectionsRoute,

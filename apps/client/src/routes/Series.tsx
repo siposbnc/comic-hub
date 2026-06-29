@@ -1,7 +1,16 @@
 import { useState } from 'react';
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
-import { Button, ProgressBar, Tabs, CoverCard, EmptyState, IconButton } from '@comichub/ui';
-import type { BookCard, SeriesDetail } from '@comichub/api-client';
+import {
+  Button,
+  ProgressBar,
+  Tabs,
+  CoverCard,
+  EmptyState,
+  IconButton,
+  Icon,
+  Tag,
+} from '@comichub/ui';
+import type { BookCard, SeriesDetail, GroupingCard, MetadataState } from '@comichub/api-client';
 import { useClient } from '../lib/client.js';
 import { useSeriesDetail } from '../lib/queries.js';
 import { useReadLaunch } from '../lib/launch.js';
@@ -40,6 +49,7 @@ export function Series() {
 
 function SeriesView({ detail }: { detail: SeriesDetail }) {
   const client = useClient();
+  const navigate = useNavigate();
   const launch = useReadLaunch();
   const [tab, setTab] = useState('issues');
   const [matching, setMatching] = useState(false);
@@ -53,7 +63,12 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
   const coverUrl = coverBook ? client.coverUrl(coverBook.id, 600) : undefined;
   const format = detail.books[0]?.format?.toUpperCase();
 
-  const meta = [detail.publisher, detail.year, `${detail.bookCount} issues`]
+  const meta = [
+    detail.publisher,
+    detail.year,
+    `${detail.bookCount} issues`,
+    detail.genres?.length ? detail.genres.join(' · ') : undefined,
+  ]
     .filter(Boolean)
     .join(' · ');
 
@@ -127,6 +142,9 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
             >
               {detail.name}
             </h1>
+            <div style={{ marginTop: 14 }}>
+              <MetaChip state={detail.metadataState} onMatch={() => setMatching(true)} />
+            </div>
             {meta && (
               <p
                 className="ch-label"
@@ -168,9 +186,11 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
                     ? `Continue · ${issueLabel(resumeBook.number) ?? ''}`
                     : 'Read first issue'}
                 </Button>
-                <Button variant="ghost" icon="search" onClick={() => setMatching(true)}>
-                  Match
-                </Button>
+                {detail.metadataState === 'matched' && (
+                  <Button variant="ghost" icon="search" onClick={() => setMatching(true)}>
+                    Re-match
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -186,8 +206,9 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
           onChange={setTab}
           tabs={[
             { value: 'issues', label: 'Issues', count: detail.bookCount },
+            { value: 'volumes', label: 'Volumes', count: detail.volumes?.length ?? 0 },
+            { value: 'arcs', label: 'Story Arcs', count: detail.storyArcs?.length ?? 0 },
             { value: 'details', label: 'Details' },
-            { value: 'history', label: 'History' },
           ]}
           style={{ marginBottom: 22 }}
         />
@@ -208,35 +229,133 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
               ))}
             </div>
           )
-        ) : tab === 'details' ? (
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '160px 1fr',
-              gap: '10px 24px',
-              maxWidth: 560,
-              fontSize: 'var(--text-body)',
-            }}
-          >
-            {(
-              [
-                ['Publisher', detail.publisher],
-                ['Year', detail.year ? String(detail.year) : undefined],
-                ['Issues', String(detail.bookCount)],
-                ['Format', format],
-                [
-                  'Reading direction',
-                  detail.readingDir === 'rtl' ? 'Right to left' : 'Left to right',
-                ],
-              ] as const
-            )
-              .filter(([, v]) => Boolean(v))
-              .map(([k, v]) => (
-                <Detail key={k} label={k} value={v as string} />
+        ) : tab === 'volumes' ? (
+          detail.volumes && detail.volumes.length > 0 ? (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+                gap: 18,
+              }}
+            >
+              {detail.volumes.map((v) => (
+                <GroupingCardButton
+                  key={v.id}
+                  cover={detail.books[0] ? client.coverUrl(detail.books[0].id, 200) : undefined}
+                  name={v.name}
+                  meta={[v.year || undefined, `${v.issueCount} issues`].filter(Boolean).join(' · ')}
+                  description={v.description}
+                  onClick={() =>
+                    navigate({
+                      to: '/series/$id/volumes/$volume',
+                      params: { id: detail.id, volume: v.id },
+                    })
+                  }
+                />
               ))}
-          </div>
+            </div>
+          ) : (
+            <MatchToPopulate
+              kind="volumes"
+              state={detail.metadataState}
+              onMatch={() => setMatching(true)}
+            />
+          )
+        ) : tab === 'arcs' ? (
+          detail.storyArcs && detail.storyArcs.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {detail.storyArcs.map((a) => (
+                <ArcRow
+                  key={a.id}
+                  arc={a}
+                  onClick={() =>
+                    navigate({
+                      to: '/series/$id/story-arcs/$arcId',
+                      params: { id: detail.id, arcId: a.id },
+                    })
+                  }
+                />
+              ))}
+            </div>
+          ) : (
+            <MatchToPopulate
+              kind="story arcs"
+              state={detail.metadataState}
+              onMatch={() => setMatching(true)}
+            />
+          )
         ) : (
-          <p style={{ color: 'var(--text-tertiary)' }}>No reading history yet.</p>
+          <div
+            style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 40, maxWidth: 820 }}
+          >
+            <div>
+              {detail.summary && (
+                <p
+                  style={{
+                    margin: '0 0 20px',
+                    color: 'var(--text-secondary)',
+                    lineHeight: 1.6,
+                  }}
+                >
+                  {detail.summary}
+                </p>
+              )}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '120px 1fr',
+                  gap: '9px 20px',
+                  fontSize: 'var(--text-body)',
+                }}
+              >
+                {(
+                  [
+                    ['Publisher', detail.publisher],
+                    ['Year', detail.year ? String(detail.year) : undefined],
+                    ['Issues', String(detail.bookCount)],
+                    ['Format', format],
+                    [
+                      'Reading direction',
+                      detail.readingDir === 'rtl' ? 'Right to left' : 'Left to right',
+                    ],
+                  ] as const
+                )
+                  .filter(([, v]) => Boolean(v))
+                  .map(([k, v]) => (
+                    <Detail key={k} label={k} value={v as string} />
+                  ))}
+              </div>
+            </div>
+            <div>
+              {detail.genres && detail.genres.length > 0 && (
+                <>
+                  <div
+                    className="ch-label"
+                    style={{ color: 'var(--text-tertiary)', marginBottom: 10 }}
+                  >
+                    Genres
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 22 }}>
+                    {detail.genres.map((g) => (
+                      <Tag key={g}>{g}</Tag>
+                    ))}
+                  </div>
+                </>
+              )}
+              <div className="ch-label" style={{ color: 'var(--text-tertiary)', marginBottom: 10 }}>
+                Characters
+              </div>
+              {detail.characters && detail.characters.length > 0 ? (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {detail.characters.map((c) => (
+                    <Tag key={c}>{c}</Tag>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ color: 'var(--text-tertiary)', fontSize: '0.82rem' }}>—</p>
+              )}
+            </div>
+          </div>
         )}
       </div>
 
@@ -291,6 +410,219 @@ function IssueCover({ book, seriesName }: { book: BookCard; seriesName: string }
         </div>
       )}
     </div>
+  );
+}
+
+/** Series metadata-state chip: matched (accent) or incomplete/no-match (warning + Match). */
+function MetaChip({ state, onMatch }: { state?: MetadataState; onMatch: () => void }) {
+  if (state === 'matched') {
+    return (
+      <span
+        className="ch-mono"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          height: 24,
+          padding: '0 10px',
+          borderRadius: 'var(--radius-pill)',
+          background: 'var(--accent-soft)',
+          color: 'var(--accent)',
+          fontSize: '0.64rem',
+          letterSpacing: '0.04em',
+          textTransform: 'uppercase',
+        }}
+      >
+        <Icon name="check" size={13} color="var(--accent)" /> Matched · Comic Vine
+      </span>
+    );
+  }
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+      <span
+        className="ch-mono"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          height: 24,
+          padding: '0 10px',
+          borderRadius: 'var(--radius-pill)',
+          background: 'color-mix(in oklab, var(--warning) 20%, transparent)',
+          color: 'var(--warning)',
+          fontSize: '0.64rem',
+          letterSpacing: '0.04em',
+          textTransform: 'uppercase',
+        }}
+      >
+        <Icon name="alert-triangle" size={13} color="var(--warning)" />{' '}
+        {state === 'none' ? 'No match' : 'Incomplete'}
+      </span>
+      <Button size="sm" variant="secondary" icon="refresh" onClick={onMatch}>
+        Match metadata
+      </Button>
+    </span>
+  );
+}
+
+/** Empty state for the Volumes/Story Arcs tabs when the series isn't fully matched. */
+function MatchToPopulate({
+  kind,
+  state,
+  onMatch,
+}: {
+  kind: string;
+  state?: MetadataState;
+  onMatch: () => void;
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        textAlign: 'center',
+        padding: '40px 24px',
+        border: '1px dashed var(--border-strong)',
+        borderRadius: 'var(--radius-lg)',
+      }}
+    >
+      <div
+        className="ch-halftone-duo"
+        style={{ width: 72, height: 72, borderRadius: '50%', marginBottom: 16, opacity: 0.5 }}
+      />
+      <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.05rem' }}>
+        No {kind} yet
+      </div>
+      <p
+        style={{
+          margin: '8px 0 16px',
+          maxWidth: 360,
+          fontSize: '0.85rem',
+          color: 'var(--text-secondary)',
+          lineHeight: 1.5,
+        }}
+      >
+        {state === 'none'
+          ? 'This series has no metadata-provider match.'
+          : 'This series is only partly matched.'}{' '}
+        Match it to Comic Vine to pull in {kind}.
+      </p>
+      <Button variant="secondary" icon="refresh" onClick={onMatch}>
+        Match metadata
+      </Button>
+    </div>
+  );
+}
+
+/** A Volume card on the Volumes tab. */
+function GroupingCardButton({
+  cover,
+  name,
+  meta,
+  description,
+  onClick,
+}: {
+  cover?: string;
+  name: string;
+  meta: string;
+  description?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        gap: 14,
+        padding: 12,
+        textAlign: 'left',
+        cursor: 'pointer',
+        background: 'var(--surface-raised)',
+        border: '1px solid var(--border-hairline)',
+        borderRadius: 'var(--radius-lg)',
+      }}
+    >
+      <div
+        style={{
+          width: 60,
+          height: 90,
+          flex: 'none',
+          background: 'var(--surface-cover)',
+          backgroundImage: cover ? `url(${cover})` : undefined,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          boxShadow: '0 2px 10px rgba(0,0,0,.5)',
+        }}
+      />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 600, fontSize: '0.92rem', color: 'var(--text-primary)' }}>
+          {name}
+        </div>
+        <div
+          className="ch-mono"
+          style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', marginTop: 4 }}
+        >
+          {meta}
+        </div>
+        {description && (
+          <p
+            style={{
+              margin: '8px 0 0',
+              fontSize: '0.78rem',
+              color: 'var(--text-secondary)',
+              lineHeight: 1.4,
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+            }}
+          >
+            {description}
+          </p>
+        )}
+      </div>
+    </button>
+  );
+}
+
+/** A Story Arc row on the Story Arcs tab. */
+function ArcRow({ arc, onClick }: { arc: GroupingCard; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 16,
+        padding: '14px 16px',
+        textAlign: 'left',
+        cursor: 'pointer',
+        background: 'var(--surface-raised)',
+        border: '1px solid var(--border-hairline)',
+        borderRadius: 'var(--radius-md)',
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--text-primary)' }}>
+          {arc.name}
+        </div>
+        {arc.description && (
+          <p style={{ margin: '3px 0 0', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+            {arc.description}
+          </p>
+        )}
+      </div>
+      <span
+        className="ch-mono"
+        style={{ flex: 'none', fontSize: '0.68rem', color: 'var(--text-tertiary)' }}
+      >
+        {arc.issueCount} issues
+      </span>
+      <Icon name="chevron-right" size={16} color="var(--text-tertiary)" />
+    </button>
   );
 }
 

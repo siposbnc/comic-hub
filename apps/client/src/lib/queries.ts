@@ -78,6 +78,22 @@ export function useSeriesDetail(id: string) {
   return useQuery({ queryKey: qk.seriesDetail(id), queryFn: () => client.seriesDetail(id) });
 }
 
+export function useStoryArc(seriesId: string, arcId: string) {
+  const client = useClient();
+  return useQuery({
+    queryKey: ['storyArc', seriesId, arcId] as const,
+    queryFn: () => client.storyArc(seriesId, arcId),
+  });
+}
+
+export function useVolume(seriesId: string, volume: string) {
+  const client = useClient();
+  return useQuery({
+    queryKey: ['volume', seriesId, volume] as const,
+    queryFn: () => client.volume(seriesId, volume),
+  });
+}
+
 export function useBookDetail(id: string) {
   const client = useClient();
   return useQuery({ queryKey: qk.book(id), queryFn: () => client.bookDetail(id) });
