@@ -10,9 +10,9 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/domain"
 )
 
-// seriesRepo persists series. Upsert is keyed on the ULID id; the scanner resolves a
-// folder to an existing series id before calling Upsert (lookup-by-folder lands with
-// the scanner in a later milestone).
+// seriesRepo persists series. Upsert conflicts on the natural key (library_id,
+// folder_path) so concurrent scans converge on one row per folder rather than creating
+// duplicates; it returns the surviving row's id.
 type seriesRepo struct{ db *sql.DB }
 
 // seriesColumns are the scanner-owned columns Upsert writes. The match columns
@@ -29,6 +29,8 @@ func (r *seriesRepo) Upsert(ctx context.Context, s domain.Series) (domain.Series
 	if rd == "" {
 		rd = domain.LTR
 	}
+	// Conflict on the ULID id for the normal path: a rescan re-upserts the same series in
+	// place (updating its name/folder/etc.).
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO series (`+seriesColumns+`)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -47,6 +49,20 @@ func (r *seriesRepo) Upsert(ctx context.Context, s domain.Series) (domain.Series
 		s.CreatedAt, s.UpdatedAt,
 	)
 	if err != nil {
+		// The UNIQUE(library_id, folder_path) index rejected the insert: a *different* id
+		// already owns this folder, i.e. a concurrent scan created the series first. Converge
+		// on that existing row instead of duplicating (book is likewise protected by
+		// UNIQUE(file_path)). If no such row exists, the error is something else — surface it.
+		if s.FolderPath != "" {
+			var existingID string
+			if e2 := r.db.QueryRowContext(ctx,
+				`SELECT id FROM series WHERE library_id = ? AND folder_path = ?`,
+				s.LibraryID, s.FolderPath).Scan(&existingID); e2 == nil && existingID != "" {
+				s.ID = existingID
+				s.ReadingDir = rd
+				return s, nil
+			}
+		}
 		return domain.Series{}, err
 	}
 	s.ReadingDir = rd

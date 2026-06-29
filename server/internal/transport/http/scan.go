@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
@@ -12,9 +13,33 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/service/library"
 )
 
+// ActiveScanJobID returns the id of a queued or running scan job for the library, if one
+// exists. Used to coalesce scans: the file-watcher's debounced scan and an explicit scan
+// (or two rapid explicit scans) must not run concurrently on the same library — overlapping
+// scans race on series creation and waste work re-reading the same files.
+func ActiveScanJobID(ctx context.Context, repo domain.Repository, libraryID string) (string, bool) {
+	for _, state := range []domain.JobState{domain.JobRunning, domain.JobQueued} {
+		list, err := repo.Jobs().ListByState(ctx, state, 200)
+		if err != nil {
+			continue
+		}
+		for _, j := range list {
+			if j.Type != domain.JobScan {
+				continue
+			}
+			var p scanner.JobPayload
+			if json.Unmarshal([]byte(j.Payload), &p) == nil && p.LibraryID == libraryID {
+				return j.ID, true
+			}
+		}
+	}
+	return "", false
+}
+
 // handleScanLibrary starts a scan job for a library and returns its job id. Body is
-// optional: {"mode":"full"|"incremental"} (default incremental).
-func handleScanLibrary(lib *library.Service, runner *jobs.Runner) http.HandlerFunc {
+// optional: {"mode":"full"|"incremental"} (default incremental). If a scan is already
+// queued or running for this library, its id is returned instead of starting another.
+func handleScanLibrary(lib *library.Service, runner *jobs.Runner, repo domain.Repository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		if _, err := lib.Get(r.Context(), id); err != nil {
@@ -33,6 +58,11 @@ func handleScanLibrary(lib *library.Service, runner *jobs.Runner) http.HandlerFu
 			if req.Mode != "" {
 				mode = req.Mode
 			}
+		}
+
+		if existing, ok := ActiveScanJobID(r.Context(), repo, id); ok {
+			writeJSON(w, http.StatusAccepted, map[string]any{"jobId": existing, "coalesced": true})
+			return
 		}
 
 		payload, _ := json.Marshal(scanner.JobPayload{LibraryID: id, Full: mode == "full"})

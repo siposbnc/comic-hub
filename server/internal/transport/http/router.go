@@ -84,7 +84,7 @@ func NewRouter(d Deps) http.Handler {
 			r.Post("/", handleCreateLibrary(d.Library))
 			r.Get("/{id}", handleGetLibrary(d.Library))
 			r.Delete("/{id}", handleDeleteLibrary(d.Library))
-			r.Post("/{id}/scan", handleScanLibrary(d.Library, d.Runner))
+			r.Post("/{id}/scan", handleScanLibrary(d.Library, d.Runner, d.Repo))
 			r.Post("/{id}/scan/cancel", handleCancelScan(d.Runner, d.Repo))
 			r.Get("/{id}/health", handleLibraryHealth(d.Health))
 		})

@@ -11,6 +11,7 @@ import (
 
 	"github.com/siposbnc/comic-hub/server/internal/archive"
 	"github.com/siposbnc/comic-hub/server/internal/domain"
+	imageproc "github.com/siposbnc/comic-hub/server/internal/image"
 	"github.com/siposbnc/comic-hub/server/internal/pkg/contenthash"
 	"github.com/siposbnc/comic-hub/server/internal/pkg/ulid"
 )
@@ -33,12 +34,19 @@ type Scanner struct {
 	registry      *archive.Registry
 	logger        *slog.Logger
 	hashThreshold int64
+	proc          imageproc.Processor
 }
 
 // New constructs a scanner. hashThreshold is the file size above which content hashing
 // switches to sampled mode.
 func New(repo domain.Repository, registry *archive.Registry, logger *slog.Logger, hashThreshold int64) *Scanner {
-	return &Scanner{repo: repo, registry: registry, logger: logger, hashThreshold: hashThreshold}
+	return &Scanner{
+		repo:          repo,
+		registry:      registry,
+		logger:        logger,
+		hashThreshold: hashThreshold,
+		proc:          imageproc.New(),
+	}
 }
 
 // Scan walks a library's roots and upserts its catalog. When full is false, files whose
@@ -155,6 +163,7 @@ func (s *Scanner) processFile(ctx context.Context, lib domain.Library, full bool
 	}
 
 	pages := buildPages(src.Pages(), ci)
+	s.fillPageDimensions(src, pages)
 	series, err := s.resolveSeries(ctx, lib, path, ci, haveCI)
 	if err != nil {
 		return err
@@ -186,6 +195,25 @@ func buildPages(infos []archive.PageInfo, ci ComicInfo) []domain.Page {
 		pages[i] = p
 	}
 	return pages
+}
+
+// fillPageDimensions decodes each page's header to record its pixel size, so the reader's
+// manifest carries real dimensions (for layout + double-spread detection) instead of zeros.
+// Best-effort: a page whose format has no pure-Go decoder (e.g. AVIF) keeps zero dims, and
+// a single unreadable page never fails the scan.
+func (s *Scanner) fillPageDimensions(src archive.PageSource, pages []domain.Page) {
+	for i := range pages {
+		rc, _, err := src.Page(i)
+		if err != nil {
+			continue
+		}
+		w, h, err := s.proc.Dimensions(rc)
+		rc.Close()
+		if err == nil {
+			pages[i].Width = w
+			pages[i].Height = h
+		}
+	}
 }
 
 func (s *Scanner) resolveSeries(ctx context.Context, lib domain.Library, path string, ci ComicInfo, haveCI bool) (domain.Series, error) {

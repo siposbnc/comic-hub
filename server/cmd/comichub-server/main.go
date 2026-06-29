@@ -209,6 +209,13 @@ func run() error {
 	// File-watching: a debounced incremental rescan whenever a library's files change on
 	// disk. A moved/renamed file is reconciled by the scanner via content hash.
 	if watcher, werr := watch.New(logger, 2*time.Second, func(libraryID string) {
+		// Coalesce: skip if a scan for this library is already queued/running, so a
+		// watcher event can't spawn a scan that overlaps an in-flight one (which would
+		// race on series creation and re-read the same files).
+		if existing, ok := httptransport.ActiveScanJobID(appCtx, store, libraryID); ok {
+			logger.Debug("watch: scan already active, skipping", "library", libraryID, "job", existing)
+			return
+		}
 		payload, _ := json.Marshal(scanner.JobPayload{LibraryID: libraryID, Full: false})
 		if _, err := runner.Submit(appCtx, domain.JobScan, string(payload)); err != nil {
 			logger.Warn("watch: enqueue scan failed", "library", libraryID, "err", err)

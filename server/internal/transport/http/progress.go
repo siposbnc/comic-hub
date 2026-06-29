@@ -23,7 +23,9 @@ type progressDTO struct {
 
 func toProgressDTO(p domain.Progress) progressDTO {
 	percent := 0.0
-	if p.PageCount > 0 {
+	if p.Status == domain.StatusRead {
+		percent = 100 // a finished book is 100%, not (pageCount-1)/pageCount
+	} else if p.PageCount > 0 {
 		percent = math.Round(float64(p.Page)/float64(p.PageCount)*1000) / 10
 	}
 	return progressDTO{
