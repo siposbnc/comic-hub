@@ -30,24 +30,29 @@ const (
 type Service struct {
 	repo      domain.Repository
 	providers map[string]providers.Provider
-	def       string // default provider name (first registered)
+	order     []string // registration order; order[0] is the default
+	def       string   // default provider name (first registered)
 }
 
 // New builds the service over the catalog repository and zero or more providers; the
 // first provider registered is the default when a request doesn't name one.
 func New(repo domain.Repository, provs ...providers.Provider) *Service {
 	m := make(map[string]providers.Provider, len(provs))
+	var order []string
 	def := ""
 	for _, p := range provs {
 		if p == nil {
 			continue
+		}
+		if _, dup := m[p.Name()]; !dup {
+			order = append(order, p.Name())
 		}
 		m[p.Name()] = p
 		if def == "" {
 			def = p.Name()
 		}
 	}
-	return &Service{repo: repo, providers: m, def: def}
+	return &Service{repo: repo, providers: m, order: order, def: def}
 }
 
 // Names lists the registered provider names.
@@ -70,31 +75,74 @@ func (s *Service) provider(name string) (providers.Provider, error) {
 	return p, nil
 }
 
-// Candidates searches a provider for series matching the local series (or an explicit
-// query), ranked best-first by the matching engine.
+// Candidates searches for series matching the local series (or an explicit query), ranked
+// best-first. With an empty providerName it searches every configured provider and merges
+// the results (each candidate tagged with its source), so the picker shows the best hit
+// across providers; a non-empty providerName restricts to that one. A provider that errors
+// (e.g. transient network) is skipped rather than failing the whole search.
 func (s *Service) Candidates(ctx context.Context, seriesID, providerName, query string) ([]providers.SeriesCandidate, error) {
 	series, err := s.repo.Series().Get(ctx, seriesID)
 	if err != nil {
 		return nil, err
 	}
-	p, err := s.provider(providerName)
-	if err != nil {
-		return nil, err
+
+	var search []providers.Provider
+	if providerName == "" {
+		search = s.allProviders()
+		if len(search) == 0 {
+			return nil, fmt.Errorf("metadata: no provider configured")
+		}
+	} else {
+		p, err := s.provider(providerName)
+		if err != nil {
+			return nil, err
+		}
+		search = []providers.Provider{p}
 	}
+
 	q := strings.TrimSpace(query)
 	if q == "" {
 		q = series.Name
 	}
-	cands, err := p.SearchSeries(ctx, q)
-	if err != nil {
-		return nil, err
+
+	var merged []providers.SeriesCandidate
+	var firstErr error
+	for _, p := range search {
+		cands, err := p.SearchSeries(ctx, q)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		for i := range cands {
+			cands[i].Provider = p.Name()
+		}
+		merged = append(merged, cands...)
 	}
+	// Surface an error only when every provider failed (so one provider's outage doesn't
+	// hide another's results).
+	if len(merged) == 0 && firstErr != nil {
+		return nil, firstErr
+	}
+
 	books, err := s.repo.Books().ListBySeries(ctx, seriesID)
 	if err != nil {
 		return nil, err
 	}
 	local := providers.LocalSeries{Name: series.Name, Year: series.Year, IssueCount: len(books)}
-	return providers.RankSeries(local, cands), nil
+	return providers.RankSeries(local, merged), nil
+}
+
+// allProviders returns the configured providers in registration order.
+func (s *Service) allProviders() []providers.Provider {
+	out := make([]providers.Provider, 0, len(s.order))
+	for _, name := range s.order {
+		if p, ok := s.providers[name]; ok {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // ApplyBook fetches one issue's metadata from a provider and writes it onto a book,
@@ -199,19 +247,20 @@ func (s *Service) HasProviders() bool { return len(s.providers) > 0 }
 // 1.0 means an exact, fully-confident match (see providers.ScoreSeries).
 const autoMatchThreshold = 1.0
 
-// AutoMatchSeries searches the default provider for a series and, if the best candidate is
-// a 100%-confidence match, applies it; otherwise the series is flagged incomplete so the
-// user can match it manually. A series with no configured provider is left untouched.
+// AutoMatchSeries searches every configured provider for a series and, if the best
+// candidate across them is a 100%-confidence match, applies it (from whichever provider it
+// came); otherwise the series is flagged incomplete so the user can match it manually. A
+// series with no configured provider is left untouched.
 func (s *Service) AutoMatchSeries(ctx context.Context, seriesID string) error {
 	if s.def == "" {
 		return nil
 	}
-	cands, err := s.Candidates(ctx, seriesID, s.def, "")
+	cands, err := s.Candidates(ctx, seriesID, "", "")
 	if err != nil {
 		return err
 	}
 	if len(cands) > 0 && cands[0].Score >= autoMatchThreshold {
-		return s.MatchSeries(ctx, seriesID, s.def, cands[0].ProviderID, nil, nil)
+		return s.MatchSeries(ctx, seriesID, cands[0].Provider, cands[0].ProviderID, nil, nil)
 	}
 	return s.repo.Series().SetMetadataState(ctx, seriesID, domain.MetaIncomplete)
 }

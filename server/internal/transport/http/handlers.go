@@ -61,6 +61,11 @@ func handleProviders(cfg config.Config) http.HandlerFunc {
 					"label":      "Comic Vine",
 					"configured": cfg.ComicVineAPIKey != "",
 				},
+				{
+					"name":       "metron",
+					"label":      "Metron",
+					"configured": cfg.MetronUsername != "" && cfg.MetronPassword != "",
+				},
 			},
 		})
 	}

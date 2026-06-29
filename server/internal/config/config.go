@@ -39,6 +39,12 @@ type Config struct {
 	// COMICVINE_API_KEY environment variable (server-side only; never sent to clients).
 	// Empty disables online matching against Comic Vine.
 	ComicVineAPIKey string
+
+	// MetronUsername / MetronPassword authenticate the Metron provider (HTTP Basic Auth),
+	// read from METRON_USERNAME / METRON_PASSWORD (server-side only). Both must be set to
+	// enable matching against Metron.
+	MetronUsername string
+	MetronPassword string
 }
 
 // DatabaseConfig describes the catalog store.
@@ -87,6 +93,8 @@ func Load(args []string) (Config, error) {
 		Database:      DatabaseConfig{Driver: "sqlite", Path: *dbPath},
 		// Provider keys are env-only (never flags, so they don't leak into shell history).
 		ComicVineAPIKey: strings.TrimSpace(os.Getenv("COMICVINE_API_KEY")),
+		MetronUsername:  strings.TrimSpace(os.Getenv("METRON_USERNAME")),
+		MetronPassword:  strings.TrimSpace(os.Getenv("METRON_PASSWORD")),
 	}
 
 	if cfg.Mode != ModeEmbedded && cfg.Mode != ModeServer {

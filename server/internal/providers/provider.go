@@ -8,6 +8,7 @@ import "context"
 // SeriesCandidate is a possible series match from a provider.
 type SeriesCandidate struct {
 	ProviderID string  `json:"providerId"`
+	Provider   string  `json:"provider"` // source provider name (e.g. "comicvine", "metron")
 	Name       string  `json:"name"`
 	Year       int     `json:"year"`
 	Publisher  string  `json:"publisher"`

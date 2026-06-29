@@ -46,7 +46,8 @@ export function MatchDialog({
   const activeLabel = active || seriesName;
 
   const apply = useMutation({
-    mutationFn: (providerId: string) => client.applySeriesMatch(seriesId, providerId),
+    mutationFn: (c: SeriesMatchCandidate) =>
+      client.applySeriesMatch(seriesId, c.providerId, { provider: c.provider }),
     onSuccess: () => {
       addToast({
         tone: 'info',
@@ -162,10 +163,10 @@ export function MatchDialog({
             >
               {candidates.data!.map((c) => (
                 <CandidateRow
-                  key={c.providerId}
+                  key={`${c.provider}:${c.providerId}`}
                   candidate={c}
                   busy={apply.isPending}
-                  onUse={() => apply.mutate(c.providerId)}
+                  onUse={() => apply.mutate(c)}
                 />
               ))}
             </div>
@@ -188,7 +189,9 @@ function CandidateRow({
   const pct = Math.round(c.score * 100);
   const tone: BadgeProps['tone'] =
     c.score >= 0.8 ? 'success' : c.score >= 0.5 ? 'accent' : 'neutral';
+  const providerLabel = c.provider === 'metron' ? 'Metron' : 'Comic Vine';
   const meta = [
+    providerLabel,
     c.publisher,
     c.year || undefined,
     c.issueCount ? `${c.issueCount} issues` : undefined,

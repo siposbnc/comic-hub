@@ -403,6 +403,8 @@ export interface ProviderStatus {
 /** A ranked provider series (volume) candidate for matching (GET …/match/candidates). */
 export interface SeriesMatchCandidate {
   providerId: string;
+  /** Source provider name (e.g. "comicvine", "metron"). */
+  provider: string;
   name: string;
   year: number;
   publisher: string;

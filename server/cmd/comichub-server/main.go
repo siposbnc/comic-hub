@@ -26,6 +26,7 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/logging"
 	"github.com/siposbnc/comic-hub/server/internal/providers"
 	"github.com/siposbnc/comic-hub/server/internal/providers/comicvine"
+	"github.com/siposbnc/comic-hub/server/internal/providers/metron"
 	"github.com/siposbnc/comic-hub/server/internal/scanner"
 	"github.com/siposbnc/comic-hub/server/internal/service/browse"
 	"github.com/siposbnc/comic-hub/server/internal/service/health"
@@ -111,13 +112,18 @@ func run() error {
 	defer runner.Shutdown()
 	sc := scanner.New(store, registry, logger, hashLargeThreshold)
 
-	// Online metadata matching (Comic Vine via COMICVINE_API_KEY). The metadata_match
-	// job batch-applies a chosen provider volume to a series' books; the metadata_automatch
-	// job (chained after a scan) auto-applies 100% matches and flags the rest incomplete.
+	// Online metadata matching. The metadata_match job batch-applies a chosen provider
+	// volume to a series' books; the metadata_automatch job (chained after a scan)
+	// auto-applies 100% matches and flags the rest incomplete. Multiple providers can be
+	// configured — matching searches them all and ranks the combined candidates.
 	var metaProviders []providers.Provider
 	if cfg.ComicVineAPIKey != "" {
 		metaProviders = append(metaProviders, comicvine.New(cfg.ComicVineAPIKey))
 		logger.Info("metadata provider configured", "provider", "comicvine")
+	}
+	if cfg.MetronUsername != "" && cfg.MetronPassword != "" {
+		metaProviders = append(metaProviders, metron.New(cfg.MetronUsername, cfg.MetronPassword))
+		logger.Info("metadata provider configured", "provider", "metron")
 	}
 	metaSvc := metadata.New(store, metaProviders...)
 
