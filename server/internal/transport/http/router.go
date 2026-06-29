@@ -83,6 +83,8 @@ func NewRouter(d Deps) http.Handler {
 		r.Route("/series", func(r chi.Router) {
 			r.Get("/", handleListSeries(d.Browse))
 			r.Get("/{id}", handleSeriesDetail(d.Browse))
+			r.Get("/{id}/story-arcs/{arcId}", handleStoryArcDetail(d.Browse))
+			r.Get("/{id}/volumes/{volume}", handleVolumeDetail(d.Browse))
 			r.Get("/{id}/match/candidates", handleSeriesCandidates(d.Metadata))
 			r.Post("/{id}/match/apply", handleSeriesMatch(d.Metadata, d.Runner))
 		})

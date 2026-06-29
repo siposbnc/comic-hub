@@ -50,9 +50,13 @@ func (fakeProvider) Issue(_ context.Context, id string) (providers.IssueMeta, er
 		return providers.IssueMeta{
 			Title: "The Lies Part One", Number: "1", Summary: "begins",
 			People: map[string][]string{"writer": {"Greg Rucka"}}, Characters: []string{"Wonder Woman"},
+			StoryArcs: []providers.ArcRef{{ProviderID: "arc-1", Name: "The Lies"}},
 		}, nil
 	case "iss-2":
-		return providers.IssueMeta{Title: "Year One Part One", Number: "2", Summary: "flashback"}, nil
+		return providers.IssueMeta{
+			Title: "Year One Part One", Number: "2", Summary: "flashback",
+			StoryArcs: []providers.ArcRef{{ProviderID: "arc-1", Name: "The Lies"}},
+		}, nil
 	}
 	return providers.IssueMeta{}, nil
 }
@@ -154,6 +158,24 @@ func TestMatchSeries(t *testing.T) {
 	}
 	if ser.MatchProvider != "fake" || ser.MatchProviderID != "vol-1" {
 		t.Fatalf("series provider link = %q/%q", ser.MatchProvider, ser.MatchProviderID)
+	}
+
+	// Both issues credit one shared arc → a single story arc covering both books.
+	arcs, _ := store.Metadata().SeriesStoryArcs(ctx, seriesID)
+	if len(arcs) != 1 || arcs[0].Name != "The Lies" || arcs[0].IssueCount != 2 {
+		t.Fatalf("series story arcs = %+v", arcs)
+	}
+	ids, _ := store.Metadata().StoryArcBookIDs(ctx, arcs[0].ID)
+	if len(ids) != 2 {
+		t.Fatalf("arc book ids = %v", ids)
+	}
+
+	// Re-matching rebuilds arcs without duplicating them.
+	if err := svc.MatchSeries(ctx, seriesID, "", "vol-1", nil, nil); err != nil {
+		t.Fatalf("re-match: %v", err)
+	}
+	if again, _ := store.Metadata().SeriesStoryArcs(ctx, seriesID); len(again) != 1 {
+		t.Fatalf("re-match duplicated arcs: %+v", again)
 	}
 }
 

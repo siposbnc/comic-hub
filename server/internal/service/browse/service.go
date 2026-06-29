@@ -7,6 +7,9 @@ import (
 	"context"
 	"errors"
 	"math"
+	"sort"
+	"strconv"
+	"time"
 
 	"github.com/siposbnc/comic-hub/server/internal/domain"
 )
@@ -45,16 +48,44 @@ type BookCard struct {
 
 // SeriesDetail is a series header + its issues.
 type SeriesDetail struct {
-	ID            string     `json:"id"`
-	Name          string     `json:"name"`
-	Year          int        `json:"year,omitempty"`
-	Publisher     string     `json:"publisher,omitempty"`
-	Summary       string     `json:"summary,omitempty"`
-	ReadingDir    string     `json:"readingDir"`
-	BookCount     int        `json:"bookCount"`
-	ReadCount     int        `json:"readCount"`
-	MetadataState string     `json:"metadataState,omitempty"`
-	Books         []BookCard `json:"books"`
+	ID            string         `json:"id"`
+	Name          string         `json:"name"`
+	Year          int            `json:"year,omitempty"`
+	Publisher     string         `json:"publisher,omitempty"`
+	Summary       string         `json:"summary,omitempty"`
+	ReadingDir    string         `json:"readingDir"`
+	BookCount     int            `json:"bookCount"`
+	ReadCount     int            `json:"readCount"`
+	MetadataState string         `json:"metadataState,omitempty"`
+	Genres        []string       `json:"genres,omitempty"`
+	Characters    []string       `json:"characters,omitempty"`
+	Volumes       []GroupingCard `json:"volumes,omitempty"`
+	StoryArcs     []GroupingCard `json:"storyArcs,omitempty"`
+	Books         []BookCard     `json:"books"`
+}
+
+// GroupingCard summarizes a browsable grouping (a story arc or a volume) on the series page.
+type GroupingCard struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Year        int    `json:"year,omitempty"`
+	IssueCount  int    `json:"issueCount"`
+	Description string `json:"description,omitempty"`
+}
+
+// GroupingDetail is a story-arc/volume header plus its issues (the detail screen payload).
+type GroupingDetail struct {
+	ID          string     `json:"id"`
+	Kind        string     `json:"kind"` // "arc" | "volume"
+	Name        string     `json:"name"`
+	SeriesID    string     `json:"seriesId"`
+	SeriesName  string     `json:"seriesName"`
+	Year        int        `json:"year,omitempty"`
+	Description string     `json:"description,omitempty"`
+	ReadingDir  string     `json:"readingDir"`
+	IssueCount  int        `json:"issueCount"`
+	ReadCount   int        `json:"readCount"`
+	Books       []BookCard `json:"books"`
 }
 
 // BookDetail is the book detail screen payload.
@@ -173,7 +204,138 @@ func (s *Service) SeriesDetail(ctx context.Context, seriesID, userID string) (Se
 		}
 		detail.Books = append(detail.Books, card)
 	}
+
+	// Details-tab aggregates + browsable groupings (best-effort; absent until matched).
+	detail.Genres, _ = s.repo.Metadata().SeriesGenres(ctx, seriesID)
+	detail.Characters, _ = s.repo.Metadata().SeriesCharacters(ctx, seriesID)
+	detail.Volumes = volumeCards(books)
+	if arcs, err := s.repo.Metadata().SeriesStoryArcs(ctx, seriesID); err == nil {
+		for _, a := range arcs {
+			detail.StoryArcs = append(detail.StoryArcs, GroupingCard{
+				ID: a.ID, Name: a.Name, IssueCount: a.IssueCount, Description: a.Description,
+			})
+		}
+	}
 	return detail, nil
+}
+
+// volumeCards derives browsable volumes from each book's volume number (0 = ungrouped).
+// A "Volume N" lists the issues tagged with that number, earliest release year first.
+func volumeCards(books []domain.Book) []GroupingCard {
+	type agg struct {
+		count int
+		year  int
+	}
+	byVol := map[int]*agg{}
+	var order []int
+	for _, b := range books {
+		if b.Volume <= 0 {
+			continue
+		}
+		a := byVol[b.Volume]
+		if a == nil {
+			a = &agg{}
+			byVol[b.Volume] = a
+			order = append(order, b.Volume)
+		}
+		a.count++
+		if y := yearOf(b.ReleaseDate); y > 0 && (a.year == 0 || y < a.year) {
+			a.year = y
+		}
+	}
+	sort.Ints(order)
+	cards := make([]GroupingCard, 0, len(order))
+	for _, v := range order {
+		a := byVol[v]
+		cards = append(cards, GroupingCard{
+			ID:         strconv.Itoa(v),
+			Name:       "Volume " + strconv.Itoa(v),
+			Year:       a.year,
+			IssueCount: a.count,
+		})
+	}
+	return cards
+}
+
+// StoryArcDetail returns a story arc's header + its issues in reading order.
+func (s *Service) StoryArcDetail(ctx context.Context, seriesID, arcID, userID string) (GroupingDetail, error) {
+	arc, err := s.repo.Metadata().StoryArc(ctx, arcID)
+	if err != nil {
+		return GroupingDetail{}, err
+	}
+	if arc.SeriesID != seriesID {
+		return GroupingDetail{}, domain.ErrNotFound
+	}
+	bookIDs, err := s.repo.Metadata().StoryArcBookIDs(ctx, arcID)
+	if err != nil {
+		return GroupingDetail{}, err
+	}
+	d := s.groupingDetail(ctx, seriesID, userID, "arc", arc.ID, arc.Name, 0, arc.Description, s.booksByID(ctx, bookIDs))
+	return d, nil
+}
+
+// VolumeDetail returns a derived volume's header + its issues (books with that volume number).
+func (s *Service) VolumeDetail(ctx context.Context, seriesID string, volume int, userID string) (GroupingDetail, error) {
+	all, err := s.repo.Books().ListBySeries(ctx, seriesID)
+	if err != nil {
+		return GroupingDetail{}, err
+	}
+	var books []domain.Book
+	year := 0
+	for _, b := range all {
+		if b.Volume == volume {
+			books = append(books, b)
+			if y := yearOf(b.ReleaseDate); y > 0 && (year == 0 || y < year) {
+				year = y
+			}
+		}
+	}
+	if len(books) == 0 {
+		return GroupingDetail{}, domain.ErrNotFound
+	}
+	return s.groupingDetail(ctx, seriesID, userID, "volume", strconv.Itoa(volume), "Volume "+strconv.Itoa(volume), year, "", books), nil
+}
+
+// groupingDetail assembles a GroupingDetail header + its book cards (shared by arc/volume).
+func (s *Service) groupingDetail(ctx context.Context, seriesID, userID, kind, id, name string, year int, desc string, books []domain.Book) GroupingDetail {
+	d := GroupingDetail{
+		ID: id, Kind: kind, Name: name, SeriesID: seriesID, Year: year, Description: desc,
+		ReadingDir: string(domain.LTR), Books: make([]BookCard, 0, len(books)),
+	}
+	if ser, err := s.repo.Series().Get(ctx, seriesID); err == nil {
+		d.SeriesName = ser.Name
+		if ser.ReadingDir != "" {
+			d.ReadingDir = string(ser.ReadingDir)
+		}
+	}
+	for _, b := range books {
+		card := s.bookCard(ctx, b, userID)
+		if card.Progress != nil && card.Progress.Status == string(domain.StatusRead) {
+			d.ReadCount++
+		}
+		d.Books = append(d.Books, card)
+	}
+	d.IssueCount = len(d.Books)
+	return d
+}
+
+// booksByID loads books for the given ids, preserving order and skipping any that vanished.
+func (s *Service) booksByID(ctx context.Context, ids []string) []domain.Book {
+	out := make([]domain.Book, 0, len(ids))
+	for _, id := range ids {
+		if b, err := s.repo.Books().Get(ctx, id); err == nil {
+			out = append(out, b)
+		}
+	}
+	return out
+}
+
+// yearOf extracts the year from an epoch-ms timestamp (0 when unset).
+func yearOf(ms int64) int {
+	if ms <= 0 {
+		return 0
+	}
+	return time.UnixMilli(ms).UTC().Year()
 }
 
 // BookDetail returns the full book detail payload.

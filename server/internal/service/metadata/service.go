@@ -150,6 +150,11 @@ func (s *Service) MatchSeries(ctx context.Context, seriesID, providerName, volum
 		byNumber[normalizeNumber(iss.Number)] = iss
 	}
 
+	// Accumulate story-arc membership across the matched issues (de-duped by provider arc
+	// id, encounter order preserved) to rebuild the series' arcs after applying issues.
+	arcByID := make(map[string]*domain.StoryArcInput)
+	var arcOrder []string
+
 	total := len(books)
 	for i, b := range books {
 		if err := ctx.Err(); err != nil {
@@ -163,12 +168,27 @@ func (s *Service) MatchSeries(ctx context.Context, seriesID, providerName, volum
 			if err := s.applyIssueMeta(ctx, b.ID, p.Name(), iss.ProviderID, im, fields); err != nil {
 				return err
 			}
+			for _, a := range im.StoryArcs {
+				ai := arcByID[a.ProviderID]
+				if ai == nil {
+					ai = &domain.StoryArcInput{ProviderID: a.ProviderID, Name: a.Name}
+					arcByID[a.ProviderID] = ai
+					arcOrder = append(arcOrder, a.ProviderID)
+				}
+				ai.BookIDs = append(ai.BookIDs, b.ID)
+			}
 		}
 		if progress != nil {
 			progress(i+1, total)
 		}
 	}
-	return nil
+
+	// Rebuild the series' story arcs (always — an empty slice clears stale arcs).
+	arcs := make([]domain.StoryArcInput, 0, len(arcOrder))
+	for _, id := range arcOrder {
+		arcs = append(arcs, *arcByID[id])
+	}
+	return s.repo.Metadata().ReplaceSeriesStoryArcs(ctx, seriesID, arcs)
 }
 
 // HasProviders reports whether any metadata provider is configured (online matching is

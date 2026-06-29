@@ -155,6 +155,34 @@ export interface SeriesDetail {
   bookCount: number;
   readCount: number;
   metadataState?: MetadataState;
+  genres?: string[];
+  characters?: string[];
+  volumes?: GroupingCard[];
+  storyArcs?: GroupingCard[];
+  books: BookCard[];
+}
+
+/** A browsable grouping summary on the series page (a story arc or a volume). */
+export interface GroupingCard {
+  id: string;
+  name: string;
+  year?: number;
+  issueCount: number;
+  description?: string;
+}
+
+/** A story-arc/volume detail: header + its issues (same BookCard shape as series issues). */
+export interface GroupingDetail {
+  id: string;
+  kind: 'arc' | 'volume';
+  name: string;
+  seriesId: string;
+  seriesName: string;
+  year?: number;
+  description?: string;
+  readingDir: 'ltr' | 'rtl';
+  issueCount: number;
+  readCount: number;
   books: BookCard[];
 }
 

@@ -41,6 +41,35 @@ func handleSeriesDetail(b *browse.Service) http.HandlerFunc {
 	}
 }
 
+// handleStoryArcDetail returns a story arc's header + its issues in reading order.
+func handleStoryArcDetail(b *browse.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		detail, err := b.StoryArcDetail(r.Context(), chi.URLParam(r, "id"), chi.URLParam(r, "arcId"), currentUserID(r))
+		if err != nil {
+			writeDomainError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, detail)
+	}
+}
+
+// handleVolumeDetail returns a derived volume's header + its issues.
+func handleVolumeDetail(b *browse.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		volume, err := strconv.Atoi(chi.URLParam(r, "volume"))
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "bad_request", "volume must be an integer")
+			return
+		}
+		detail, err := b.VolumeDetail(r.Context(), chi.URLParam(r, "id"), volume, currentUserID(r))
+		if err != nil {
+			writeDomainError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, detail)
+	}
+}
+
 func handleListBooks(b *browse.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		lib := r.URL.Query().Get("library") // optional; empty spans all libraries

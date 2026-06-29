@@ -33,6 +33,12 @@ type SeriesMeta struct {
 	CoverURL    string
 }
 
+// ArcRef is a reference to a story arc an issue belongs to (id + display name).
+type ArcRef struct {
+	ProviderID string
+	Name       string
+}
+
 // IssueMeta is the full metadata for a matched issue.
 type IssueMeta struct {
 	Title       string
@@ -44,6 +50,7 @@ type IssueMeta struct {
 	People      map[string][]string // role -> names
 	Genres      []string
 	Characters  []string
+	StoryArcs   []ArcRef
 }
 
 // Provider is an external metadata source.

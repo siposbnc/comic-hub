@@ -9,6 +9,7 @@ import type {
   Connection,
   CreateLibraryInput,
   Discover,
+  GroupingDetail,
   HealthStatus,
   Job,
   Library,
@@ -175,6 +176,22 @@ export class ComicHubClient {
 
   seriesDetail(id: string): Promise<SeriesDetail> {
     return this.request<SeriesDetail>('GET', `/api/v1/series/${encodeURIComponent(id)}`);
+  }
+
+  /** A story arc's header + its issues in reading order. */
+  storyArc(seriesId: string, arcId: string): Promise<GroupingDetail> {
+    return this.request<GroupingDetail>(
+      'GET',
+      `/api/v1/series/${encodeURIComponent(seriesId)}/story-arcs/${encodeURIComponent(arcId)}`,
+    );
+  }
+
+  /** A derived volume's header + its issues (books tagged with that volume number). */
+  volume(seriesId: string, volume: string | number): Promise<GroupingDetail> {
+    return this.request<GroupingDetail>(
+      'GET',
+      `/api/v1/series/${encodeURIComponent(seriesId)}/volumes/${encodeURIComponent(String(volume))}`,
+    );
   }
 
   bookDetail(id: string): Promise<BookDetail> {

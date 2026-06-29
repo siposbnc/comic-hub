@@ -156,6 +156,22 @@ func (r *metadataRepo) BookCharacters(ctx context.Context, bookID string) ([]str
 	return r.listNames(ctx, `SELECT c.name FROM book_character bc JOIN character c ON c.id = bc.character_id WHERE bc.book_id = ? ORDER BY c.name`, bookID)
 }
 
+func (r *metadataRepo) SeriesGenres(ctx context.Context, seriesID string) ([]string, error) {
+	return r.listNames(ctx, `
+		SELECT DISTINCT g.name FROM genre g
+		JOIN book_genre bg ON bg.genre_id = g.id
+		JOIN book b ON b.id = bg.book_id
+		WHERE b.series_id = ? ORDER BY g.name`, seriesID)
+}
+
+func (r *metadataRepo) SeriesCharacters(ctx context.Context, seriesID string) ([]string, error) {
+	return r.listNames(ctx, `
+		SELECT DISTINCT c.name FROM character c
+		JOIN book_character bc ON bc.character_id = c.id
+		JOIN book b ON b.id = bc.book_id
+		WHERE b.series_id = ? ORDER BY c.name`, seriesID)
+}
+
 func (r *metadataRepo) listNames(ctx context.Context, query, arg string) ([]string, error) {
 	rows, err := r.db.QueryContext(ctx, query, arg)
 	if err != nil {

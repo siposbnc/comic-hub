@@ -41,4 +41,19 @@ type MetadataRepository interface {
 	BookCredits(ctx context.Context, bookID string) (map[string][]string, error)
 	BookGenres(ctx context.Context, bookID string) ([]string, error)
 	BookCharacters(ctx context.Context, bookID string) ([]string, error)
+
+	// SeriesGenres / SeriesCharacters aggregate the distinct genres/characters across a
+	// series' books (for the series Details tab).
+	SeriesGenres(ctx context.Context, seriesID string) ([]string, error)
+	SeriesCharacters(ctx context.Context, seriesID string) ([]string, error)
+
+	// ReplaceSeriesStoryArcs swaps a series' provider-sourced story arcs and their book
+	// links in one transaction (clears stale arcs on a re-match).
+	ReplaceSeriesStoryArcs(ctx context.Context, seriesID string, arcs []StoryArcInput) error
+	// SeriesStoryArcs lists a series' arcs with issue counts, ordered by first issue.
+	SeriesStoryArcs(ctx context.Context, seriesID string) ([]StoryArc, error)
+	// StoryArc returns one arc (with issue count); ErrNotFound if absent.
+	StoryArc(ctx context.Context, arcID string) (StoryArc, error)
+	// StoryArcBookIDs returns an arc's member book ids in issue order.
+	StoryArcBookIDs(ctx context.Context, arcID string) ([]string, error)
 }

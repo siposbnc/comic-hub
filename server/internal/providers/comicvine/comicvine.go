@@ -147,7 +147,7 @@ func (c *Client) Issues(ctx context.Context, seriesProviderID string) ([]provide
 // Issue fetches full metadata for one issue (credits, characters, release date).
 func (c *Client) Issue(ctx context.Context, issueProviderID string) (providers.IssueMeta, error) {
 	params := url.Values{}
-	params.Set("field_list", "name,issue_number,cover_date,deck,description,person_credits,character_credits")
+	params.Set("field_list", "name,issue_number,cover_date,deck,description,person_credits,character_credits,story_arc_credits")
 
 	var d cvIssueDetail
 	if err := c.get(ctx, "/issue/"+issueResourcePrefix+issueProviderID+"/", params, &d); err != nil {
@@ -169,6 +169,14 @@ func (c *Client) Issue(ctx context.Context, issueProviderID string) (providers.I
 	for _, ch := range d.CharacterCredits {
 		if ch.Name != "" {
 			meta.Characters = append(meta.Characters, ch.Name)
+		}
+	}
+	for _, a := range d.StoryArcCredits {
+		if a.Name != "" {
+			meta.StoryArcs = append(meta.StoryArcs, providers.ArcRef{
+				ProviderID: strconv.Itoa(a.ID),
+				Name:       a.Name,
+			})
 		}
 	}
 	return meta, nil
@@ -254,6 +262,11 @@ type cvNamed struct {
 	Name string `json:"name"`
 }
 
+type cvNamedID struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
 type cvVolume struct {
 	ID            int     `json:"id"`
 	Name          string  `json:"name"`
@@ -285,13 +298,14 @@ type cvCredit struct {
 }
 
 type cvIssueDetail struct {
-	Name             string     `json:"name"`
-	IssueNumber      string     `json:"issue_number"`
-	CoverDate        string     `json:"cover_date"`
-	Deck             string     `json:"deck"`
-	Description      string     `json:"description"`
-	PersonCredits    []cvCredit `json:"person_credits"`
-	CharacterCredits []cvNamed  `json:"character_credits"`
+	Name             string      `json:"name"`
+	IssueNumber      string      `json:"issue_number"`
+	CoverDate        string      `json:"cover_date"`
+	Deck             string      `json:"deck"`
+	Description      string      `json:"description"`
+	PersonCredits    []cvCredit  `json:"person_credits"`
+	CharacterCredits []cvNamed   `json:"character_credits"`
+	StoryArcCredits  []cvNamedID `json:"story_arc_credits"`
 }
 
 // --- small helpers -------------------------------------------------------------------
