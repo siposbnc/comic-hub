@@ -101,8 +101,11 @@ Accessibility gate per screen; CI bench thresholds; docs kept in lockstep (03-ap
 | W — Watch + Health | ✅ done — `GET /libraries/{id}/health` (corrupt/orphan/unmatched/duplicate) + client panel; fsnotify watcher → debounced incremental rescan; scanner move/rename reconciliation by content hash |
 | R — Reader extras | ✅ done — continuous (webtoon) scroll, per-book overrides (Settings panel; local/server), auto-advance to the next issue (series or active reading list) on completion, and **bookmarks** (page + note, server-synced; toolbar toggle + B key, slide-over list, scrubber markers). Active reading-list queues (reorder + Home "Up next") landed alongside. (Standalone-local bookmarks deferred — bookmarks are connected-mode only.) |
 
-Remaining metadata polish (non-blocking): GCD as a second provider, ComicInfo
-`write-sidecar`, per-field lock toggles in the UI, and a book-level candidate picker.
+Metadata polish: ✅ Metron added as a second provider (matching searches all providers,
+ranked together) + in-app provider settings; ✅ genres pulled into series Details; ✅ ComicInfo
+`write-sidecar` (opt-in, .cbz). Remaining (UI, needs Design Preview v2 screens): per-field
+lock toggles on the book screen (backend already supports locks), and a book-level candidate
+picker. Also open: GCD as a third provider.
 
 ## Verification
 
