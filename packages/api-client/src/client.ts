@@ -12,6 +12,8 @@ import type {
   GroupingDetail,
   HealthStatus,
   Job,
+  ProviderSettings,
+  ProviderSettingsUpdate,
   Library,
   LibraryHealth,
   NextContext,
@@ -318,6 +320,16 @@ export class ComicHubClient {
   async providers(): Promise<ProviderStatus[]> {
     const res = await this.request<{ providers: ProviderStatus[] }>('GET', '/api/v1/providers');
     return res.providers;
+  }
+
+  /** Provider credential status for the settings screen (secrets never returned). */
+  getProviderSettings(): Promise<ProviderSettings> {
+    return this.request<ProviderSettings>('GET', '/api/v1/settings/providers');
+  }
+
+  /** Save provider credentials; the server reconfigures matching live and returns status. */
+  updateProviderSettings(input: ProviderSettingsUpdate): Promise<ProviderSettings> {
+    return this.request<ProviderSettings>('PUT', '/api/v1/settings/providers', { body: input });
   }
 
   /** Ranked provider candidates for a series (defaults the query to the series name). */

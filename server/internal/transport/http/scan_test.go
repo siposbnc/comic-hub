@@ -19,10 +19,13 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/domain"
 	"github.com/siposbnc/comic-hub/server/internal/image"
 	"github.com/siposbnc/comic-hub/server/internal/jobs"
+	"github.com/siposbnc/comic-hub/server/internal/providers"
+	"github.com/siposbnc/comic-hub/server/internal/providers/comicvine"
 	"github.com/siposbnc/comic-hub/server/internal/scanner"
 	"github.com/siposbnc/comic-hub/server/internal/service/browse"
 	"github.com/siposbnc/comic-hub/server/internal/service/health"
 	"github.com/siposbnc/comic-hub/server/internal/service/library"
+	"github.com/siposbnc/comic-hub/server/internal/service/metadata"
 	"github.com/siposbnc/comic-hub/server/internal/service/organize"
 	"github.com/siposbnc/comic-hub/server/internal/service/reader"
 	"github.com/siposbnc/comic-hub/server/internal/service/reading"
@@ -66,6 +69,7 @@ func newScanServer(t *testing.T) (string, *sqlite.Store) {
 		return sc.Scan(ctx, p.LibraryID, p.Full, scanner.ProgressFunc(progress))
 	})
 
+	metaSvc := metadata.New(store)
 	router := NewRouter(Deps{
 		Logger:   logger,
 		DB:       db,
@@ -76,9 +80,19 @@ func newScanServer(t *testing.T) (string, *sqlite.Store) {
 		Reader:   readerSvc,
 		Browse:   browse.New(store),
 		Reading:  reading.New(store, func(_ string, p domain.Progress) { hub.BroadcastProgress(p) }),
+		Metadata: metaSvc,
 		Organize: organize.New(store),
 		Health:   health.New(store),
 		Hub:      hub,
+		ReloadProviders: func(ctx context.Context) error {
+			saved, _ := store.Settings().GetAll(ctx)
+			var provs []providers.Provider
+			if k := saved[domain.SettingComicVineAPIKey]; k != "" {
+				provs = append(provs, comicvine.New(k))
+			}
+			metaSvc.Configure(provs...)
+			return nil
+		},
 	})
 	srv := httptest.NewServer(router)
 	t.Cleanup(func() { srv.Close(); runner.Shutdown(); _ = db.Close() })

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/siposbnc/comic-hub/server/internal/domain"
 	"github.com/siposbnc/comic-hub/server/internal/providers"
@@ -26,9 +27,12 @@ const (
 	FieldCharacters  = "characters"
 )
 
-// Service applies provider metadata to the catalog.
+// Service applies provider metadata to the catalog. Its provider set can be reconfigured
+// at runtime (when credentials change in settings), so reads are guarded by a mutex.
 type Service struct {
-	repo      domain.Repository
+	repo domain.Repository
+
+	mu        sync.RWMutex
 	providers map[string]providers.Provider
 	order     []string // registration order; order[0] is the default
 	def       string   // default provider name (first registered)
@@ -37,6 +41,14 @@ type Service struct {
 // New builds the service over the catalog repository and zero or more providers; the
 // first provider registered is the default when a request doesn't name one.
 func New(repo domain.Repository, provs ...providers.Provider) *Service {
+	s := &Service{repo: repo}
+	s.Configure(provs...)
+	return s
+}
+
+// Configure replaces the service's provider set (used at startup and whenever provider
+// credentials change). Safe to call concurrently with matching.
+func (s *Service) Configure(provs ...providers.Provider) {
 	m := make(map[string]providers.Provider, len(provs))
 	var order []string
 	def := ""
@@ -52,11 +64,15 @@ func New(repo domain.Repository, provs ...providers.Provider) *Service {
 			def = p.Name()
 		}
 	}
-	return &Service{repo: repo, providers: m, order: order, def: def}
+	s.mu.Lock()
+	s.providers, s.order, s.def = m, order, def
+	s.mu.Unlock()
 }
 
 // Names lists the registered provider names.
 func (s *Service) Names() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	out := make([]string, 0, len(s.providers))
 	for name := range s.providers {
 		out = append(out, name)
@@ -64,7 +80,17 @@ func (s *Service) Names() []string {
 	return out
 }
 
+// Has reports whether a named provider is currently configured.
+func (s *Service) Has(name string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	_, ok := s.providers[name]
+	return ok
+}
+
 func (s *Service) provider(name string) (providers.Provider, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if name == "" {
 		name = s.def
 	}
@@ -136,6 +162,8 @@ func (s *Service) Candidates(ctx context.Context, seriesID, providerName, query 
 
 // allProviders returns the configured providers in registration order.
 func (s *Service) allProviders() []providers.Provider {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	out := make([]providers.Provider, 0, len(s.order))
 	for _, name := range s.order {
 		if p, ok := s.providers[name]; ok {
@@ -241,7 +269,11 @@ func (s *Service) MatchSeries(ctx context.Context, seriesID, providerName, volum
 
 // HasProviders reports whether any metadata provider is configured (online matching is
 // possible). The scan pipeline checks this before enqueuing an auto-match.
-func (s *Service) HasProviders() bool { return len(s.providers) > 0 }
+func (s *Service) HasProviders() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.providers) > 0
+}
 
 // autoMatchThreshold is the minimum candidate score to auto-apply without user confirmation.
 // 1.0 means an exact, fully-confident match (see providers.ScoreSeries).
@@ -252,7 +284,7 @@ const autoMatchThreshold = 1.0
 // came); otherwise the series is flagged incomplete so the user can match it manually. A
 // series with no configured provider is left untouched.
 func (s *Service) AutoMatchSeries(ctx context.Context, seriesID string) error {
-	if s.def == "" {
+	if !s.HasProviders() {
 		return nil
 	}
 	cands, err := s.Candidates(ctx, seriesID, "", "")
@@ -269,7 +301,7 @@ func (s *Service) AutoMatchSeries(ctx context.Context, seriesID string) error {
 // already-matched series and ones already flagged incomplete are skipped so repeated scans
 // don't re-hit the provider. progress, if non-nil, is called after each series.
 func (s *Service) AutoMatchLibrary(ctx context.Context, libraryID string, progress func(done, total int)) error {
-	if s.def == "" {
+	if !s.HasProviders() {
 		return nil
 	}
 	all, err := s.repo.Series().ListByLibrary(ctx, libraryID)

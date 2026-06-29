@@ -401,6 +401,19 @@ export interface ProviderStatus {
 }
 
 /** A ranked provider series (volume) candidate for matching (GET …/match/candidates). */
+/** Provider credential status for the settings screen (secrets are never returned). */
+export interface ProviderSettings {
+  comicvine: { configured: boolean };
+  metron: { configured: boolean; username: string };
+}
+
+/** Provider credential update. Omitted fields are left unchanged; "" clears a field. */
+export interface ProviderSettingsUpdate {
+  comicVineApiKey?: string;
+  metronUsername?: string;
+  metronPassword?: string;
+}
+
 export interface SeriesMatchCandidate {
   providerId: string;
   /** Source provider name (e.g. "comicvine", "metron"). */

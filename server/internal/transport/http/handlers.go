@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/siposbnc/comic-hub/server/internal/config"
+	"github.com/siposbnc/comic-hub/server/internal/service/metadata"
 	"github.com/siposbnc/comic-hub/server/internal/version"
 )
 
@@ -50,22 +51,15 @@ func handleServerInfo(cfg config.Config) http.HandlerFunc {
 	}
 }
 
-// handleProviders reports the configured metadata providers and whether each has
-// credentials (docs/03-api.md §9). Keys themselves are never exposed.
-func handleProviders(cfg config.Config) http.HandlerFunc {
+// handleProviders reports the metadata providers and whether each is currently configured
+// (credentials present). Keys themselves are never exposed. Status reflects runtime
+// settings, so it updates after credentials are saved.
+func handleProviders(meta *metadata.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"providers": []map[string]any{
-				{
-					"name":       "comicvine",
-					"label":      "Comic Vine",
-					"configured": cfg.ComicVineAPIKey != "",
-				},
-				{
-					"name":       "metron",
-					"label":      "Metron",
-					"configured": cfg.MetronUsername != "" && cfg.MetronPassword != "",
-				},
+				{"name": "comicvine", "label": "Comic Vine", "configured": meta.Has("comicvine")},
+				{"name": "metron", "label": "Metron", "configured": meta.Has("metron")},
 			},
 		})
 	}

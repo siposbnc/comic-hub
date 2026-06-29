@@ -41,6 +41,9 @@ type Deps struct {
 	Organize *organize.Service
 	Health   *health.Service
 	Hub      *Hub
+	// ReloadProviders rebuilds the metadata service's providers from persisted settings +
+	// env, after credentials change. Supplied by main.
+	ReloadProviders func(context.Context) error
 }
 
 // NewRouter builds the HTTP handler tree.
@@ -63,7 +66,16 @@ func NewRouter(d Deps) http.Handler {
 
 		r.Get("/server/info", handleServerInfo(d.Config))
 		r.Get("/server/stats", handleServerStats(d.DB))
-		r.Get("/providers", handleProviders(d.Config))
+		r.Get("/providers", handleProviders(d.Metadata))
+
+		// Provider credentials (metadata sources), editable from the settings screen.
+		providerEnvCfg := providerEnv{
+			ComicVineAPIKey: d.Config.ComicVineAPIKey,
+			MetronUsername:  d.Config.MetronUsername,
+			MetronPassword:  d.Config.MetronPassword,
+		}
+		r.Get("/settings/providers", handleGetProviderSettings(d.Repo, d.Metadata, providerEnvCfg))
+		r.Put("/settings/providers", handlePutProviderSettings(d.Repo, d.Metadata, providerEnvCfg, d.ReloadProviders))
 		r.Get("/auth/handshake", handleAuthHandshake(d.Config))
 		r.Post("/admin/shutdown", handleShutdown(d.Logger, d.Shutdown))
 

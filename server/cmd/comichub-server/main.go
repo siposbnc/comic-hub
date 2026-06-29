@@ -112,20 +112,39 @@ func run() error {
 	defer runner.Shutdown()
 	sc := scanner.New(store, registry, logger, hashLargeThreshold)
 
-	// Online metadata matching. The metadata_match job batch-applies a chosen provider
-	// volume to a series' books; the metadata_automatch job (chained after a scan)
-	// auto-applies 100% matches and flags the rest incomplete. Multiple providers can be
-	// configured — matching searches them all and ranks the combined candidates.
-	var metaProviders []providers.Provider
-	if cfg.ComicVineAPIKey != "" {
-		metaProviders = append(metaProviders, comicvine.New(cfg.ComicVineAPIKey))
-		logger.Info("metadata provider configured", "provider", "comicvine")
+	// Online metadata matching. Provider credentials come from persisted settings, falling
+	// back to env vars — so the settings UI can configure them at runtime (and the packaged
+	// app needs no env vars). Multiple providers can be configured; matching searches them
+	// all and ranks the combined candidates. The metadata_automatch job (chained after a
+	// scan) auto-applies 100% matches and flags the rest incomplete.
+	buildProviders := func(ctx context.Context) []providers.Provider {
+		saved, _ := store.Settings().GetAll(ctx)
+		eff := func(key, fallback string) string {
+			if v, ok := saved[key]; ok {
+				return v
+			}
+			return fallback
+		}
+		cvKey := eff(domain.SettingComicVineAPIKey, cfg.ComicVineAPIKey)
+		mUser := eff(domain.SettingMetronUsername, cfg.MetronUsername)
+		mPass := eff(domain.SettingMetronPassword, cfg.MetronPassword)
+		var provs []providers.Provider
+		if cvKey != "" {
+			provs = append(provs, comicvine.New(cvKey))
+		}
+		if mUser != "" && mPass != "" {
+			provs = append(provs, metron.New(mUser, mPass))
+		}
+		return provs
 	}
-	if cfg.MetronUsername != "" && cfg.MetronPassword != "" {
-		metaProviders = append(metaProviders, metron.New(cfg.MetronUsername, cfg.MetronPassword))
-		logger.Info("metadata provider configured", "provider", "metron")
+
+	metaSvc := metadata.New(store, buildProviders(context.Background())...)
+	logger.Info("metadata providers configured", "providers", metaSvc.Names())
+	reloadProviders := func(ctx context.Context) error {
+		metaSvc.Configure(buildProviders(ctx)...)
+		logger.Info("metadata providers reloaded", "providers", metaSvc.Names())
+		return nil
 	}
-	metaSvc := metadata.New(store, metaProviders...)
 
 	runner.Register(domain.JobScan, func(ctx context.Context, payload string, progress jobs.ProgressFunc) error {
 		var p scanner.JobPayload
@@ -211,6 +230,8 @@ func run() error {
 		Organize: organizing,
 		Health:   healthSvc,
 		Hub:      hub,
+
+		ReloadProviders: reloadProviders,
 	})
 
 	srv := &http.Server{
