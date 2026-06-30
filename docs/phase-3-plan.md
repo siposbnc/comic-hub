@@ -92,7 +92,7 @@ G Stats dashboards (preview) last
 |-----------|--------|
 | A — Auth core (accounts, argon2id, JWT, middleware, context user) | ✅ done — server-side; opt-in via `--auth` (env bootstrap), tested e2e |
 | B — Roles + content restrictions | ✅ done — role-gating + admin `/users` CRUD + age-ceiling enforcement (browse/search/reader); A-review carry-overs landed |
-| C — Client auth UX (login / pairing / accounts) — preview-gated | ⬜ not started |
+| C — Client auth UX (login / pairing / accounts) — preview-gated | ✅ done — connect/login boot flow, account chip + sign-out, admin Users card; built to the Design Preview v2 handoffs, verified e2e (stats G1 still pending) |
 | D — Server discovery (mDNS + manual pairing) | ⬜ not started |
 | E — Cross-device sync + presence | ⬜ not started |
 | F — Remote deployment (Docker / service / Postgres / TLS docs) | ⬜ not started |
