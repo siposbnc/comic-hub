@@ -20,9 +20,14 @@ export interface ReaderConfig {
    *  sticks across issues even when per-book remembering is off). Per-book overrides, when
    *  enabled, layer on top of these. */
   defaults: ReaderSettings;
-  /** Continuous auto-scroll speed in CSS pixels per second. */
+  /** Continuous auto-scroll pace, in milliseconds to scroll one screen height (lower is
+   *  faster). Screen-relative so the perceived speed is consistent across window sizes. */
   autoScrollSpeed: number;
 }
+
+/** Auto-scroll pace bounds (ms per screen). */
+export const AUTO_SCROLL_MIN_MS = 1000;
+export const AUTO_SCROLL_MAX_MS = 15000;
 
 const CONFIG_KEY = 'comichub.reader.config';
 const DEFAULT_CONFIG: ReaderConfig = {
@@ -30,8 +35,13 @@ const DEFAULT_CONFIG: ReaderConfig = {
   syncMode: 'local',
   autoAdvance: 'off',
   defaults: { ...DEFAULT_SETTINGS },
-  autoScrollSpeed: 80,
+  autoScrollSpeed: 4000,
 };
+
+function clampSpeed(ms: number): number {
+  if (!Number.isFinite(ms)) return DEFAULT_CONFIG.autoScrollSpeed;
+  return Math.min(AUTO_SCROLL_MAX_MS, Math.max(AUTO_SCROLL_MIN_MS, ms));
+}
 
 export function loadConfig(): ReaderConfig {
   try {
@@ -43,6 +53,8 @@ export function loadConfig(): ReaderConfig {
         ...parsed,
         // Merge nested defaults so an older/partial stored shape can't drop fields.
         defaults: { ...DEFAULT_SETTINGS, ...(parsed.defaults ?? {}) },
+        // Clamp into the ms range (also migrates pre-slider px/sec values).
+        autoScrollSpeed: clampSpeed(parsed.autoScrollSpeed ?? DEFAULT_CONFIG.autoScrollSpeed),
       };
     }
   } catch {

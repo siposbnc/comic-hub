@@ -2,7 +2,12 @@ import { useEffect, type ReactNode } from 'react';
 import { Icon } from '@comichub/ui';
 import { useReaderStore } from './store.js';
 import type { FitMode, LayoutMode, ReaderBackground } from './types.js';
-import type { AutoAdvance, SyncMode } from './prefs.js';
+import {
+  AUTO_SCROLL_MAX_MS,
+  AUTO_SCROLL_MIN_MS,
+  type AutoAdvance,
+  type SyncMode,
+} from './prefs.js';
 
 const LAYOUTS: { value: LayoutMode; label: string }[] = [
   { value: 'single', label: 'Single' },
@@ -17,19 +22,6 @@ const FITS: { value: FitMode; label: string }[] = [
   { value: 'smart', label: 'Smart' },
 ];
 const BACKGROUNDS: ReaderBackground[] = ['black', 'gray', 'sepia', 'white'];
-const SCROLL_SPEEDS: { label: string; px: number }[] = [
-  { label: 'Slow', px: 40 },
-  { label: 'Medium', px: 80 },
-  { label: 'Fast', px: 140 },
-  { label: 'Faster', px: 220 },
-];
-
-/** Closest preset to the stored px/sec, so the active speed always highlights one option. */
-function nearestSpeed(px: number): number {
-  return SCROLL_SPEEDS.reduce((best, s) =>
-    Math.abs(s.px - px) < Math.abs(best.px - px) ? s : best,
-  ).px;
-}
 
 /** Reader settings: the reading preferences plus where per-book overrides are stored. */
 export function SettingsPanel() {
@@ -46,8 +38,6 @@ export function SettingsPanel() {
   const setAutoAdvance = useReaderStore((s) => s.setAutoAdvance);
   const setAutoScrollSpeed = useReaderStore((s) => s.setAutoScrollSpeed);
   const close = useReaderStore((s) => s.setSettingsOpen);
-
-  const activeSpeed = nearestSpeed(config.autoScrollSpeed);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -112,18 +102,21 @@ export function SettingsPanel() {
           <Toggle on={settings.coverAlone} onChange={setCoverAlone} />
         </Row>
         <Row label="Auto-scroll speed" hint="Continuous mode — toggle auto-scroll with A">
-          <div className="seg" role="group">
-            {SCROLL_SPEEDS.map((s) => (
-              <button
-                key={s.px}
-                type="button"
-                className={`seg__btn${s.px === activeSpeed ? ' is-active' : ''}`}
-                aria-pressed={s.px === activeSpeed}
-                onClick={() => setAutoScrollSpeed(s.px)}
-              >
-                {s.label}
-              </button>
-            ))}
+          <div className="settings-slider">
+            {/* Stored as ms to scroll one screen (lower = faster); the slider is inverted so
+                dragging right speeds up, which reads as "more speed". */}
+            <input
+              type="range"
+              min={AUTO_SCROLL_MIN_MS}
+              max={AUTO_SCROLL_MAX_MS}
+              step={250}
+              value={AUTO_SCROLL_MIN_MS + AUTO_SCROLL_MAX_MS - config.autoScrollSpeed}
+              aria-label="Auto-scroll speed"
+              onChange={(e) =>
+                setAutoScrollSpeed(AUTO_SCROLL_MIN_MS + AUTO_SCROLL_MAX_MS - Number(e.target.value))
+              }
+            />
+            <span className="settings-slider__value ch-mono">{config.autoScrollSpeed} ms</span>
           </div>
         </Row>
 

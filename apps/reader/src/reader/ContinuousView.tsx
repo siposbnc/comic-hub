@@ -102,6 +102,9 @@ export function ContinuousView() {
   const syncedRef = useRef(currentPage);
   const suppressRef = useRef(false);
   const didInitRef = useRef(false);
+  // Latest scroll position as a fraction of scrollHeight, to re-anchor across zoom changes.
+  const ratioRef = useRef(0);
+  const zoomMountedRef = useRef(false);
 
   useLayoutEffect(() => {
     const el = containerRef.current;
@@ -154,6 +157,7 @@ export function ContinuousView() {
       if (raf) return;
       raf = requestAnimationFrame(() => {
         raf = 0;
+        ratioRef.current = el.scrollHeight > 0 ? el.scrollTop / el.scrollHeight : 0;
         if (suppressRef.current) return;
         const mark = el.scrollTop + el.clientHeight * 0.25;
         let page = 0;
@@ -175,6 +179,42 @@ export function ContinuousView() {
     };
   }, [goToPage]);
 
+  // Ctrl/⌘ + wheel zooms (matching paged mode); a plain wheel scrolls the column.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      useReaderStore.getState().zoomBy(e.deltaY < 0 ? 1 : -1);
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
+
+  // Page sizes scale with zoom, so restore the same scroll fraction after a zoom change to
+  // keep the reader anchored where it was (skip the initial mount).
+  useEffect(() => {
+    if (!zoomMountedRef.current) {
+      zoomMountedRef.current = true;
+      return;
+    }
+    const el = containerRef.current;
+    if (!el) return;
+    const ratio = ratioRef.current;
+    suppressRef.current = true;
+    const raf = requestAnimationFrame(() => {
+      el.scrollTop = ratio * el.scrollHeight;
+    });
+    const t = window.setTimeout(() => {
+      suppressRef.current = false;
+    }, 200);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(t);
+    };
+  }, [zoom]);
+
   // Auto-scroll: advance the column at the configured speed, pausing when a key is held.
   // Speed/pause are read live from the store so changes apply mid-scroll without re-binding.
   useEffect(() => {
@@ -189,7 +229,10 @@ export function ContinuousView() {
       const st = useReaderStore.getState();
       if (!st.autoScroll) return;
       if (!st.autoScrollPaused) {
-        el.scrollTop += st.config.autoScrollSpeed * dt;
+        // Speed is stored as ms to scroll one screen height → convert to px/sec.
+        const msPerScreen = st.config.autoScrollSpeed;
+        const pxPerSec = msPerScreen > 0 ? el.clientHeight / (msPerScreen / 1000) : 0;
+        el.scrollTop += pxPerSec * dt;
         if (el.scrollTop + el.clientHeight >= el.scrollHeight - 1) {
           useReaderStore.setState({ autoScroll: false }); // reached the end
           return;

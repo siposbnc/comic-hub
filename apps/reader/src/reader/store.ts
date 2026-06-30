@@ -333,6 +333,23 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
       });
       navigateTo(startPage);
       void get().loadBookmarks();
+
+      // Connected mode only knows the bookId up front; fetch the book to show a readable
+      // "Series #Issue" title (standalone already uses the filename as the title).
+      if (launch.kind === 'connected') {
+        void (async () => {
+          try {
+            const d = await launch.client.bookDetail(manifest.bookId);
+            if (get().manifest?.bookId !== manifest.bookId) return; // book changed meanwhile
+            const label = d.number
+              ? `${d.seriesName} #${d.number}`
+              : d.title || d.seriesName || get().title;
+            set({ title: label });
+          } catch {
+            // keep whatever title we have
+          }
+        })();
+      }
     } catch (err) {
       set({
         status: 'error',
