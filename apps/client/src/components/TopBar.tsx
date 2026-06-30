@@ -1,20 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useRouter, useRouterState } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import {
-  Input,
-  JobIndicator,
-  IconButton,
-  Tooltip,
-  Button,
-  Avatar,
-  Icon,
-  type JobItem,
-} from '@comichub/ui';
+import { Input, JobIndicator, IconButton, Tooltip, Button, Icon, type JobItem } from '@comichub/ui';
 import type { ComicHubClient, SearchResults } from '@comichub/api-client';
 import { useClient } from '../lib/client.js';
 import { useUiStore } from '../store/ui.js';
 import { issueLabel } from '../lib/format.js';
+import { AccountChip } from './AccountChip.js';
 
 /** 56px utility bar: back nav, catalog search, view density, job status, theme, identity. */
 export function TopBar() {
@@ -159,7 +151,7 @@ export function TopBar() {
         />
       </Tooltip>
 
-      <Avatar name={info.data?.name || 'ComicHub'} />
+      <AccountChip fallbackName={info.data?.name || 'ComicHub'} />
     </header>
   );
 }

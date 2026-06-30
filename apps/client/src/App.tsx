@@ -1,28 +1,32 @@
 import { useEffect, useMemo, useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
-import { ComicHubClient, type Connection } from '@comichub/api-client';
+import { ComicHubClient, ApiError, type Connection } from '@comichub/api-client';
 import { resolveConnection, isTauri } from './connection.js';
 import { ClientProvider } from './lib/client.js';
+import { tokenStore, useAuthStore, wireRefresh } from './lib/auth.js';
+import { AuthFlow, type AuthResult } from './routes/Auth.js';
 import { createQueryClient } from './lib/queries.js';
 import { router } from './router.js';
 import { useUiStore, applyTheme, applyAccent } from './store/ui.js';
 
 type Boot =
   | { kind: 'starting' }
+  | { kind: 'auth'; baseUrl: string; startAtLogin: boolean }
   | { kind: 'ready'; client: ComicHubClient; connection: Connection }
   | { kind: 'error'; message: string };
 
 /**
- * App root: resolve a server connection (embedded sidecar in Tauri, dev server on the
- * web), then mount the query + client providers around the router. Theme/accent are
- * applied to the document before the first paint of real screens.
+ * App root: resolve a server connection, then — if that server requires auth — run the
+ * connect/login flow before mounting the app. Embedded / auth-disabled installs (the default)
+ * skip straight to ready. A dropped session (refresh failed, or sign-out) returns here.
  */
 export function App() {
   const [boot, setBoot] = useState<Boot>({ kind: 'starting' });
   const queryClient = useMemo(() => createQueryClient(), []);
   const theme = useUiStore((s) => s.theme);
   const accent = useUiStore((s) => s.accent);
+  const disconnected = useAuthStore((s) => s.disconnected);
 
   useEffect(() => {
     applyTheme(theme);
@@ -33,10 +37,37 @@ export function App() {
     let cancelled = false;
     (async () => {
       try {
-        const connection = await resolveConnection();
-        const client = new ComicHubClient(connection);
-        await client.health();
-        if (!cancelled) setBoot({ kind: 'ready', client, connection });
+        // A remembered remote server wins over the embedded sidecar; else resolve normally.
+        const stored = tokenStore.serverUrl();
+        const base = stored
+          ? { baseUrl: stored, token: tokenStore.access() }
+          : await resolveConnection();
+
+        const client = new ComicHubClient(base);
+        wireRefresh(client);
+
+        try {
+          await client.health();
+        } catch (err) {
+          // A remembered server that's unreachable → let the user re-point (connect screen).
+          if (stored) {
+            if (!cancelled) setBoot({ kind: 'auth', baseUrl: stored, startAtLogin: false });
+            return;
+          }
+          throw err;
+        }
+
+        try {
+          const hs = await client.authHandshake();
+          useAuthStore.getState().setUser(hs.user);
+          if (!cancelled) setBoot({ kind: 'ready', client, connection: base });
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 401) {
+            if (!cancelled) setBoot({ kind: 'auth', baseUrl: base.baseUrl, startAtLogin: true });
+            return;
+          }
+          throw err;
+        }
       } catch (err) {
         if (!cancelled) {
           setBoot({ kind: 'error', message: err instanceof Error ? err.message : String(err) });
@@ -48,8 +79,33 @@ export function App() {
     };
   }, []);
 
+  const onAuthenticated = (r: AuthResult) => {
+    wireRefresh(r.client);
+    setBoot({ kind: 'ready', client: r.client, connection: r.connection });
+  };
+
   if (boot.kind === 'starting') return <BootScreen state="starting" />;
   if (boot.kind === 'error') return <BootScreen state="error" message={boot.message} />;
+  if (boot.kind === 'auth') {
+    return (
+      <AuthFlow
+        initialBaseUrl={boot.baseUrl}
+        startAtLogin={boot.startAtLogin}
+        onAuthenticated={onAuthenticated}
+      />
+    );
+  }
+
+  // A session that dropped mid-use (refresh failed, or the user signed out) → re-authenticate.
+  if (disconnected) {
+    return (
+      <AuthFlow
+        initialBaseUrl={boot.connection.baseUrl}
+        startAtLogin
+        onAuthenticated={onAuthenticated}
+      />
+    );
+  }
 
   return (
     <QueryClientProvider client={queryClient}>

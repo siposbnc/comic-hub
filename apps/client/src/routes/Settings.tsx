@@ -3,8 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button, Badge, Switch } from '@comichub/ui';
 import type { ProviderSettingsUpdate } from '@comichub/api-client';
 import { useClient, useConnection } from '../lib/client.js';
+import { useAuthStore, isAdmin } from '../lib/auth.js';
 import { useUiStore, type Accent, type Theme } from '../store/ui.js';
 import { Page, LoadingState } from '../components/Page.js';
+import { UsersCard } from '../components/UsersCard.js';
 
 const ACCENTS: { value: Accent; label: string; swatch: string }[] = [
   { value: 'cyan', label: 'Cyan', swatch: 'var(--cyan-500)' },
@@ -21,6 +23,7 @@ export function Settings() {
   const accent = useUiStore((s) => s.accent);
   const setAccent = useUiStore((s) => s.setAccent);
 
+  const user = useAuthStore((s) => s.user);
   const info = useQuery({ queryKey: ['server', 'info'], queryFn: () => client.serverInfo() });
   const stats = useQuery({ queryKey: ['server', 'stats'], queryFn: () => client.serverStats() });
 
@@ -63,6 +66,8 @@ export function Settings() {
         </SettingsCard>
 
         <ProvidersCard />
+
+        {isAdmin(user) && <UsersCard />}
 
         <SettingsCard title="Server">
           {info.isLoading || stats.isLoading ? (

@@ -43,6 +43,42 @@ export interface AuthHandshakeResult {
   user: User;
 }
 
+/** A token pair + the signed-in user, returned by login/refresh (auth mode). */
+export interface AuthTokens {
+  access: string;
+  refresh: string;
+  /** Unix seconds when the access token expires. */
+  accessExpiry: number;
+  user: User;
+}
+
+/** An account as seen by admin user-management (includes the restriction ceiling). */
+export interface UserAccount {
+  id: string;
+  username: string;
+  displayName: string;
+  role: UserRole;
+  /** Content rating ceiling for restricted users (empty/absent = unrestricted). */
+  ageRatingMax?: string;
+}
+
+/** Admin create-account input. */
+export interface CreateUserInput {
+  username: string;
+  displayName?: string;
+  role: UserRole;
+  password: string;
+  ageRatingMax?: string;
+}
+
+/** Admin update-account input; omitted fields are unchanged. */
+export interface UpdateUserInput {
+  displayName?: string;
+  role?: UserRole;
+  ageRatingMax?: string;
+  password?: string;
+}
+
 export interface ApiErrorBody {
   error: {
     code: string;

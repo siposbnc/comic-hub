@@ -1,5 +1,6 @@
 import type {
   AuthHandshakeResult,
+  AuthTokens,
   Bookmark,
   BookCard,
   BookDetail,
@@ -34,6 +35,9 @@ import type {
   SmartListResults,
   SmartRules,
   Tag,
+  CreateUserInput,
+  UpdateUserInput,
+  UserAccount,
 } from './types.js';
 
 /** Thrown when the server returns a non-2xx response. */
@@ -55,11 +59,68 @@ export class ApiError extends Error {
  */
 export class ComicHubClient {
   private readonly baseUrl: string;
-  private readonly token: string;
+  private token: string;
+  /** Called once on a 401 to obtain a fresh access token (refresh flow). Returns the new
+   *  token, or null if refresh failed (the caller should then re-authenticate). */
+  private onUnauthorized?: () => Promise<string | null>;
 
   constructor(connection: Connection) {
     this.baseUrl = connection.baseUrl.replace(/\/$/, '');
     this.token = connection.token;
+  }
+
+  /** Replace the bearer access token (after login/refresh). */
+  setAccessToken(token: string): void {
+    this.token = token;
+  }
+
+  /** Register the refresh hook used to recover from a 401 once per request. */
+  setUnauthorizedHandler(fn: (() => Promise<string | null>) | undefined): void {
+    this.onUnauthorized = fn;
+  }
+
+  // ── Authentication (auth mode) ───────────────────────────────────────────────
+
+  /** Exchange credentials for a token pair. Unauthenticated. */
+  login(username: string, password: string): Promise<AuthTokens> {
+    return this.request<AuthTokens>('POST', '/api/v1/auth/login', {
+      auth: false,
+      body: { username, password },
+    });
+  }
+
+  /** Rotate a refresh token for a fresh pair. Unauthenticated. */
+  refreshTokens(refresh: string): Promise<AuthTokens> {
+    return this.request<AuthTokens>('POST', '/api/v1/auth/refresh', {
+      auth: false,
+      body: { refresh },
+    });
+  }
+
+  /** Revoke a refresh-token session. Unauthenticated (the token is the credential). */
+  async logout(refresh: string): Promise<void> {
+    await this.request<unknown>('POST', '/api/v1/auth/logout', { auth: false, body: { refresh } });
+  }
+
+  // ── User management (admin) ──────────────────────────────────────────────────
+
+  async listUsers(): Promise<UserAccount[]> {
+    const res = await this.request<{ users: UserAccount[] }>('GET', '/api/v1/users');
+    return res.users ?? [];
+  }
+
+  createUser(input: CreateUserInput): Promise<UserAccount> {
+    return this.request<UserAccount>('POST', '/api/v1/users', { body: input });
+  }
+
+  updateUser(id: string, input: UpdateUserInput): Promise<UserAccount> {
+    return this.request<UserAccount>('PATCH', `/api/v1/users/${encodeURIComponent(id)}`, {
+      body: input,
+    });
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    await this.request<unknown>('DELETE', `/api/v1/users/${encodeURIComponent(id)}`);
   }
 
   /** Liveness — unauthenticated. */
@@ -569,7 +630,7 @@ export class ComicHubClient {
   private async request<T>(
     method: string,
     path: string,
-    opts: { auth?: boolean; body?: unknown } = {},
+    opts: { auth?: boolean; body?: unknown; retried?: boolean } = {},
   ): Promise<T> {
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (opts.auth !== false && this.token) {
@@ -584,6 +645,17 @@ export class ComicHubClient {
       headers,
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
     });
+
+    // Auth mode: a 401 on an authenticated call means the access token expired — refresh once
+    // (via the registered hook) and retry. The refresh call itself is auth:false, so it never
+    // recurses here.
+    if (res.status === 401 && opts.auth !== false && !opts.retried && this.onUnauthorized) {
+      const fresh = await this.onUnauthorized();
+      if (fresh) {
+        this.token = fresh;
+        return this.request<T>(method, path, { ...opts, retried: true });
+      }
+    }
 
     if (!res.ok) {
       let code = 'http_error';
