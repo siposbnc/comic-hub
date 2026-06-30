@@ -50,7 +50,27 @@ type UpsertInput struct {
 
 // Get returns the user's progress for a book (ErrNotFound if none yet).
 func (s *Service) Get(ctx context.Context, userID, bookID string) (domain.Progress, error) {
-	return s.repo.Progress().Get(ctx, userID, bookID)
+	p, err := s.repo.Progress().Get(ctx, userID, bookID)
+	if err == nil {
+		return p, nil
+	}
+	if !errors.Is(err, domain.ErrNotFound) {
+		return domain.Progress{}, err
+	}
+	// No progress row yet: return a default "unread" progress (page 0) so a client opening
+	// a fresh book gets a 200 with sensible defaults instead of a 404 it must special-case.
+	// An unknown book is still a real 404.
+	book, berr := s.repo.Books().Get(ctx, bookID)
+	if berr != nil {
+		return domain.Progress{}, berr
+	}
+	return domain.Progress{
+		UserID:    userID,
+		BookID:    bookID,
+		Page:      0,
+		PageCount: book.PageCount,
+		Status:    domain.StatusUnread,
+	}, nil
 }
 
 // Upsert records progress for a book, snapshotting the page count and deriving status
