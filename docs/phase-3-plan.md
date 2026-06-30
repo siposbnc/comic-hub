@@ -70,7 +70,11 @@ G Stats dashboards (preview) last
   still works.
 - **B — Roles + content restrictions.** Role-gating middleware; admin user-management routes
   (`GET/POST/PATCH/DELETE /users`); `age_rating_max` ceiling applied in browse + reader for
-  restricted users (server-enforced). Tests for each role's access matrix.
+  restricted users (server-enforced). Tests for each role's access matrix. **Carry-overs from
+  the Milestone A security review** (must land before auth ships): role-gate `/admin/shutdown`
+  (currently any authenticated user can call it); enforce the `restricted` ceiling (the role
+  exists but isn't yet applied); and revoke a user's sessions (`Sessions().DeleteForUser`) on
+  password change / role downgrade.
 - **C — Client auth UX (preview-gated).** Login screen, server pairing (manual URL), account
   switcher, account management; OS-keychain token storage; refresh-on-401. Build against the
   Design Preview v2 screens.
