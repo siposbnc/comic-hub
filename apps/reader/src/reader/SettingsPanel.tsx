@@ -17,6 +17,19 @@ const FITS: { value: FitMode; label: string }[] = [
   { value: 'smart', label: 'Smart' },
 ];
 const BACKGROUNDS: ReaderBackground[] = ['black', 'gray', 'sepia', 'white'];
+const SCROLL_SPEEDS: { label: string; px: number }[] = [
+  { label: 'Slow', px: 40 },
+  { label: 'Medium', px: 80 },
+  { label: 'Fast', px: 140 },
+  { label: 'Faster', px: 220 },
+];
+
+/** Closest preset to the stored px/sec, so the active speed always highlights one option. */
+function nearestSpeed(px: number): number {
+  return SCROLL_SPEEDS.reduce((best, s) =>
+    Math.abs(s.px - px) < Math.abs(best.px - px) ? s : best,
+  ).px;
+}
 
 /** Reader settings: the reading preferences plus where per-book overrides are stored. */
 export function SettingsPanel() {
@@ -31,7 +44,10 @@ export function SettingsPanel() {
   const setRememberPerBook = useReaderStore((s) => s.setRememberPerBook);
   const setSyncMode = useReaderStore((s) => s.setSyncMode);
   const setAutoAdvance = useReaderStore((s) => s.setAutoAdvance);
+  const setAutoScrollSpeed = useReaderStore((s) => s.setAutoScrollSpeed);
   const close = useReaderStore((s) => s.setSettingsOpen);
+
+  const activeSpeed = nearestSpeed(config.autoScrollSpeed);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -94,6 +110,21 @@ export function SettingsPanel() {
         </Row>
         <Row label="Cover alone" hint="Show the first page as a lone cover in double mode">
           <Toggle on={settings.coverAlone} onChange={setCoverAlone} />
+        </Row>
+        <Row label="Auto-scroll speed" hint="Continuous mode — toggle auto-scroll with A">
+          <div className="seg" role="group">
+            {SCROLL_SPEEDS.map((s) => (
+              <button
+                key={s.px}
+                type="button"
+                className={`seg__btn${s.px === activeSpeed ? ' is-active' : ''}`}
+                aria-pressed={s.px === activeSpeed}
+                onClick={() => setAutoScrollSpeed(s.px)}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
         </Row>
 
         <div className="settings-divider" />

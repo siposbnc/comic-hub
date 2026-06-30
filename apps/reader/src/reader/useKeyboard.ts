@@ -2,6 +2,9 @@ import { useEffect } from 'react';
 import { useReaderStore } from './store.js';
 import { toggleFullscreen, exitFullscreen, isFullscreen } from './fullscreen.js';
 
+/** Keys that pause auto-scroll while held (resumed on release). */
+const AUTOSCROLL_PAUSE_KEYS = new Set([' ', 'ArrowDown', 'ArrowUp', 'PageDown', 'PageUp']);
+
 /**
  * Global keyboard navigation (docs/06-reader.md §3.4). Physical arrows map to reading order
  * by direction; Space/Shift-Space always advance/retreat in reading order.
@@ -15,6 +18,14 @@ export function useKeyboard(): void {
 
       const s = useReaderStore.getState();
       const rtl = s.settings.direction === 'rtl';
+
+      // While auto-scrolling, navigation keys momentarily pause the scroll (held, not toggled)
+      // instead of paging — released in the keyup handler below.
+      if (s.autoScroll && AUTOSCROLL_PAUSE_KEYS.has(e.key)) {
+        e.preventDefault();
+        s.setAutoScrollPaused(true);
+        return;
+      }
 
       switch (e.key) {
         case 'ArrowRight':
@@ -60,6 +71,11 @@ export function useKeyboard(): void {
           e.preventDefault();
           s.toggleContinuous();
           break;
+        case 'a':
+        case 'A':
+          e.preventDefault();
+          s.toggleAutoScroll();
+          break;
         case 'b':
         case 'B':
           // Bookmarks are server-backed (connected mode only); no-ops otherwise.
@@ -97,7 +113,18 @@ export function useKeyboard(): void {
       }
     }
 
+    function onKeyUp(e: KeyboardEvent): void {
+      const s = useReaderStore.getState();
+      if (s.autoScroll && s.autoScrollPaused && AUTOSCROLL_PAUSE_KEYS.has(e.key)) {
+        s.setAutoScrollPaused(false);
+      }
+    }
+
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keyup', onKeyUp);
+    };
   }, []);
 }

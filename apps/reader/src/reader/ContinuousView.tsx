@@ -2,9 +2,45 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Icon } from '@comichub/ui';
 import { useReaderStore } from './store.js';
 import { usePageSnapshot } from './usePageSnapshot.js';
+import type { FitMode } from './types.js';
 
 // Cap the page column on wide screens so webtoon pages don't blow up to full width.
 const MAX_WIDTH = 1000;
+
+/** Rendered column width (CSS px) for a page in continuous mode, honoring the fit mode and
+ *  the zoom multiplier. Fit decides the base size from the viewport + page aspect; zoom
+ *  scales it (so zooming in a webtoon enlarges pages and scrolls through them). */
+function columnWidth(
+  fit: FitMode,
+  aspect: number,
+  viewW: number,
+  viewH: number,
+  nativeW: number,
+  zoom: number,
+): number {
+  const byWidth = viewW;
+  const byHeight = viewH * aspect; // width such that the page height equals the viewport
+  let base: number;
+  switch (fit) {
+    case 'width':
+      base = byWidth;
+      break;
+    case 'height':
+      base = byHeight;
+      break;
+    case 'original':
+      base = nativeW > 0 ? nativeW : byWidth;
+      break;
+    case 'smart':
+    case 'screen':
+    default:
+      base = Math.min(byWidth, byHeight);
+      break;
+  }
+  // Cap width-driven fits on ultra-wide screens; native/height keep their intrinsic size.
+  if (fit !== 'original' && fit !== 'height') base = Math.min(base, MAX_WIDTH);
+  return Math.max(1, base * zoom);
+}
 
 /** One page in the continuous column. The slot's height is fixed from the manifest aspect
  *  so the scrollbar is stable; the decoded image swaps in once the cache window covers it. */
@@ -36,36 +72,58 @@ function ContinuousPage({ idx }: { idx: number }) {
 }
 
 /**
- * Continuous (webtoon) reading: a single vertical scroll of fit-to-width pages. The page
- * nearest the top drives `currentPage` (progress + cache window via the store's goToPage);
- * external page changes (keyboard/scrubber/resume) scroll the matching page into view.
+ * Continuous (webtoon) reading: a vertical scroll of pages sized by the fit mode and zoom.
+ * The page nearest the top drives `currentPage` (progress + cache window); external page
+ * changes (keyboard/scrubber/resume) and the initial open scroll the matching page into
+ * view. Auto-scroll advances the column at a configurable speed.
  */
 export function ContinuousView() {
   const containerRef = useRef<HTMLDivElement>(null);
   const slotRefs = useRef<Array<HTMLDivElement | null>>([]);
-  const [contentW, setContentW] = useState(0);
+  const [view, setView] = useState({ w: 0, h: 0 });
 
   const manifest = useReaderStore((s) => s.manifest);
   const currentPage = useReaderStore((s) => s.currentPage);
+  const fit = useReaderStore((s) => s.settings.fit);
+  const zoom = useReaderStore((s) => s.zoom);
+  const autoScroll = useReaderStore((s) => s.autoScroll);
   const goToPage = useReaderStore((s) => s.goToPage);
   const toggleChrome = useReaderStore((s) => s.toggleChrome);
 
   const total = manifest?.pageCount ?? 0;
-  const renderedW = Math.min(contentW || MAX_WIDTH, MAX_WIDTH);
 
   // The last page we reported to / synced from the store, to break the scroll↔state loop.
   const syncedRef = useRef(currentPage);
   const suppressRef = useRef(false);
+  const didInitRef = useRef(false);
 
   useLayoutEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const update = () => setContentW(el.clientWidth);
+    const update = () => setView({ w: el.clientWidth, h: el.clientHeight });
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  // On first layout (and when toggling into continuous), scroll to the current page rather
+  // than snapping to the top — otherwise the view jumps to page 1 while progress stays put.
+  useEffect(() => {
+    if (didInitRef.current || !total || view.w === 0) return;
+    if (currentPage > 0) {
+      const slot = slotRefs.current[currentPage];
+      if (slot) {
+        suppressRef.current = true;
+        slot.scrollIntoView({ block: 'start' });
+        syncedRef.current = currentPage;
+        window.setTimeout(() => {
+          suppressRef.current = false;
+        }, 250);
+      }
+    }
+    didInitRef.current = true;
+  }, [total, view.w, currentPage]);
 
   // External page change (keyboard, scrubber, resume): scroll that page to the top.
   useEffect(() => {
@@ -111,6 +169,32 @@ export function ContinuousView() {
     };
   }, [goToPage]);
 
+  // Auto-scroll: advance the column at the configured speed, pausing when a key is held.
+  // Speed/pause are read live from the store so changes apply mid-scroll without re-binding.
+  useEffect(() => {
+    if (!autoScroll) return;
+    const el = containerRef.current;
+    if (!el) return;
+    let raf = 0;
+    let last = performance.now();
+    const step = (now: number) => {
+      const dt = (now - last) / 1000;
+      last = now;
+      const st = useReaderStore.getState();
+      if (!st.autoScroll) return;
+      if (!st.autoScrollPaused) {
+        el.scrollTop += st.config.autoScrollSpeed * dt;
+        if (el.scrollTop + el.clientHeight >= el.scrollHeight - 1) {
+          useReaderStore.setState({ autoScroll: false }); // reached the end
+          return;
+        }
+      }
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [autoScroll]);
+
   if (!manifest) return null;
 
   return (
@@ -118,7 +202,9 @@ export function ContinuousView() {
       {Array.from({ length: total }, (_, idx) => {
         const meta = manifest.pages.find((p) => p.idx === idx);
         const aspect = meta && meta.w > 0 && meta.h > 0 ? meta.w / meta.h : 0.66;
-        const height = renderedW / aspect;
+        const nativeW = meta?.w ?? 0;
+        const width = columnWidth(fit, aspect, view.w || MAX_WIDTH, view.h, nativeW, zoom);
+        const height = width / aspect;
         return (
           <div
             key={idx}
@@ -126,7 +212,7 @@ export function ContinuousView() {
               slotRefs.current[idx] = el;
             }}
             className="continuous-page"
-            style={{ width: renderedW, height }}
+            style={{ width, height }}
           >
             <ContinuousPage idx={idx} />
           </div>

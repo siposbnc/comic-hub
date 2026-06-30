@@ -89,6 +89,8 @@ export function Reader() {
         <Scrubber />
       </div>
 
+      <ZoomIndicator />
+
       {settingsOpen && <SettingsPanel />}
       {bookmarksOpen && <BookmarksPanel />}
 
@@ -164,6 +166,37 @@ function AutoNext({ label }: { label: string }) {
         </Button>
       </div>
     </>
+  );
+}
+
+const ZOOM_FADE_MS = 1400;
+
+/** Transient zoom readout: shows the current zoom % with a Reset button whenever the zoom
+ *  level changes, then fades away. (The toolbar carries the always-visible readout.) */
+function ZoomIndicator() {
+  const zoom = useReaderStore((s) => s.zoom);
+  const resetZoom = useReaderStore((s) => s.resetZoom);
+  const [visible, setVisible] = useState(false);
+  const mounted = useRef(false);
+
+  useEffect(() => {
+    // Don't flash on first render — only on actual zoom changes.
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    setVisible(true);
+    const t = setTimeout(() => setVisible(false), ZOOM_FADE_MS);
+    return () => clearTimeout(t);
+  }, [zoom]);
+
+  return (
+    <div className={`zoom-indicator${visible ? ' is-visible' : ''}`} aria-hidden={!visible}>
+      <span className="zoom-indicator__pct">{Math.round(zoom * 100)}%</span>
+      <button type="button" className="zoom-indicator__reset" onClick={resetZoom}>
+        Reset
+      </button>
+    </div>
   );
 }
 

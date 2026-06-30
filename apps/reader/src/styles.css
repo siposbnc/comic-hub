@@ -189,6 +189,79 @@ body {
   background: var(--reader-chrome-border);
 }
 
+/* Always-visible zoom readout between the zoom buttons; click resets to 100%. */
+.zoom-pct {
+  min-width: 3.4ch;
+  padding: 0.25rem 0.4rem;
+  border: none;
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--paper-400);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-standard),
+    background var(--dur-fast) var(--ease-standard);
+}
+
+.zoom-pct:hover {
+  color: var(--paper-100);
+  background: var(--reader-chrome-hover, rgba(255, 255, 255, 0.08));
+}
+
+/* Transient zoom readout near the bottom centre; appears on zoom change, then fades. */
+.zoom-indicator {
+  position: absolute;
+  left: 50%;
+  bottom: 5.5rem;
+  transform: translateX(-50%) translateY(6px);
+  z-index: 13;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.35rem 0.4rem 0.35rem 0.9rem;
+  background: var(--ink-700);
+  border: 1px solid var(--reader-chrome-border);
+  border-radius: 999px;
+  color: var(--paper-100);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity var(--dur-fast) var(--ease-standard),
+    transform var(--dur-fast) var(--ease-standard);
+}
+
+.zoom-indicator.is-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+}
+
+.zoom-indicator__pct {
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.zoom-indicator__reset {
+  border: none;
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
+  background: var(--reader-chrome-hover, rgba(255, 255, 255, 0.1));
+  color: var(--paper-100);
+  font: inherit;
+  font-size: var(--text-small);
+  cursor: pointer;
+}
+
+.zoom-indicator__reset:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
 .page-counter {
   font-family: var(--font-mono);
   font-size: var(--text-small);
@@ -316,22 +389,22 @@ body {
 }
 
 /* ── Continuous (webtoon) scroll ────────────────────────────────────── */
+/* Block layout (not flex) so a page wider than the viewport — when zoomed or fit to height
+ * — centers via auto margins yet still scrolls horizontally from its left edge. */
 .continuous-area {
   position: absolute;
   inset: 0;
   overflow-y: auto;
-  overflow-x: hidden;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
+  overflow-x: auto;
+  display: block;
   padding: 8px 0 64px;
+  text-align: center;
   scrollbar-width: thin;
 }
 
 .continuous-page {
   position: relative;
-  flex: none;
+  margin: 0 auto 8px;
   box-shadow: 0 8px 40px rgba(0, 0, 0, 0.55);
 }
 

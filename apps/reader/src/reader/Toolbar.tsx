@@ -29,6 +29,8 @@ export function Toolbar() {
   const layout = useReaderStore((s) => s.settings.layout);
   const fit = useReaderStore((s) => s.settings.fit);
   const direction = useReaderStore((s) => s.settings.direction);
+  const zoom = useReaderStore((s) => s.zoom);
+  const autoScroll = useReaderStore((s) => s.autoScroll);
   const currentPage = useReaderStore((s) => s.currentPage);
   const pageCount = useReaderStore((s) => s.manifest?.pageCount ?? 0);
   const bookmarks = useReaderStore((s) => s.bookmarks);
@@ -38,9 +40,11 @@ export function Toolbar() {
   const setBookmarksOpen = useReaderStore((s) => s.setBookmarksOpen);
   const toggleLayout = useReaderStore((s) => s.toggleLayout);
   const toggleContinuous = useReaderStore((s) => s.toggleContinuous);
+  const toggleAutoScroll = useReaderStore((s) => s.toggleAutoScroll);
   const cycleFit = useReaderStore((s) => s.cycleFit);
   const toggleDirection = useReaderStore((s) => s.toggleDirection);
   const zoomBy = useReaderStore((s) => s.zoomBy);
+  const resetZoom = useReaderStore((s) => s.resetZoom);
   const openSettings = useReaderStore((s) => s.setSettingsOpen);
 
   const full = useFullscreenState();
@@ -79,6 +83,13 @@ export function Toolbar() {
           active={layout === 'continuous'}
           onClick={toggleContinuous}
         />
+        <IconButton
+          icon="chevron-down"
+          label={autoScroll ? 'Stop auto-scroll' : 'Auto-scroll'}
+          hint="A"
+          active={autoScroll}
+          onClick={toggleAutoScroll}
+        />
         <IconButton icon="fit" label={FIT_LABEL[fit]} hint="cycle" onClick={cycleFit} />
         <IconButton
           icon="direction"
@@ -112,6 +123,15 @@ export function Toolbar() {
         )}
         <span className="toolbar__divider" aria-hidden="true" />
         <IconButton icon="zoom-out" label="Zoom out" hint="-" onClick={() => zoomBy(-1)} />
+        <button
+          type="button"
+          className="zoom-pct"
+          title="Reset zoom"
+          aria-label={`Zoom ${Math.round(zoom * 100)}% — click to reset`}
+          onClick={resetZoom}
+        >
+          {Math.round(zoom * 100)}%
+        </button>
         <IconButton icon="zoom-in" label="Zoom in" hint="+" onClick={() => zoomBy(1)} />
         <IconButton
           icon={full ? 'fullscreen-exit' : 'maximize'}

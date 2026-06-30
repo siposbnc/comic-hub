@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { ComicHubClient } from '@comichub/api-client';
-import type { ReaderSettings } from './types.js';
+import { DEFAULT_SETTINGS, type ReaderSettings } from './types.js';
 
 /** Where per-book reader overrides are stored. `server` syncs across devices (connected
  *  mode only); `local` keeps them on this machine. */
@@ -16,6 +16,12 @@ export interface ReaderConfig {
   syncMode: SyncMode;
   /** Auto-advance to the next issue on completion (connected mode only). */
   autoAdvance: AutoAdvance;
+  /** Global default reader settings, applied to every book on open (so a chosen fit/layout
+   *  sticks across issues even when per-book remembering is off). Per-book overrides, when
+   *  enabled, layer on top of these. */
+  defaults: ReaderSettings;
+  /** Continuous auto-scroll speed in CSS pixels per second. */
+  autoScrollSpeed: number;
 }
 
 const CONFIG_KEY = 'comichub.reader.config';
@@ -23,16 +29,26 @@ const DEFAULT_CONFIG: ReaderConfig = {
   rememberPerBook: true,
   syncMode: 'local',
   autoAdvance: 'off',
+  defaults: { ...DEFAULT_SETTINGS },
+  autoScrollSpeed: 80,
 };
 
 export function loadConfig(): ReaderConfig {
   try {
     const raw = localStorage.getItem(CONFIG_KEY);
-    if (raw) return { ...DEFAULT_CONFIG, ...(JSON.parse(raw) as Partial<ReaderConfig>) };
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<ReaderConfig>;
+      return {
+        ...DEFAULT_CONFIG,
+        ...parsed,
+        // Merge nested defaults so an older/partial stored shape can't drop fields.
+        defaults: { ...DEFAULT_SETTINGS, ...(parsed.defaults ?? {}) },
+      };
+    }
   } catch {
     // ignore malformed/unavailable storage
   }
-  return { ...DEFAULT_CONFIG };
+  return { ...DEFAULT_CONFIG, defaults: { ...DEFAULT_SETTINGS } };
 }
 
 export function saveConfig(config: ReaderConfig): void {

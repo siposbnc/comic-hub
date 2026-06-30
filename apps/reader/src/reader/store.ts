@@ -75,6 +75,11 @@ export interface ReaderState {
   chromeVisible: boolean;
   settingsOpen: boolean;
 
+  /** Continuous auto-scroll running (transient; forced off outside continuous mode). */
+  autoScroll: boolean;
+  /** Auto-scroll momentarily paused while a navigation key is held. */
+  autoScrollPaused: boolean;
+
   /** Bookmarks for the open book (connected mode only); ordered by page ascending. */
   bookmarks: Bookmark[];
   bookmarksOpen: boolean;
@@ -133,6 +138,13 @@ export interface ReaderState {
   toggleChrome: () => void;
   setSettingsOpen: (open: boolean) => void;
 
+  /** Toggle continuous auto-scroll (switches to continuous layout if needed). */
+  toggleAutoScroll: () => void;
+  /** Momentarily pause/resume auto-scroll (held navigation key). */
+  setAutoScrollPaused: (paused: boolean) => void;
+  /** Set the auto-scroll speed (CSS px/sec), persisted to config. */
+  setAutoScrollSpeed: (pxPerSec: number) => void;
+
   /** Load the open book's bookmarks from the server (no-op outside connected mode). */
   loadBookmarks: () => Promise<void>;
   /** Bookmark the current page (add-only; removal is explicit, from the list). */
@@ -184,6 +196,14 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
       const { manifest, settings } = get();
       if (manifest) void activePrefs().save(manifest.bookId, settings);
     }, PREFS_DEBOUNCE_MS);
+  }
+
+  /** Capture the current settings as the global defaults, so a chosen fit/layout/etc. sticks
+   *  across issues even when per-book remembering is off. */
+  function saveDefaults(): void {
+    const config = { ...get().config, defaults: { ...get().settings } };
+    set({ config });
+    saveConfig(config);
   }
 
   function clamp(value: number, min: number, max: number): number {
@@ -246,6 +266,8 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
       nextBook: null,
       bookmarks: [],
       bookmarksOpen: false,
+      autoScroll: false,
+      autoScrollPaused: false,
     });
   }
 
@@ -272,11 +294,13 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
 
       const pages = new PageCache(provider, PAGE_CACHE_CAPACITY);
       const thumbs = new ThumbCache(provider);
-      const direction = manifest.readingDir ?? DEFAULT_SETTINGS.direction;
-      let settings: ReaderSettings = { ...DEFAULT_SETTINGS, direction };
+      // Base every book on the global defaults (so a chosen fit/layout persists across
+      // issues), but let the manifest's natural reading direction win for direction.
+      const config = get().config;
+      const direction = manifest.readingDir ?? config.defaults.direction;
+      let settings: ReaderSettings = { ...DEFAULT_SETTINGS, ...config.defaults, direction };
 
       // Restore this book's saved overrides (if remembering is enabled) before laying out.
-      const config = get().config;
       if (config.rememberPerBook) {
         const backend = config.syncMode === 'server' && prefsServer ? prefsServer : localPrefs;
         const saved = await backend.load(manifest.bookId);
@@ -317,9 +341,11 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
     }
   }
 
-  /** Moves to a page, snapping to the start of its spread; resets zoom/pan. */
+  /** Moves to a page, snapping to the start of its spread. Resets zoom/pan in paged modes;
+   *  in continuous mode zoom is a page-size multiplier independent of scroll position, so it
+   *  is preserved (scroll-driven page changes must not keep resetting it). */
   function navigateTo(page: number): void {
-    const { manifest, spreads } = get();
+    const { manifest, spreads, settings } = get();
     if (!manifest) return;
     const clamped = clamp(page, 0, manifest.pageCount - 1);
     const spreadIdx = spreadIndexOf(spreads, clamped);
@@ -328,9 +354,7 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
     set({
       currentPage: start,
       finished: lastSpread,
-      zoom: MIN_ZOOM,
-      panX: 0,
-      panY: 0,
+      ...(settings.layout === 'continuous' ? {} : { zoom: MIN_ZOOM, panX: 0, panY: 0 }),
     });
     refreshWindow();
     scheduleSave();
@@ -354,6 +378,8 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
     panY: 0,
     chromeVisible: true,
     settingsOpen: false,
+    autoScroll: false,
+    autoScrollPaused: false,
     bookmarks: [],
     bookmarksOpen: false,
     bmToast: null,
@@ -432,10 +458,15 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
     dismissFinished: () => set({ finished: false }),
 
     setLayout: (layout) => {
-      set((s) => ({ settings: { ...s.settings, layout } }));
+      // Auto-scroll only applies to continuous; leaving it stops auto-scroll.
+      set((s) => ({
+        settings: { ...s.settings, layout },
+        ...(layout === 'continuous' ? {} : { autoScroll: false, autoScrollPaused: false }),
+      }));
       recomputeSpreads();
       navigateTo(get().currentPage);
       persistPrefs();
+      saveDefaults();
     },
 
     toggleLayout: () => {
@@ -451,6 +482,7 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
     setFit: (fit) => {
       set((s) => ({ settings: { ...s.settings, fit }, zoom: MIN_ZOOM, panX: 0, panY: 0 }));
       persistPrefs();
+      saveDefaults();
     },
 
     cycleFit: () => {
@@ -462,6 +494,7 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
     setDirection: (direction) => {
       set((s) => ({ settings: { ...s.settings, direction } }));
       persistPrefs();
+      saveDefaults();
     },
 
     toggleDirection: () => {
@@ -472,6 +505,7 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
     setBackground: (background) => {
       set((s) => ({ settings: { ...s.settings, background } }));
       persistPrefs();
+      saveDefaults();
     },
 
     setCoverAlone: (on) => {
@@ -479,6 +513,7 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
       recomputeSpreads();
       navigateTo(get().currentPage);
       persistPrefs();
+      saveDefaults();
     },
 
     setRememberPerBook: (on) => {
@@ -554,6 +589,23 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
     toggleChrome: () => set((s) => ({ chromeVisible: !s.chromeVisible })),
 
     setSettingsOpen: (open) => set({ settingsOpen: open }),
+
+    toggleAutoScroll: () => {
+      const on = !get().autoScroll;
+      // Auto-scroll is a continuous-mode behavior; turning it on switches layout if needed.
+      if (on && get().settings.layout !== 'continuous') {
+        get().setLayout('continuous');
+      }
+      set({ autoScroll: on, autoScrollPaused: false });
+    },
+
+    setAutoScrollPaused: (paused) => set({ autoScrollPaused: paused }),
+
+    setAutoScrollSpeed: (pxPerSec) => {
+      const config = { ...get().config, autoScrollSpeed: pxPerSec };
+      set({ config });
+      saveConfig(config);
+    },
 
     loadBookmarks: async () => {
       const { serverClient, manifest } = get();
