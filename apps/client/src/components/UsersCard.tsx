@@ -286,9 +286,12 @@ function UserDialog({ user, onClose }: { user?: UserAccount; onClose: () => void
       subtitle={isCreate ? 'New account on this server' : `@${user.username}`}
       onClose={onClose}
     >
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      <div
+        style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 14 }}
+      >
         <Labeled label="Username" hint={isCreate ? undefined : "Can't be changed"}>
           <Input
+            style={{ width: '100%' }}
             value={username}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUsername(e.target.value)}
             disabled={!isCreate}
@@ -297,6 +300,7 @@ function UserDialog({ user, onClose }: { user?: UserAccount; onClose: () => void
         </Labeled>
         <Labeled label="Display name">
           <Input
+            style={{ width: '100%' }}
             value={displayName}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDisplayName(e.target.value)}
             placeholder="Full name"
@@ -306,6 +310,7 @@ function UserDialog({ user, onClose }: { user?: UserAccount; onClose: () => void
 
       <Labeled label="Role">
         <Select
+          style={{ width: '100%' }}
           value={role}
           onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
             setRole(e.target.value as UserRole)
@@ -335,6 +340,7 @@ function UserDialog({ user, onClose }: { user?: UserAccount; onClose: () => void
         >
           <Labeled label="Content rating ceiling">
             <Select
+              style={{ width: '100%' }}
               value={ceiling}
               onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setCeiling(e.target.value)}
             >
@@ -362,6 +368,7 @@ function UserDialog({ user, onClose }: { user?: UserAccount; onClose: () => void
 
       <Labeled label={isCreate ? 'Password' : 'Set new password'}>
         <Input
+          style={{ width: '100%' }}
           type="password"
           value={password}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
