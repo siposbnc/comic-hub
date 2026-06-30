@@ -32,9 +32,15 @@ function columnWidth(
       base = nativeW > 0 ? nativeW : byWidth;
       break;
     case 'smart':
+      // Contain the whole page, upscaling small pages to fill the column (matches paged).
+      base = Math.min(byWidth, byHeight);
+      break;
     case 'screen':
     default:
+      // Contain, but never enlarge a page beyond its native width (the `,1` cap of paged
+      // mode): a small scan stays at its real size instead of being blown up.
       base = Math.min(byWidth, byHeight);
+      if (nativeW > 0) base = Math.min(base, nativeW);
       break;
   }
   // Cap width-driven fits on ultra-wide screens; native/height keep their intrinsic size.
