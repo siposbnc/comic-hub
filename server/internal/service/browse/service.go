@@ -154,15 +154,19 @@ type Service struct {
 // New constructs the browse service.
 func New(repo domain.Repository) *Service { return &Service{repo: repo} }
 
-// ListSeries returns the series cards for a library.
+// ListSeries returns the series cards for a library. For a restricted user, series are
+// rebuilt from only the books they may see: a fully-restricted series is dropped entirely
+// (treated as non-existent), and a partially-restricted one reports the visible count and a
+// visible cover so nothing leaks.
 func (s *Service) ListSeries(ctx context.Context, libraryID, userID string) ([]SeriesCard, error) {
 	sums, err := s.repo.Series().Summaries(ctx, libraryID, userID)
 	if err != nil {
 		return nil, err
 	}
+	ceiling := access.CeilingFrom(ctx)
 	cards := make([]SeriesCard, 0, len(sums))
 	for _, su := range sums {
-		cards = append(cards, SeriesCard{
+		card := SeriesCard{
 			ID:            su.ID,
 			Name:          su.Name,
 			Year:          su.Year,
@@ -171,9 +175,50 @@ func (s *Service) ListSeries(ctx context.Context, libraryID, userID string) ([]S
 			ReadCount:     su.ReadCount,
 			CoverBookID:   su.CoverBookID,
 			MetadataState: string(su.MetadataState),
-		})
+		}
+		if ceiling != "" {
+			visible := s.visible(ctx, s.booksOf(ctx, su.ID))
+			if len(visible) == 0 {
+				continue // hide series with no viewable issues
+			}
+			card.BookCount = len(visible)
+			card.ReadCount = s.readCount(ctx, userID, visible)
+			card.CoverBookID = visibleCover(su.CoverBookID, visible)
+		}
+		cards = append(cards, card)
 	}
 	return cards, nil
+}
+
+// booksOf returns a series' books straight from the repo (unfiltered).
+func (s *Service) booksOf(ctx context.Context, seriesID string) []domain.Book {
+	books, _ := s.repo.Books().ListBySeries(ctx, seriesID)
+	return books
+}
+
+// readCount counts how many of the given books the user has finished.
+func (s *Service) readCount(ctx context.Context, userID string, books []domain.Book) int {
+	n := 0
+	for _, b := range books {
+		if p, err := s.repo.Progress().Get(ctx, userID, b.ID); err == nil && p.Status == domain.StatusRead {
+			n++
+		}
+	}
+	return n
+}
+
+// visibleCover keeps the configured cover if it's viewable, else falls back to the first
+// visible book (books arrive in reading order).
+func visibleCover(cover string, visible []domain.Book) string {
+	for _, b := range visible {
+		if b.ID == cover {
+			return cover
+		}
+	}
+	if len(visible) > 0 {
+		return visible[0].ID
+	}
+	return ""
 }
 
 // SeriesDetail returns a series header + its issues with per-book progress.

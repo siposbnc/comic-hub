@@ -79,17 +79,28 @@ func (s *Service) Search(ctx context.Context, libraryID, query, typeFilter strin
 	wantSeries := typeFilter == "" || typeFilter == SearchAll || typeFilter == SearchSeries
 	wantBooks := typeFilter == "" || typeFilter == SearchAll || typeFilter == SearchBook
 
+	ceiling := access.CeilingFrom(ctx)
 	if wantSeries {
 		hits, err := s.repo.Search().SearchSeries(ctx, libraryID, match, limit)
 		if err != nil {
 			return SearchResults{}, err
 		}
 		for _, h := range hits {
+			// Drop a series with no issues the restricted user may see, and surface a
+			// viewable cover when the configured one is hidden.
+			cover := h.CoverBookID
+			if ceiling != "" {
+				visible := s.visible(ctx, s.booksOf(ctx, h.ID))
+				if len(visible) == 0 {
+					continue
+				}
+				cover = visibleCover(h.CoverBookID, visible)
+			}
 			out.Series = append(out.Series, SeriesHit{
 				ID:          h.ID,
 				Name:        h.Name,
 				Year:        h.Year,
-				CoverBookID: h.CoverBookID,
+				CoverBookID: cover,
 			})
 		}
 	}
@@ -98,7 +109,6 @@ func (s *Service) Search(ctx context.Context, libraryID, query, typeFilter strin
 		if err != nil {
 			return SearchResults{}, err
 		}
-		ceiling := access.CeilingFrom(ctx)
 		for _, h := range hits {
 			// Drop hits above a restricted user's content ceiling (search results expose
 			// titles, so they must respect the restriction too).

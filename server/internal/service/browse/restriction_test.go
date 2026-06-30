@@ -55,8 +55,36 @@ func TestContentRestrictionFiltersBrowse(t *testing.T) {
 	teenID := mkBook("1", "Teen", `C:\DC\Batman\1.cbz`)
 	adultID := mkBook("2", "Adults Only 18+", `C:\DC\Batman\2.cbz`)
 
+	// A second, entirely adult-rated series — must be invisible to the restricted user.
+	adultSeries, _ := store.Series().Upsert(ctx, domain.Series{
+		ID: ulid.New(), LibraryID: lib.ID, Name: "Hellblazer", SortName: "Hellblazer", CreatedAt: 1, UpdatedAt: 1,
+	})
+	if _, err := store.Books().Upsert(ctx, domain.Book{
+		ID: ulid.New(), SeriesID: adultSeries.ID, LibraryID: lib.ID, FilePath: `C:\DC\Hellblazer\1.cbz`,
+		FileFormat: "cbz", PageCount: 10, Number: "1", AgeRating: "Adults Only 18+", AddedAt: 1, UpdatedAt: 1,
+	}); err != nil {
+		t.Fatalf("adult series book: %v", err)
+	}
+
 	svc := browse.New(store)
 	restricted := access.WithCeiling(ctx, "Teen")
+
+	// Restricted listing: the all-adult series is gone; the partial one reports only its
+	// visible issue and a visible cover.
+	list, err := svc.ListSeries(restricted, lib.ID, "owner")
+	if err != nil {
+		t.Fatalf("list series: %v", err)
+	}
+	if len(list) != 1 || list[0].ID != ser.ID {
+		t.Fatalf("restricted listing = %+v, want only Batman", list)
+	}
+	if list[0].BookCount != 1 || list[0].CoverBookID != teenID {
+		t.Fatalf("restricted Batman card = count %d cover %q, want 1 / teen cover", list[0].BookCount, list[0].CoverBookID)
+	}
+	// Unrestricted listing shows both series.
+	if full, _ := svc.ListSeries(ctx, lib.ID, "owner"); len(full) != 2 {
+		t.Fatalf("unrestricted listing = %d series, want 2", len(full))
+	}
 
 	// Restricted user: series shows only the Teen issue.
 	d, err := svc.SeriesDetail(restricted, ser.ID, "owner")
