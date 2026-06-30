@@ -35,6 +35,16 @@ body {
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; text-underline-offset: 2px; }
 
+/* Make native dropdown popups (select options) match the theme, not the OS default.
+   The Select wrapper paints the closed control, but the native option list is drawn
+   by the browser on its own surface — under color-scheme: dark a transparent select
+   still pops on white. Tokenized here so it tracks light/dark automatically. */
+option,
+optgroup {
+  background-color: var(--surface-card);
+  color: var(--text-primary);
+}
+
 /* Thin mono tabular figures helper — issue numbers, counts, dates. */
 .ch-mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 
