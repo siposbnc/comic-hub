@@ -24,6 +24,21 @@ content-addressed caching.
 | `POST` | `/auth/logout` | `{refresh}` → revoke that refresh-token session (204). |
 | `GET`  | `/auth/handshake` | Returns the acting user: the authenticated user in auth mode, the implicit owner in embedded/auth-disabled mode. |
 
+**Roles & restrictions (auth mode).** Roles rank `owner > admin > member > restricted`.
+A `restricted` user has an `ageRatingMax` ceiling: books rated above it are hidden from
+listings/search and refused (`403`) by the reader's content routes. Admin-only routes return
+`403` for lower roles. With auth disabled (embedded/dev) the acting user is the implicit
+owner, so everything is permitted.
+
+### 1.1 User management (admin only)
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET`  | `/users` | List accounts. |
+| `POST` | `/users` | `{username, displayName, role, password, ageRatingMax}` → create (201). |
+| `PATCH`| `/users/{id}` | Update `displayName`/`role`/`ageRatingMax` and/or `password`. A role or password change revokes the user's sessions. |
+| `DELETE`| `/users/{id}` | Delete (sessions cascade; the implicit owner can't be deleted). |
+
 ## 2. Server / system
 
 | Method | Path | Purpose |
@@ -31,7 +46,7 @@ content-addressed caching.
 | `GET` | `/healthz` / `/readyz` | Liveness / readiness. |
 | `GET` | `/server/info` | Version, mode, capabilities, feature flags. |
 | `GET` | `/server/stats` | Counts: libraries, series, books, pages, cache size. |
-| `POST`| `/admin/shutdown` | Graceful shutdown (owner only; embedded client uses this). |
+| `POST`| `/admin/shutdown` | Graceful shutdown (admin+; embedded client uses this). |
 
 ## 3. Libraries & scanning
 

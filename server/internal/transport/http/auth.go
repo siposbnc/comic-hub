@@ -5,6 +5,9 @@ import (
 	"crypto/subtle"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
+
+	"github.com/siposbnc/comic-hub/server/internal/access"
 	"github.com/siposbnc/comic-hub/server/internal/config"
 	"github.com/siposbnc/comic-hub/server/internal/domain"
 	"github.com/siposbnc/comic-hub/server/internal/service/auth"
@@ -17,6 +20,12 @@ const userCtxKey ctxKey = iota
 // withUser stores the acting user on the request context.
 func withUser(ctx context.Context, u domain.User) context.Context {
 	return context.WithValue(ctx, userCtxKey, u)
+}
+
+// withActor stores the acting user and their content ceiling, so services can apply
+// restrictions (browse filtering, reader access) straight from the context.
+func withActor(ctx context.Context, u domain.User) context.Context {
+	return access.WithCeiling(withUser(ctx, u), u.AgeRatingMax)
 }
 
 // userFromContext returns the acting user set by the auth middleware.
@@ -48,7 +57,7 @@ func authMiddleware(cfg config.Config, authSvc *auth.Service) func(http.Handler)
 					writeError(w, http.StatusUnauthorized, "unauthorized", "missing or invalid token")
 					return
 				}
-				next.ServeHTTP(w, r.WithContext(withUser(r.Context(), implicitOwner())))
+				next.ServeHTTP(w, r.WithContext(withActor(r.Context(), implicitOwner())))
 				return
 			}
 
@@ -65,7 +74,40 @@ func authMiddleware(cfg config.Config, authSvc *auth.Service) func(http.Handler)
 				writeError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
 				return
 			}
-			next.ServeHTTP(w, r.WithContext(withUser(r.Context(), u)))
+			next.ServeHTTP(w, r.WithContext(withActor(r.Context(), u)))
+		})
+	}
+}
+
+// requireRole gates a route to users at or above min. The acting user is set by
+// authMiddleware; with auth disabled it is the implicit owner, so embedded/dev runs pass.
+func requireRole(min domain.UserRole) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			u, ok := userFromContext(r.Context())
+			if !ok || !u.Role.AtLeast(min) {
+				writeError(w, http.StatusForbidden, "forbidden", "insufficient permissions")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// requireBookAccess refuses (403) a restricted user access to a book rated above their
+// ceiling — the security boundary for content restrictions, applied to the reader's content
+// routes (manifest / cover / pages / prefetch). A no-op for unrestricted users.
+func requireBookAccess(repo domain.Repository) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if ceiling := access.CeilingFrom(r.Context()); ceiling != "" {
+				if b, err := repo.Books().Get(r.Context(), chi.URLParam(r, "id")); err == nil &&
+					!access.Allowed(ceiling, b.AgeRating) {
+					writeError(w, http.StatusForbidden, "forbidden", "this content is restricted")
+					return
+				}
+			}
+			next.ServeHTTP(w, r)
 		})
 	}
 }
@@ -84,14 +126,21 @@ func implicitOwner() domain.User {
 }
 
 type userDTO struct {
-	ID          string `json:"id"`
-	Username    string `json:"username"`
-	DisplayName string `json:"displayName"`
-	Role        string `json:"role"`
+	ID           string `json:"id"`
+	Username     string `json:"username"`
+	DisplayName  string `json:"displayName"`
+	Role         string `json:"role"`
+	AgeRatingMax string `json:"ageRatingMax,omitempty"`
 }
 
 func toUserDTO(u domain.User) userDTO {
-	return userDTO{ID: u.ID, Username: u.Username, DisplayName: u.DisplayName, Role: string(u.Role)}
+	return userDTO{
+		ID:           u.ID,
+		Username:     u.Username,
+		DisplayName:  u.DisplayName,
+		Role:         string(u.Role),
+		AgeRatingMax: u.AgeRatingMax,
+	}
 }
 
 type tokensDTO struct {

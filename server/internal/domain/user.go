@@ -21,6 +21,23 @@ func (r UserRole) Valid() bool {
 	return false
 }
 
+// Rank orders roles for permission checks (owner highest). Unknown roles rank lowest.
+func (r UserRole) Rank() int {
+	switch r {
+	case RoleOwner:
+		return 3
+	case RoleAdmin:
+		return 2
+	case RoleMember:
+		return 1
+	default:
+		return 0
+	}
+}
+
+// AtLeast reports whether r has at least min's permission level.
+func (r UserRole) AtLeast(min UserRole) bool { return r.Rank() >= min.Rank() }
+
 // User is an account. In embedded mode a single implicit owner exists (id OwnerUserID,
 // no password). In server mode users have password hashes and log in.
 type User struct {

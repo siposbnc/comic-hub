@@ -4,6 +4,8 @@ import (
 	"context"
 	"regexp"
 	"strings"
+
+	"github.com/siposbnc/comic-hub/server/internal/access"
 )
 
 // SearchHitType groups search results by kind.
@@ -96,7 +98,16 @@ func (s *Service) Search(ctx context.Context, libraryID, query, typeFilter strin
 		if err != nil {
 			return SearchResults{}, err
 		}
+		ceiling := access.CeilingFrom(ctx)
 		for _, h := range hits {
+			// Drop hits above a restricted user's content ceiling (search results expose
+			// titles, so they must respect the restriction too).
+			if ceiling != "" {
+				if b, err := s.repo.Books().Get(ctx, h.ID); err != nil ||
+					!access.Allowed(ceiling, b.AgeRating) {
+					continue
+				}
+			}
 			out.Books = append(out.Books, BookHit{
 				ID:         h.ID,
 				SeriesID:   h.SeriesID,

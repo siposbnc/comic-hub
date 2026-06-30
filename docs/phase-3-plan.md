@@ -91,7 +91,7 @@ G Stats dashboards (preview) last
 | Milestone | Status |
 |-----------|--------|
 | A — Auth core (accounts, argon2id, JWT, middleware, context user) | ✅ done — server-side; opt-in via `--auth` (env bootstrap), tested e2e |
-| B — Roles + content restrictions | ⬜ not started |
+| B — Roles + content restrictions | ✅ done — role-gating + admin `/users` CRUD + age-ceiling enforcement (browse/search/reader); A-review carry-overs landed |
 | C — Client auth UX (login / pairing / accounts) — preview-gated | ⬜ not started |
 | D — Server discovery (mDNS + manual pairing) | ⬜ not started |
 | E — Cross-device sync + presence | ⬜ not started |

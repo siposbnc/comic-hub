@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/siposbnc/comic-hub/server/internal/access"
 	"github.com/siposbnc/comic-hub/server/internal/domain"
 )
 
@@ -185,6 +186,7 @@ func (s *Service) SeriesDetail(ctx context.Context, seriesID, userID string) (Se
 	if err != nil {
 		return SeriesDetail{}, err
 	}
+	books = s.visible(ctx, books) // hide issues above the acting user's content ceiling
 
 	detail := SeriesDetail{
 		ID:            ser.ID,
@@ -280,6 +282,7 @@ func (s *Service) VolumeDetail(ctx context.Context, seriesID string, volume int,
 	if err != nil {
 		return GroupingDetail{}, err
 	}
+	all = s.visible(ctx, all)
 	var books []domain.Book
 	year := 0
 	for _, b := range all {
@@ -327,6 +330,26 @@ func (s *Service) booksByID(ctx context.Context, ids []string) []domain.Book {
 			out = append(out, b)
 		}
 	}
+	return s.visible(ctx, out)
+}
+
+// allowed reports whether the acting user (per the request's content ceiling) may see a book.
+func (s *Service) allowed(ctx context.Context, b domain.Book) bool {
+	return access.Allowed(access.CeilingFrom(ctx), b.AgeRating)
+}
+
+// visible drops books the acting user may not see (content restriction). A no-op for
+// unrestricted users, so it stays cheap on the common path.
+func (s *Service) visible(ctx context.Context, books []domain.Book) []domain.Book {
+	if access.CeilingFrom(ctx) == "" {
+		return books
+	}
+	out := make([]domain.Book, 0, len(books))
+	for _, b := range books {
+		if s.allowed(ctx, b) {
+			out = append(out, b)
+		}
+	}
 	return out
 }
 
@@ -343,6 +366,9 @@ func (s *Service) BookDetail(ctx context.Context, bookID, userID string) (BookDe
 	b, err := s.repo.Books().Get(ctx, bookID)
 	if err != nil {
 		return BookDetail{}, err
+	}
+	if !s.allowed(ctx, b) {
+		return BookDetail{}, domain.ErrNotFound // don't reveal restricted content exists
 	}
 
 	seriesName := ""
@@ -405,7 +431,7 @@ func (s *Service) RecentBooks(ctx context.Context, libraryID, userID string, lim
 		return nil, err
 	}
 	cards := make([]BookCard, 0, len(books))
-	for _, b := range books {
+	for _, b := range s.visible(ctx, books) {
 		cards = append(cards, s.bookCard(ctx, b, userID))
 	}
 	return cards, nil
@@ -418,7 +444,7 @@ func (s *Service) BooksByIDs(ctx context.Context, ids []string, userID string) (
 	cards := make([]BookCard, 0, len(ids))
 	for _, id := range ids {
 		b, err := s.repo.Books().Get(ctx, id)
-		if err != nil {
+		if err != nil || !s.allowed(ctx, b) {
 			continue
 		}
 		cards = append(cards, s.bookCard(ctx, b, userID))
@@ -509,7 +535,7 @@ func (s *Service) cardAfter(ctx context.Context, userID, bookID string, ordered 
 			return nil, nil
 		}
 		b, err := s.repo.Books().Get(ctx, ordered[i+1])
-		if err != nil {
+		if err != nil || !s.allowed(ctx, b) {
 			return nil, nil
 		}
 		card := s.bookCard(ctx, b, userID)
@@ -539,8 +565,8 @@ func (s *Service) continueReading(ctx context.Context, userID string) ([]BookCar
 	cards := make([]BookCard, 0, len(progs))
 	for _, p := range progs {
 		b, err := s.repo.Books().Get(ctx, p.BookID)
-		if err != nil {
-			continue // book vanished; skip
+		if err != nil || !s.allowed(ctx, b) {
+			continue // book vanished or above the content ceiling; skip
 		}
 		card := s.bookCard(ctx, b, userID)
 		card.Progress = toProgressView(p)

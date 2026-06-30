@@ -160,6 +160,109 @@ func (s *Service) EnsureAdmin(ctx context.Context, username, displayName, plaint
 	}
 }
 
+// CreateUserInput describes a new account (admin action).
+type CreateUserInput struct {
+	Username     string
+	DisplayName  string
+	Role         domain.UserRole
+	Password     string
+	AgeRatingMax string
+}
+
+// ListUsers returns all accounts.
+func (s *Service) ListUsers(ctx context.Context) ([]domain.User, error) {
+	return s.repo.Users().List(ctx)
+}
+
+// GetUser returns one account by id.
+func (s *Service) GetUser(ctx context.Context, id string) (domain.User, error) {
+	return s.repo.Users().Get(ctx, id)
+}
+
+// CreateUser adds a login-capable account with a password.
+func (s *Service) CreateUser(ctx context.Context, in CreateUserInput) (domain.User, error) {
+	username := strings.TrimSpace(in.Username)
+	if username == "" {
+		return domain.User{}, fmt.Errorf("%w: username is required", domain.ErrValidation)
+	}
+	if !in.Role.Valid() {
+		return domain.User{}, fmt.Errorf("%w: invalid role", domain.ErrValidation)
+	}
+	if len(in.Password) < MinPasswordLen {
+		return domain.User{}, fmt.Errorf("%w: password must be at least %d characters", domain.ErrValidation, MinPasswordLen)
+	}
+	hash, err := password.Hash(in.Password)
+	if err != nil {
+		return domain.User{}, err
+	}
+	display := strings.TrimSpace(in.DisplayName)
+	if display == "" {
+		display = username
+	}
+	return s.repo.Users().Create(ctx, domain.User{
+		ID:           ulid.New(),
+		Username:     username,
+		DisplayName:  display,
+		Role:         in.Role,
+		PasswordHash: hash,
+		AgeRatingMax: strings.TrimSpace(in.AgeRatingMax),
+		CreatedAt:    time.Now().UnixMilli(),
+	})
+}
+
+// UpdateUser changes a user's profile/role/restriction. A role change revokes the user's
+// sessions so a downgrade (e.g. to restricted) takes effect immediately, not only when the
+// access token expires.
+func (s *Service) UpdateUser(ctx context.Context, id, displayName string, role domain.UserRole, ageRatingMax string) (domain.User, error) {
+	existing, err := s.repo.Users().Get(ctx, id)
+	if err != nil {
+		return domain.User{}, err
+	}
+	if !role.Valid() {
+		return domain.User{}, fmt.Errorf("%w: invalid role", domain.ErrValidation)
+	}
+	display := strings.TrimSpace(displayName)
+	if display == "" {
+		display = existing.DisplayName
+	}
+	updated := domain.User{ID: id, DisplayName: display, Role: role, AgeRatingMax: strings.TrimSpace(ageRatingMax)}
+	if err := s.repo.Users().Update(ctx, updated); err != nil {
+		return domain.User{}, err
+	}
+	if role != existing.Role {
+		_ = s.repo.Sessions().DeleteForUser(ctx, id)
+	}
+	existing.DisplayName = display
+	existing.Role = role
+	existing.AgeRatingMax = updated.AgeRatingMax
+	return existing, nil
+}
+
+// SetUserPassword sets a user's password and revokes their existing sessions (so an old
+// refresh token can't outlive the change).
+func (s *Service) SetUserPassword(ctx context.Context, id, plaintext string) error {
+	if len(plaintext) < MinPasswordLen {
+		return fmt.Errorf("%w: password must be at least %d characters", domain.ErrValidation, MinPasswordLen)
+	}
+	hash, err := password.Hash(plaintext)
+	if err != nil {
+		return err
+	}
+	if err := s.repo.Users().SetPasswordHash(ctx, id, hash); err != nil {
+		return err
+	}
+	_ = s.repo.Sessions().DeleteForUser(ctx, id)
+	return nil
+}
+
+// DeleteUser removes an account (its sessions cascade). The implicit owner can't be deleted.
+func (s *Service) DeleteUser(ctx context.Context, id string) error {
+	if id == domain.OwnerUserID {
+		return fmt.Errorf("%w: the owner account cannot be deleted", domain.ErrValidation)
+	}
+	return s.repo.Users().Delete(ctx, id)
+}
+
 // issue mints a token pair for a user and stores the refresh session.
 func (s *Service) issue(ctx context.Context, u domain.User) (Tokens, error) {
 	now := time.Now()

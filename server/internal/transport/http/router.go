@@ -85,7 +85,17 @@ func NewRouter(d Deps) http.Handler {
 		r.Get("/settings/providers", handleGetProviderSettings(d.Repo, d.Metadata, providerEnvCfg))
 		r.Put("/settings/providers", handlePutProviderSettings(d.Repo, d.Metadata, providerEnvCfg, d.ReloadProviders))
 		r.Get("/auth/handshake", handleAuthHandshake(d.Config))
-		r.Post("/admin/shutdown", handleShutdown(d.Logger, d.Shutdown))
+		// Admin-only: shutting the server down is privileged (a member must not be able to).
+		r.With(requireRole(domain.RoleAdmin)).Post("/admin/shutdown", handleShutdown(d.Logger, d.Shutdown))
+
+		// Account management (admin only).
+		r.Route("/users", func(r chi.Router) {
+			r.Use(requireRole(domain.RoleAdmin))
+			r.Get("/", handleListUsers(d.Auth))
+			r.Post("/", handleCreateUser(d.Auth))
+			r.Patch("/{id}", handlePatchUser(d.Auth))
+			r.Delete("/{id}", handleDeleteUser(d.Auth))
+		})
 
 		r.Route("/libraries", func(r chi.Router) {
 			r.Get("/", handleListLibraries(d.Library))
@@ -112,11 +122,15 @@ func NewRouter(d Deps) http.Handler {
 		r.Route("/books", func(r chi.Router) {
 			r.Get("/", handleListBooks(d.Browse))
 			r.Get("/{id}", handleBookDetail(d.Browse))
-			r.Get("/{id}/manifest", handleManifest(d.Reader))
-			r.Get("/{id}/cover", handleCover(d.Reader))
-			r.Get("/{id}/pages/{idx}", handlePage(d.Reader))
-			r.Get("/{id}/pages/{idx}/thumb", handlePageThumb(d.Reader))
-			r.Post("/{id}/prefetch", handlePrefetch(d.Reader))
+			// Content routes enforce the restricted-user age ceiling (403 if exceeded).
+			r.Group(func(r chi.Router) {
+				r.Use(requireBookAccess(d.Repo))
+				r.Get("/{id}/manifest", handleManifest(d.Reader))
+				r.Get("/{id}/cover", handleCover(d.Reader))
+				r.Get("/{id}/pages/{idx}", handlePage(d.Reader))
+				r.Get("/{id}/pages/{idx}/thumb", handlePageThumb(d.Reader))
+				r.Post("/{id}/prefetch", handlePrefetch(d.Reader))
+			})
 			r.Post("/{id}/match/apply", handleBookApply(d.Metadata))
 			r.Post("/{id}/tags", handleAssignTags(d.Organize))
 			r.Delete("/{id}/tags/{tagId}", handleUnassignTag(d.Organize))
