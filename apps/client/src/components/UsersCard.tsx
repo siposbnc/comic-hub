@@ -310,7 +310,6 @@ function UserDialog({ user, onClose }: { user?: UserAccount; onClose: () => void
 
       <Labeled label="Role">
         <Select
-          style={{ width: '100%' }}
           value={role}
           onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
             setRole(e.target.value as UserRole)
@@ -340,7 +339,6 @@ function UserDialog({ user, onClose }: { user?: UserAccount; onClose: () => void
         >
           <Labeled label="Content rating ceiling">
             <Select
-              style={{ width: '100%' }}
               value={ceiling}
               onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setCeiling(e.target.value)}
             >
