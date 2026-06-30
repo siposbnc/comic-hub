@@ -45,6 +45,19 @@ type Config struct {
 	// enable matching against Metron.
 	MetronUsername string
 	MetronPassword string
+
+	// AuthEnabled turns on multi-user authentication (server mode): access tokens required,
+	// login/refresh public. Off by default — embedded mode and dev runs use the implicit
+	// owner. (Phase 3 — Milestone A.)
+	AuthEnabled bool
+	// JWTSecret signs access tokens (COMICHUB_JWT_SECRET). When auth is enabled and this is
+	// empty, the server generates and persists one.
+	JWTSecret string
+	// Admin* bootstrap a login-capable admin on boot (COMICHUB_ADMIN_USERNAME / _PASSWORD /
+	// _DISPLAY_NAME), so a packaged/Docker deployment can seed the first account from env.
+	AdminUsername    string
+	AdminPassword    string
+	AdminDisplayName string
 }
 
 // DatabaseConfig describes the catalog store.
@@ -77,6 +90,7 @@ func Load(args []string) (Config, error) {
 	logLevel := fs.String("log-level", env("LOG_LEVEL", "info"), "log level: debug|info|warn|error")
 	logFormat := fs.String("log-format", env("LOG_FORMAT", "json"), "log format: json|text")
 	dbPath := fs.String("db", env("DB_PATH", ""), "sqlite database path (default <data-dir>/comichub.db)")
+	authEnabled := fs.Bool("auth", env("AUTH_ENABLED", "") == "true", "enable multi-user authentication (server mode)")
 
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
@@ -95,6 +109,13 @@ func Load(args []string) (Config, error) {
 		ComicVineAPIKey: strings.TrimSpace(os.Getenv("COMICVINE_API_KEY")),
 		MetronUsername:  strings.TrimSpace(os.Getenv("METRON_USERNAME")),
 		MetronPassword:  strings.TrimSpace(os.Getenv("METRON_PASSWORD")),
+
+		// Auth: secret + admin bootstrap are env-only (sensitive); the toggle is a flag.
+		AuthEnabled:      *authEnabled,
+		JWTSecret:        strings.TrimSpace(os.Getenv("COMICHUB_JWT_SECRET")),
+		AdminUsername:    strings.TrimSpace(os.Getenv("COMICHUB_ADMIN_USERNAME")),
+		AdminPassword:    os.Getenv("COMICHUB_ADMIN_PASSWORD"),
+		AdminDisplayName: strings.TrimSpace(os.Getenv("COMICHUB_ADMIN_DISPLAY_NAME")),
 	}
 
 	if cfg.Mode != ModeEmbedded && cfg.Mode != ModeServer {

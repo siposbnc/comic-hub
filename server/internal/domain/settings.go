@@ -11,6 +11,9 @@ const (
 	// SettingWriteSidecar ("true"/"false") opts into writing matched metadata back into each
 	// book's archive as a ComicInfo.xml. Default off.
 	SettingWriteSidecar = "metadata.write_sidecar"
+	// SettingJWTSecret is the persisted access-token signing secret (generated on first use
+	// when auth is enabled and no COMICHUB_JWT_SECRET is supplied), so tokens survive restarts.
+	SettingJWTSecret = "auth.jwt_secret"
 )
 
 // SettingsRepository persists app key/value settings.

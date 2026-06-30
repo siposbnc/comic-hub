@@ -22,6 +22,8 @@ type Repository interface {
 	SmartLists() SmartListRepository
 	ReaderPrefs() ReaderPrefRepository
 	Settings() SettingsRepository
+	Users() UserRepository
+	Sessions() SessionRepository
 }
 
 // LibraryRepository persists libraries and their roots.

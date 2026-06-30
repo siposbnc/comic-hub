@@ -27,6 +27,10 @@ func writeDomainError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "not_found", "resource not found")
 	case errors.Is(err, domain.ErrValidation):
 		writeError(w, http.StatusBadRequest, "validation_failed", err.Error())
+	case errors.Is(err, domain.ErrConflict):
+		writeError(w, http.StatusConflict, "conflict", err.Error())
+	case errors.Is(err, domain.ErrUnauthorized):
+		writeError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
 	default:
 		writeError(w, http.StatusInternalServerError, "internal_error", "something went wrong")
 	}

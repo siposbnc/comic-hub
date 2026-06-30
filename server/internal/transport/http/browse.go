@@ -10,9 +10,15 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/service/browse"
 )
 
-// currentUserID returns the acting user. In embedded mode that is always the implicit
-// owner; auth mode will resolve it from the validated token/session.
-func currentUserID(_ *http.Request) string { return domain.OwnerUserID }
+// currentUserID returns the acting user, resolved by the auth middleware into the request
+// context. In embedded mode (or server mode with auth disabled) that's the implicit owner;
+// with auth enabled it's the authenticated user. Falls back to the owner if unset.
+func currentUserID(r *http.Request) string {
+	if u, ok := userFromContext(r.Context()); ok {
+		return u.ID
+	}
+	return domain.OwnerUserID
+}
 
 func handleListSeries(b *browse.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

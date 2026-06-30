@@ -11,6 +11,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/nwaples/rardecode/v2 v2.2.5
+	golang.org/x/crypto v0.53.0
 	golang.org/x/image v0.43.0
 	modernc.org/sqlite v1.34.4
 )
@@ -30,7 +31,7 @@ require (
 	github.com/stangelandcl/ppmd v0.1.0 // indirect
 	github.com/ulikunitz/xz v0.5.15 // indirect
 	go4.org v0.0.0-20260112195520-a5071408f32f // indirect
-	golang.org/x/sys v0.40.0 // indirect
+	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
 	modernc.org/gc/v3 v3.0.0-20240107210532-573471604cb6 // indirect
 	modernc.org/libc v1.55.3 // indirect

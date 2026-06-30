@@ -5,6 +5,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,6 +30,7 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/providers/comicvine"
 	"github.com/siposbnc/comic-hub/server/internal/providers/metron"
 	"github.com/siposbnc/comic-hub/server/internal/scanner"
+	"github.com/siposbnc/comic-hub/server/internal/service/auth"
 	"github.com/siposbnc/comic-hub/server/internal/service/browse"
 	"github.com/siposbnc/comic-hub/server/internal/service/health"
 	"github.com/siposbnc/comic-hub/server/internal/service/library"
@@ -159,6 +162,26 @@ func run() error {
 		}
 	})
 
+	// Authentication (server mode). Resolve the access-token signing secret (env → persisted
+	// setting → freshly generated + persisted), build the auth service, and bootstrap a
+	// login-capable admin from env when configured. Embedded/dev runs leave auth disabled and
+	// act as the implicit owner; the secret is still resolved so the service is always usable.
+	jwtSecret, err := resolveJWTSecret(context.Background(), store, cfg)
+	if err != nil {
+		return fmt.Errorf("resolve auth secret: %w", err)
+	}
+	authSvc := auth.New(store, jwtSecret)
+	if cfg.AuthEnabled {
+		adminUser := cfg.AdminUsername
+		if adminUser == "" && cfg.AdminPassword != "" {
+			adminUser = domain.OwnerUserID // default: set the implicit owner's password
+		}
+		if err := authSvc.EnsureAdmin(context.Background(), adminUser, cfg.AdminDisplayName, cfg.AdminPassword); err != nil {
+			return fmt.Errorf("bootstrap admin: %w", err)
+		}
+		logger.Info("authentication enabled", "adminBootstrapped", adminUser != "")
+	}
+
 	runner.Register(domain.JobScan, func(ctx context.Context, payload string, progress jobs.ProgressFunc) error {
 		var p scanner.JobPayload
 		if err := json.Unmarshal([]byte(payload), &p); err != nil {
@@ -249,6 +272,7 @@ func run() error {
 		Metadata: metaSvc,
 		Organize: organizing,
 		Health:   healthSvc,
+		Auth:     authSvc,
 		Hub:      hub,
 
 		ReloadProviders: reloadProviders,
@@ -296,4 +320,28 @@ func run() error {
 	}
 	logger.Info("stopped cleanly")
 	return nil
+}
+
+// resolveJWTSecret returns the access-token signing secret: the configured value, else the
+// persisted one, else a freshly generated 32-byte secret that is persisted so tokens survive
+// restarts. Generation/persistence only happens when auth is enabled (an unused secret in
+// embedded/dev mode stays ephemeral and never touches the database).
+func resolveJWTSecret(ctx context.Context, store *sqlite.Store, cfg config.Config) ([]byte, error) {
+	if cfg.JWTSecret != "" {
+		return []byte(cfg.JWTSecret), nil
+	}
+	if saved, err := store.Settings().Get(ctx, domain.SettingJWTSecret); err == nil && saved != "" {
+		return []byte(saved), nil
+	}
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return nil, err
+	}
+	secret := hex.EncodeToString(buf)
+	if cfg.AuthEnabled {
+		if err := store.Settings().Set(ctx, domain.SettingJWTSecret, secret); err != nil {
+			return nil, err
+		}
+	}
+	return []byte(secret), nil
 }

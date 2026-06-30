@@ -16,6 +16,7 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/config"
 	"github.com/siposbnc/comic-hub/server/internal/domain"
 	"github.com/siposbnc/comic-hub/server/internal/jobs"
+	"github.com/siposbnc/comic-hub/server/internal/service/auth"
 	"github.com/siposbnc/comic-hub/server/internal/service/browse"
 	"github.com/siposbnc/comic-hub/server/internal/service/health"
 	"github.com/siposbnc/comic-hub/server/internal/service/library"
@@ -40,6 +41,7 @@ type Deps struct {
 	Metadata *metadata.Service
 	Organize *organize.Service
 	Health   *health.Service
+	Auth     *auth.Service
 	Hub      *Hub
 	// ReloadProviders rebuilds the metadata service's providers from persisted settings +
 	// env, after credentials change. Supplied by main.
@@ -62,11 +64,17 @@ func NewRouter(d Deps) http.Handler {
 	r.Get("/readyz", handleReadyz(d.DB))
 
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Use(tokenAuth(d.Config))
+		r.Use(authMiddleware(d.Config, d.Auth))
 
 		r.Get("/server/info", handleServerInfo(d.Config))
 		r.Get("/server/stats", handleServerStats(d.DB))
 		r.Get("/providers", handleProviders(d.Metadata))
+
+		// Authentication (server mode). login/refresh/logout authenticate via the request
+		// body (credentials / refresh token), so they bypass the access-token middleware.
+		r.Post("/auth/login", handleLogin(d.Auth))
+		r.Post("/auth/refresh", handleRefresh(d.Auth))
+		r.Post("/auth/logout", handleLogout(d.Auth))
 
 		// Provider credentials (metadata sources), editable from the settings screen.
 		providerEnvCfg := providerEnv{

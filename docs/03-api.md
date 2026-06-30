@@ -19,11 +19,10 @@ content-addressed caching.
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| `POST` | `/auth/login` | `{username,password}` → `{access, refresh, user}`. Auth mode only. |
-| `POST` | `/auth/refresh` | `{refresh}` → new access token. |
-| `POST` | `/auth/logout` | Revoke refresh token. |
-| `GET`  | `/auth/me` | Current user + prefs. |
-| `GET`  | `/auth/handshake` | Embedded only: validates loopback token, returns implicit owner. |
+| `POST` | `/auth/login` | `{username,password}` → `{access, refresh, accessExpiry, user}`. Auth mode only. |
+| `POST` | `/auth/refresh` | `{refresh}` → new `{access, refresh, …}` pair (refresh token rotated). |
+| `POST` | `/auth/logout` | `{refresh}` → revoke that refresh-token session (204). |
+| `GET`  | `/auth/handshake` | Returns the acting user: the authenticated user in auth mode, the implicit owner in embedded/auth-disabled mode. |
 
 ## 2. Server / system
 

@@ -87,16 +87,15 @@ func handleServerStats(db *sql.DB) http.HandlerFunc {
 
 func handleAuthHandshake(cfg config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// In embedded mode there is a single implicit owner; reaching this endpoint with
-		// a valid token is proof of identity.
+		// The acting user is resolved by the auth middleware: the implicit owner in embedded
+		// mode (or auth-disabled), the authenticated user in server mode.
+		u, ok := userFromContext(r.Context())
+		if !ok {
+			u = implicitOwner()
+		}
 		writeJSON(w, http.StatusOK, map[string]any{
 			"mode": cfg.Mode,
-			"user": map[string]any{
-				"id":          "owner",
-				"username":    "owner",
-				"displayName": "Owner",
-				"role":        "owner",
-			},
+			"user": toUserDTO(u),
 		})
 	}
 }
