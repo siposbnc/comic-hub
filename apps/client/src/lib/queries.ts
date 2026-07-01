@@ -28,6 +28,7 @@ export const qk = {
   tags: ['tags'] as const,
   smartLists: ['smartLists'] as const,
   smartList: (id: string) => ['smartList', id] as const,
+  presence: ['presence'] as const,
 };
 
 /** App-wide QueryClient. Covers are immutable + content-addressed, so list data can be
@@ -110,6 +111,21 @@ export function useDiscover(libraryId?: string) {
 export function useContinueReading() {
   const client = useClient();
   return useQuery({ queryKey: qk.continueReading, queryFn: () => client.continueReading() });
+}
+
+/**
+ * Household "now reading" presence (auth mode only — pass enabled=false elsewhere).
+ * The snapshot seeds the cache; WS presence events keep it live (see events.ts), so
+ * the query itself never goes stale.
+ */
+export function usePresence(enabled: boolean) {
+  const client = useClient();
+  return useQuery({
+    queryKey: qk.presence,
+    queryFn: () => client.presence(),
+    enabled,
+    staleTime: Infinity,
+  });
 }
 
 /**

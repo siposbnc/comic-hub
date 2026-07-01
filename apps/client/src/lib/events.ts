@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { Connection } from '@comichub/api-client';
+import type { Connection, PresenceEntry } from '@comichub/api-client';
 import { useConnection } from './client.js';
 import { qk } from './queries.js';
 import { useUiStore, type TrackedJob } from '../store/ui.js';
@@ -21,7 +21,7 @@ interface JobData {
   error?: string;
 }
 
-const TOPICS = ['jobs', 'progress', 'library'];
+const TOPICS = ['jobs', 'progress', 'library', 'presence'];
 const RECONNECT_MIN = 1_000;
 const RECONNECT_MAX = 15_000;
 
@@ -88,6 +88,23 @@ export function useServerEvents(): void {
       qc.invalidateQueries({ queryKey: qk.libraries });
     };
 
+    // Presence ticks arrive per page turn, so patch the cache in place (no refetch):
+    // the Now Reading strip's progress bars creep live.
+    const onPresence = (frame: WsFrame) => {
+      if (frame.type === 'presence.updated' && frame.data) {
+        const e = frame.data as PresenceEntry;
+        qc.setQueryData<PresenceEntry[]>(qk.presence, (cur) => [
+          e,
+          ...(cur ?? []).filter((x) => x.userId !== e.userId),
+        ]);
+      } else if (frame.type === 'presence.cleared' && frame.data) {
+        const { userId } = frame.data as { userId: string };
+        qc.setQueryData<PresenceEntry[]>(qk.presence, (cur) =>
+          (cur ?? []).filter((x) => x.userId !== userId),
+        );
+      }
+    };
+
     const connect = () => {
       if (closed) return;
       try {
@@ -100,6 +117,8 @@ export function useServerEvents(): void {
       socket.onopen = () => {
         backoff = RECONNECT_MIN;
         socket?.send(JSON.stringify({ type: 'subscribe', topics: TOPICS }));
+        // Presence changed while we were disconnected — re-seed from the snapshot.
+        qc.invalidateQueries({ queryKey: qk.presence });
       };
 
       socket.onmessage = (ev) => {
@@ -112,6 +131,7 @@ export function useServerEvents(): void {
         if (frame.topic === 'jobs' && frame.data) onJob(frame.data as JobData);
         else if (frame.topic === 'progress') onProgress();
         else if (frame.topic === 'library') onLibrary();
+        else if (frame.topic === 'presence') onPresence(frame);
       };
 
       socket.onclose = () => {

@@ -8,6 +8,7 @@ import { useReadLaunch } from '../lib/launch.js';
 import { Page, LoadingState, ErrorState } from '../components/Page.js';
 import { BookCover } from '../components/cards.js';
 import { AddLibraryDialog } from '../components/AddLibraryDialog.js';
+import { NowReadingStrip } from '../components/NowReadingStrip.js';
 import { issueLabel, resumePage } from '../lib/format.js';
 
 /** The Home feed: pick-up-where-you-left-off and what's new across every library. */
@@ -96,6 +97,9 @@ export function Home() {
           Add library
         </Button>
       </div>
+
+      {/* Household presence (auth mode only; collapses when nobody is reading). */}
+      <NowReadingStrip />
 
       {nextUp && <NextUpCard nextUp={nextUp} seriesName={seriesNames.get(nextUp.book.seriesId)} />}
 
