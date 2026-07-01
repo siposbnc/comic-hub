@@ -123,16 +123,16 @@ owner, so everything is permitted.
 
 ## 6. Progress & history
 
-| Method | Path                    | Purpose                                                                                                             |
-| ------ | ----------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `GET`  | `/me/continue`          | "Continue Reading" rail: in-progress books, recency-ranked.                                                         |
-| `GET`  | `/me/progress/{bookId}` | Your progress for one book.                                                                                         |
-| `PUT`  | `/me/progress/{bookId}` | Upsert `{page, status?, device?, updatedAt?}`. Idempotent; last-writer-wins by `updatedAt`. Also broadcast over WS. |
-| `POST` | `/me/progress/batch`    | Bulk upsert, ≤500 items (reader flushes offline progress here). Per-item results report `applied`.                  |
-| `POST` | `/me/books/{id}/mark`   | `{status: read\|unread}` convenience.                                                                               |
-| `GET`  | `/me/history`           | Reading history feed.                                                                                               |
-| `GET`  | `/me/stats`             | Aggregate stats (books read, pages, streaks, by month/genre).                                                       |
-| `GET`  | `/presence`             | Who's reading right now (household, most recent first). Viewer's content ceiling applied.                           |
+| Method | Path                    | Purpose                                                                                                                                                                                                                   |
+| ------ | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/me/continue`          | "Continue Reading" rail: in-progress books, recency-ranked.                                                                                                                                                               |
+| `GET`  | `/me/progress/{bookId}` | Your progress for one book.                                                                                                                                                                                               |
+| `PUT`  | `/me/progress/{bookId}` | Upsert `{page, status?, device?, updatedAt?}`. Idempotent; last-writer-wins by `updatedAt`. Also broadcast over WS.                                                                                                       |
+| `POST` | `/me/progress/batch`    | Bulk upsert, ≤500 items (reader flushes offline progress here). Items name a `bookId` **or** a `contentHash` (standalone progress, resolved to the catalog book(s) sharing that hash). Per-item results report `applied`. |
+| `POST` | `/me/books/{id}/mark`   | `{status: read\|unread}` convenience.                                                                                                                                                                                     |
+| `GET`  | `/me/history`           | Reading history feed.                                                                                                                                                                                                     |
+| `GET`  | `/me/stats`             | Aggregate stats (books read, pages, streaks, by month/genre).                                                                                                                                                             |
+| `GET`  | `/presence`             | Who's reading right now (household, most recent first). Viewer's content ceiling applied.                                                                                                                                 |
 
 Progress writes are **debounced & batched** by the reader (e.g. every N page turns or on
 idle/blur) and reconciled **last-writer-wins by `updatedAt`** (ADR-008): `updatedAt` is

@@ -178,7 +178,7 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/continue", handleContinueReading(d.Browse))
 			r.Get("/progress/{bookId}", handleGetProgress(d.Reading))
 			r.Put("/progress/{bookId}", handlePutProgress(d.Reading))
-			r.Post("/progress/batch", handleBatchProgress(d.Reading))
+			r.Post("/progress/batch", handleBatchProgress(d.Reading, d.Repo))
 			r.Post("/books/{id}/mark", handleMarkBook(d.Reading))
 			r.Get("/books/{id}/next", handleNextBook(d.Browse))
 			r.Get("/books/{id}/reader-prefs", handleGetReaderPrefs(d.Reading))

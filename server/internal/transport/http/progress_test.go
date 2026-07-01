@@ -196,3 +196,58 @@ func TestProgressBatchFlush(t *testing.T) {
 	res = sendJSON(t, http.MethodPost, api+"/me/progress/batch", `{"items":[]}`)
 	mustStatus(t, res, http.StatusBadRequest)
 }
+
+// TestProgressBatchByContentHash: standalone-mode progress is keyed by the file's
+// content hash (the reader has no book id); the flush resolves it to the catalog book.
+func TestProgressBatchByContentHash(t *testing.T) {
+	srv, store := newScanServer(t)
+	api := srv + "/api/v1"
+
+	root := t.TempDir()
+	writeImageCBZ(t, filepath.Join(root, "Saga", "Saga 001.cbz"), map[string][]byte{
+		"p1.png": makePNGBytes(40, 60), "p2.png": makePNGBytes(40, 60),
+	})
+	bookID := scanOneSeries(t, api, root, 1)[0]
+	book, err := store.Books().Get(t.Context(), bookID)
+	if err != nil || book.ContentHash == "" {
+		t.Fatalf("book content hash unavailable: %v (hash %q)", err, book.ContentHash)
+	}
+
+	res := sendJSON(t, http.MethodPost, api+"/me/progress/batch", `{"items":[
+		{"contentHash":"`+book.ContentHash+`","page":1,"status":"in_progress","updatedAt":4000000},
+		{"contentHash":"not-a-real-hash","page":1},
+		{"page":1}
+	]}`)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("batch = %d, want 200", res.StatusCode)
+	}
+	var out struct {
+		Items []struct {
+			BookID   string       `json:"bookId"`
+			Applied  bool         `json:"applied"`
+			Progress *progressDTO `json:"progress"`
+			Error    string       `json:"error"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
+		t.Fatalf("decode batch: %v", err)
+	}
+	matched, missing, keyless := out.Items[0], out.Items[1], out.Items[2]
+	if !matched.Applied || matched.BookID != bookID || matched.Progress == nil || matched.Progress.Page != 1 {
+		t.Errorf("hash item = %+v, want applied to %s at page 1", matched, bookID)
+	}
+	if missing.Applied || missing.Error == "" {
+		t.Errorf("unknown-hash item = %+v, want error", missing)
+	}
+	if keyless.Applied || keyless.Error == "" {
+		t.Errorf("keyless item = %+v, want error", keyless)
+	}
+
+	// The flush landed as real progress on the resolved book.
+	var stored progressDTO
+	getJSON(t, api+"/me/progress/"+bookID, &stored)
+	if stored.Page != 1 || stored.UpdatedAt != 4000000 {
+		t.Fatalf("stored progress = %+v, want page 1 @ 4000000", stored)
+	}
+}

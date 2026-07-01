@@ -120,6 +120,8 @@ pub fn run() {
             local::local_prefetch,
             local::local_save_progress,
             local::local_restore_progress,
+            local::local_pending_progress,
+            local::local_mark_progress_synced,
             local::local_save_prefs,
             local::local_restore_prefs
         ])

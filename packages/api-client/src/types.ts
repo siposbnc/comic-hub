@@ -143,9 +143,12 @@ export interface Progress {
   updatedAt: number;
 }
 
-/** One item of a bulk progress flush (POST /me/progress/batch). */
+/** One item of a bulk progress flush (POST /me/progress/batch). Identify the book by
+ *  `bookId`, or by `contentHash` for standalone-mode progress (keyed by the file's
+ *  hash) — the server resolves the hash to its catalog book(s). */
 export interface ProgressBatchItem {
-  bookId: string;
+  bookId?: string;
+  contentHash?: string;
   page: number;
   status?: ReadStatus;
   device?: string;
@@ -155,7 +158,8 @@ export interface ProgressBatchItem {
 
 /** Per-item result of a bulk progress flush. */
 export interface ProgressBatchResult {
-  bookId: string;
+  /** The resolved book (for contentHash items: the first match); absent on error. */
+  bookId?: string;
   /** False when the write was stale (older than stored) or errored. */
   applied: boolean;
   /** The authoritative row after the flush (absent when the item errored). */

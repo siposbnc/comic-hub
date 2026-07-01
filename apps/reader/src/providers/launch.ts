@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { ComicHubClient } from '@comichub/api-client';
+import { ComicHubClient, type ProgressBatchItem, type ReadStatus } from '@comichub/api-client';
 import type { Manifest, PageProvider } from '@comichub/reader-core';
 import { ServerPageProvider } from '@comichub/reader-core';
 import { LocalPageProvider } from './LocalPageProvider.js';
@@ -30,6 +30,9 @@ export function connectedLaunch(
   bookId: string,
   startPage?: number,
 ): LaunchResult {
+  // A server is in reach: reconcile any place saved while reading standalone
+  // (double-clicked files, no server) into the catalog. Fire-and-forget.
+  void flushStandaloneProgress(client);
   return {
     kind: 'connected',
     provider: new ServerPageProvider(client, bookId, deviceLabel()),
@@ -38,6 +41,46 @@ export function connectedLaunch(
     client,
     bookId,
   };
+}
+
+/** Shape of an entry in the Rust standalone progress store (bookId = content hash). */
+interface StandaloneProgress {
+  bookId: string;
+  page: number;
+  status: string;
+  updatedAt?: number;
+}
+
+/**
+ * Flushes standalone-mode progress into the server (ADR-008 "never lose your place",
+ * standalone → server). Entries are keyed by the file's content hash; the server
+ * resolves each to its catalog book(s) and applies last-writer-wins by updatedAt.
+ * Entries the server settled are stamped synced; unmatched hashes stay pending in
+ * case the file is imported into a library later. Best-effort — failures just leave
+ * everything pending for the next connected launch.
+ */
+async function flushStandaloneProgress(client: ComicHubClient): Promise<void> {
+  if (!isTauri()) return;
+  try {
+    const pending = await invoke<StandaloneProgress[]>('local_pending_progress');
+    if (pending.length === 0) return;
+    const items: ProgressBatchItem[] = pending.map((p) => ({
+      contentHash: p.bookId,
+      page: p.page,
+      status: p.status as ReadStatus,
+      device: deviceLabel(),
+      updatedAt: p.updatedAt,
+    }));
+    const results = await client.batchProgress(items);
+    // Results map 1:1 to items; stamp everything the server ruled on (applied or
+    // superseded by newer progress) — errors (hash not in any library) stay pending.
+    const settled = pending.filter((_, i) => results[i] && !results[i]!.error).map((p) => p.bookId);
+    if (settled.length > 0) {
+      await invoke('local_mark_progress_synced', { bookIds: settled });
+    }
+  } catch {
+    // Server or store unavailable; retry on the next connected launch.
+  }
 }
 
 function isTauri(): boolean {

@@ -391,6 +391,57 @@ pub fn local_restore_progress(
     Ok(store.get(&book_id).cloned())
 }
 
+/// Standalone progress not yet reconciled into a server: entries read (updatedAt)
+/// after their last successful flush (syncedAt, stamped by local_mark_progress_synced).
+/// The webview flushes these through POST /me/progress/batch — keyed by content hash,
+/// since standalone book ids ARE the file hash — whenever it launches connected
+/// (ADR-008 "never lose your place", standalone → server).
+#[tauri::command]
+pub fn local_pending_progress(app: tauri::AppHandle) -> Result<Vec<serde_json::Value>, String> {
+    let store = read_progress_store(&app);
+    let mut out = Vec::new();
+    if let Some(map) = store.as_object() {
+        for v in map.values() {
+            let updated = v.get("updatedAt").and_then(|x| x.as_i64()).unwrap_or(0);
+            let synced = v.get("syncedAt").and_then(|x| x.as_i64()).unwrap_or(0);
+            // Untimestamped entries never flush: the server would treat them as
+            // fresh interactive writes and let stale data win.
+            if updated > 0 && updated > synced {
+                out.push(v.clone());
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Stamps entries as reconciled (syncedAt = their current updatedAt) so they stop
+/// being pending until the book is read again. Hashes the server couldn't match stay
+/// unstamped on purpose — the file may be imported into a library later, and the
+/// place should follow it (ADR-008).
+#[tauri::command]
+pub fn local_mark_progress_synced(
+    app: tauri::AppHandle,
+    book_ids: Vec<String>,
+) -> Result<(), String> {
+    let mut store = read_progress_store(&app);
+    if let Some(map) = store.as_object_mut() {
+        for id in &book_ids {
+            if let Some(entry) = map.get_mut(id) {
+                let updated = entry.get("updatedAt").cloned();
+                if let (Some(obj), Some(up)) = (entry.as_object_mut(), updated) {
+                    obj.insert("syncedAt".into(), up);
+                }
+            }
+        }
+    }
+    let path = progress_store_path(&app)?;
+    std::fs::write(
+        path,
+        serde_json::to_vec_pretty(&store).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())
+}
+
 // ── Per-book reader overrides (layout/fit/direction/…) ─────────────────────────────────
 // Stored locally keyed by book id, the standalone counterpart to the server's reader-prefs
 // endpoint. The settings blob is opaque (the webview defines its shape).

@@ -67,6 +67,12 @@ export class ComicHubClient {
    *  token, or null if refresh failed (the caller should then re-authenticate). */
   private onUnauthorized?: () => Promise<string | null>;
 
+  /** The server base URL this client talks to (no trailing slash) — e.g. for keying
+   *  per-server local state like the reader's offline progress queue. */
+  get serverUrl(): string {
+    return this.baseUrl;
+  }
+
   constructor(connection: Connection) {
     this.baseUrl = connection.baseUrl.replace(/\/$/, '');
     this.token = connection.token;
