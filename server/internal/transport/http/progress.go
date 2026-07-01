@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	"math"
 	"net/http"
 
@@ -57,24 +58,84 @@ func handleGetProgress(rd *reading.Service) http.HandlerFunc {
 	}
 }
 
+// progressWriteReq is a single progress write: PUT body, or one batch item (which also
+// names its book). updatedAt is optional — readers replaying offline progress stamp
+// when the reading happened; last-writer-wins by updatedAt (ADR-008).
+type progressWriteReq struct {
+	BookID    string `json:"bookId,omitempty"`
+	Page      int    `json:"page"`
+	Status    string `json:"status"`
+	Device    string `json:"device"`
+	UpdatedAt int64  `json:"updatedAt"`
+}
+
 func handlePutProgress(rd *reading.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req struct {
-			Page   int    `json:"page"`
-			Status string `json:"status"`
-			Device string `json:"device"`
-		}
+		var req progressWriteReq
 		if !decodeJSON(w, r, &req) {
 			return
 		}
 		p, err := rd.Upsert(r.Context(), currentUserID(r), chi.URLParam(r, "bookId"), reading.UpsertInput{
-			Page: req.Page, Status: req.Status, Device: req.Device,
+			Page: req.Page, Status: req.Status, Device: req.Device, UpdatedAt: req.UpdatedAt,
 		})
-		if err != nil {
+		// A stale write (older than the stored row) is not an error to a debounced
+		// client: respond 200 with the authoritative row so the device can adopt it
+		// (or offer "resume here / there"). Detectable via the returned updatedAt.
+		if err != nil && !errors.Is(err, reading.ErrStaleWrite) {
 			writeDomainError(w, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, toProgressDTO(p))
+	}
+}
+
+// handleBatchProgress bulk-upserts progress — the reader flushes offline/standalone
+// progress here (docs/03-api.md §6). Items are applied independently; each result
+// reports whether the write won (applied) and the authoritative row.
+func handleBatchProgress(rd *reading.Service) http.HandlerFunc {
+	const maxBatch = 500
+	type itemResult struct {
+		BookID  string       `json:"bookId"`
+		Applied bool         `json:"applied"`
+		Progress *progressDTO `json:"progress,omitempty"`
+		Error   string       `json:"error,omitempty"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Items []progressWriteReq `json:"items"`
+		}
+		if !decodeJSON(w, r, &req) {
+			return
+		}
+		if len(req.Items) == 0 {
+			writeError(w, http.StatusBadRequest, "empty_batch", "items is empty")
+			return
+		}
+		if len(req.Items) > maxBatch {
+			writeError(w, http.StatusBadRequest, "batch_too_large", "at most 500 items per batch")
+			return
+		}
+		userID := currentUserID(r)
+		results := make([]itemResult, 0, len(req.Items))
+		for _, it := range req.Items {
+			res := itemResult{BookID: it.BookID}
+			p, err := rd.Upsert(r.Context(), userID, it.BookID, reading.UpsertInput{
+				Page: it.Page, Status: it.Status, Device: it.Device, UpdatedAt: it.UpdatedAt,
+			})
+			switch {
+			case err == nil:
+				res.Applied = true
+				dto := toProgressDTO(p)
+				res.Progress = &dto
+			case errors.Is(err, reading.ErrStaleWrite):
+				dto := toProgressDTO(p) // the authoritative (newer) row
+				res.Progress = &dto
+			default:
+				res.Error = err.Error()
+			}
+			results = append(results, res)
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"items": results})
 	}
 }
 

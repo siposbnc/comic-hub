@@ -18,7 +18,10 @@ import type {
   Library,
   LibraryHealth,
   NextContext,
+  PresenceEntry,
   Progress,
+  ProgressBatchItem,
+  ProgressBatchResult,
   ProviderStatus,
   ReadingList,
   ReadingListDetail,
@@ -306,13 +309,42 @@ export class ComicHubClient {
     return this.request<Progress>('GET', `/api/v1/me/progress/${encodeURIComponent(bookId)}`);
   }
 
+  /**
+   * Upserts progress. `updatedAt` (unix ms) stamps when the reading actually happened —
+   * set it when replaying offline/standalone progress. Last-writer-wins by `updatedAt`:
+   * a stale write is not applied and the response carries the authoritative (newer) row.
+   */
   putProgress(
     bookId: string,
-    input: { page: number; status?: ReadStatus; device?: string },
+    input: { page: number; status?: ReadStatus; device?: string; updatedAt?: number },
   ): Promise<Progress> {
     return this.request<Progress>('PUT', `/api/v1/me/progress/${encodeURIComponent(bookId)}`, {
       body: input,
     });
+  }
+
+  /**
+   * Bulk progress flush (≤500 items) — how a reader syncs offline progress. Items apply
+   * independently; each result reports whether the write won (`applied`) and the
+   * authoritative row.
+   */
+  async batchProgress(items: ProgressBatchItem[]): Promise<ProgressBatchResult[]> {
+    const res = await this.request<{ items: ProgressBatchResult[] }>(
+      'POST',
+      '/api/v1/me/progress/batch',
+      { body: { items } },
+    );
+    return res.items;
+  }
+
+  /**
+   * Who's reading right now (household presence, most recent first). Live updates arrive
+   * on the WS `presence` topic; entries above the viewer's content ceiling are withheld
+   * server-side.
+   */
+  async presence(): Promise<PresenceEntry[]> {
+    const res = await this.request<{ items: PresenceEntry[] }>('GET', '/api/v1/presence');
+    return res.items;
   }
 
   /** The user's saved per-book reader overrides (opaque settings object; {} if none). */

@@ -143,6 +143,42 @@ export interface Progress {
   updatedAt: number;
 }
 
+/** One item of a bulk progress flush (POST /me/progress/batch). */
+export interface ProgressBatchItem {
+  bookId: string;
+  page: number;
+  status?: ReadStatus;
+  device?: string;
+  /** Unix ms of when the reading happened; last-writer-wins by this (ADR-008). */
+  updatedAt?: number;
+}
+
+/** Per-item result of a bulk progress flush. */
+export interface ProgressBatchResult {
+  bookId: string;
+  /** False when the write was stale (older than stored) or errored. */
+  applied: boolean;
+  /** The authoritative row after the flush (absent when the item errored). */
+  progress?: Progress;
+  error?: string;
+}
+
+/**
+ * One household member's current reading activity (GET /presence + the WS `presence`
+ * topic). Entries above the viewer's content ceiling never arrive.
+ */
+export interface PresenceEntry {
+  userId: string;
+  displayName: string;
+  bookId: string;
+  bookTitle: string;
+  seriesId?: string;
+  seriesTitle?: string;
+  page: number;
+  pageCount: number;
+  updatedAt: number;
+}
+
 /** A user's saved place in a book: a page with an optional short note. */
 export interface Bookmark {
   id: string;

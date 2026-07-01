@@ -46,7 +46,18 @@ type UpsertInput struct {
 	Page   int
 	Status string // optional; derived from page when empty
 	Device string
+	// UpdatedAt is the client's timestamp (unix ms) of when the reading actually
+	// happened — set by readers replaying offline/standalone progress (ADR-008). Zero
+	// means "now". A write older than the stored row is rejected as stale: the caller
+	// gets the authoritative row back unchanged, so no device can clobber newer
+	// progress from another one.
+	UpdatedAt int64
 }
+
+// ErrStaleWrite reports that an upsert carried an UpdatedAt older than the stored
+// progress and was not applied (last-writer-wins by updatedAt, ADR-008). Callers
+// receive the authoritative row alongside it.
+var ErrStaleWrite = errors.New("progress write is older than stored progress")
 
 // Get returns the user's progress for a book (ErrNotFound if none yet).
 func (s *Service) Get(ctx context.Context, userID, bookID string) (domain.Progress, error) {
@@ -90,6 +101,17 @@ func (s *Service) Upsert(ctx context.Context, userID, bookID string, in UpsertIn
 	existing, _ := s.repo.Progress().Get(ctx, userID, bookID)
 	now := time.Now().UnixMilli()
 
+	// Last-writer-wins by updatedAt (ADR-008). A client replaying offline progress
+	// stamps when the reading happened; if the stored row is newer (another device won
+	// meanwhile), reject the stale write and hand back the authoritative row.
+	at := in.UpdatedAt
+	if at <= 0 || at > now {
+		at = now // untimestamped (interactive) writes and future clocks resolve to now
+	}
+	if in.UpdatedAt > 0 && existing.UpdatedAt > in.UpdatedAt {
+		return existing, ErrStaleWrite
+	}
+
 	p := domain.Progress{
 		UserID:    userID,
 		BookID:    bookID,
@@ -97,14 +119,14 @@ func (s *Service) Upsert(ctx context.Context, userID, bookID string, in UpsertIn
 		PageCount: book.PageCount,
 		Status:    status,
 		StartedAt: existing.StartedAt,
-		UpdatedAt: now,
+		UpdatedAt: at,
 		Device:    in.Device,
 	}
 	if p.StartedAt == 0 && status != domain.StatusUnread {
-		p.StartedAt = now
+		p.StartedAt = at
 	}
 	if status == domain.StatusRead {
-		p.FinishedAt = now
+		p.FinishedAt = at
 		if existing.FinishedAt != 0 {
 			p.FinishedAt = existing.FinishedAt
 		}

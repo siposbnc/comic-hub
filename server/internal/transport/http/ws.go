@@ -9,7 +9,9 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	"github.com/siposbnc/comic-hub/server/internal/access"
 	"github.com/siposbnc/comic-hub/server/internal/domain"
+	"github.com/siposbnc/comic-hub/server/internal/service/presence"
 )
 
 // Topics clients can subscribe to (docs/03-api.md §10).
@@ -18,6 +20,7 @@ const (
 	TopicProgress  = "progress"
 	TopicLibrary   = "library"
 	TopicBookmarks = "bookmarks"
+	TopicPresence  = "presence"
 )
 
 const (
@@ -41,8 +44,12 @@ func NewHub(logger *slog.Logger) *Hub {
 }
 
 type wsClient struct {
-	conn   *websocket.Conn
-	send   chan []byte
+	conn *websocket.Conn
+	send chan []byte
+	// user is the connection's authenticated identity (the implicit owner in embedded /
+	// auth-off mode), fixed at upgrade. Per-user topics (progress, bookmarks) deliver
+	// only to that user's sockets; presence applies the user's content ceiling.
+	user   domain.User
 	mu     sync.Mutex
 	topics map[string]bool
 }
@@ -68,11 +75,17 @@ var wsUpgrader = websocket.Upgrader{
 
 func (h *Hub) handle() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Resolve identity before the upgrade; absent (embedded / auth-off) = the
+		// unrestricted implicit owner, matching currentUserID's fallback.
+		user, ok := userFromContext(r.Context())
+		if !ok {
+			user = domain.User{ID: domain.OwnerUserID}
+		}
 		conn, err := wsUpgrader.Upgrade(w, r, nil)
 		if err != nil {
 			return // Upgrade already wrote an error response.
 		}
-		c := &wsClient{conn: conn, send: make(chan []byte, wsSendBuffer), topics: make(map[string]bool)}
+		c := &wsClient{conn: conn, send: make(chan []byte, wsSendBuffer), user: user, topics: make(map[string]bool)}
 		h.add(c)
 		go h.writePump(c)
 		h.readPump(c)
@@ -97,6 +110,13 @@ func (h *Hub) remove(c *wsClient) {
 // Broadcast sends an event to every client subscribed to topic. Slow clients (full
 // buffer) are dropped rather than blocking the broadcaster.
 func (h *Hub) Broadcast(topic, eventType string, data any) {
+	h.broadcastWhere(topic, eventType, data, nil)
+}
+
+// broadcastWhere sends an event to every subscribed client whose connection identity
+// passes allow (nil = everyone). This is how per-user topics and content-ceiling
+// filtering work without per-client payloads.
+func (h *Hub) broadcastWhere(topic, eventType string, data any, allow func(viewer domain.User) bool) {
 	payload, err := json.Marshal(outbound{Type: eventType, Topic: topic, Data: data})
 	if err != nil {
 		h.logger.Error("ws marshal", "err", err)
@@ -108,7 +128,7 @@ func (h *Hub) Broadcast(topic, eventType string, data any) {
 		c.mu.Lock()
 		subscribed := c.topics[topic]
 		c.mu.Unlock()
-		if !subscribed {
+		if !subscribed || (allow != nil && !allow(c.user)) {
 			continue
 		}
 		select {
@@ -124,15 +144,33 @@ func (h *Hub) BroadcastJob(j domain.Job) {
 	h.Broadcast(TopicJobs, "job."+string(j.State), toJobDTO(j))
 }
 
-// BroadcastProgress publishes a progress update on the progress topic.
+// BroadcastProgress publishes a progress update on the progress topic — only to the
+// owning user's connections (cross-device sync is per-user; other members' reading
+// activity is presence's job, which applies content ceilings).
 func (h *Hub) BroadcastProgress(p domain.Progress) {
-	h.Broadcast(TopicProgress, "progress.updated", toProgressDTO(p))
+	h.broadcastWhere(TopicProgress, "progress.updated", toProgressDTO(p),
+		func(viewer domain.User) bool { return viewer.ID == p.UserID })
 }
 
-// BroadcastBookmarks signals that a book's bookmarks changed (added/edited/removed), so
-// subscribers can refresh that book's bookmark list.
-func (h *Hub) BroadcastBookmarks(bookID string) {
-	h.Broadcast(TopicBookmarks, "bookmarks.updated", map[string]string{"bookId": bookID})
+// BroadcastBookmarks signals that one of the user's books' bookmarks changed
+// (added/edited/removed), so that user's other devices refresh the list.
+func (h *Hub) BroadcastBookmarks(userID, bookID string) {
+	h.broadcastWhere(TopicBookmarks, "bookmarks.updated", map[string]string{"bookId": bookID},
+		func(viewer domain.User) bool { return viewer.ID == userID })
+}
+
+// BroadcastPresence publishes a presence change ("now reading"). Entries for a book
+// above a viewer's content ceiling are withheld from that viewer — restricted users
+// never learn of over-rated content, mirroring browse filtering.
+func (h *Hub) BroadcastPresence(e presence.Entry, active bool) {
+	eventType := "presence.updated"
+	var data any = e
+	if !active {
+		eventType = "presence.cleared"
+		data = map[string]string{"userId": e.UserID}
+	}
+	h.broadcastWhere(TopicPresence, eventType, data,
+		func(viewer domain.User) bool { return access.Allowed(viewer.AgeRatingMax, e.AgeRating) })
 }
 
 func (h *Hub) readPump(c *wsClient) {

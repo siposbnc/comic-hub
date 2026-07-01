@@ -123,18 +123,24 @@ owner, so everything is permitted.
 
 ## 6. Progress & history
 
-| Method | Path                    | Purpose                                                                                                 |
-| ------ | ----------------------- | ------------------------------------------------------------------------------------------------------- |
-| `GET`  | `/me/continue`          | "Continue Reading" rail: in-progress books, recency-ranked.                                             |
-| `GET`  | `/me/progress/{bookId}` | Your progress for one book.                                                                             |
-| `PUT`  | `/me/progress/{bookId}` | Upsert `{page, status?, device?}`. Idempotent; last-writer-wins by `updatedAt`. Also broadcast over WS. |
-| `POST` | `/me/progress/batch`    | Bulk upsert (reader flushes offline progress here).                                                     |
-| `POST` | `/me/books/{id}/mark`   | `{status: read\|unread}` convenience.                                                                   |
-| `GET`  | `/me/history`           | Reading history feed.                                                                                   |
-| `GET`  | `/me/stats`             | Aggregate stats (books read, pages, streaks, by month/genre).                                           |
+| Method | Path                    | Purpose                                                                                                             |
+| ------ | ----------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/me/continue`          | "Continue Reading" rail: in-progress books, recency-ranked.                                                         |
+| `GET`  | `/me/progress/{bookId}` | Your progress for one book.                                                                                         |
+| `PUT`  | `/me/progress/{bookId}` | Upsert `{page, status?, device?, updatedAt?}`. Idempotent; last-writer-wins by `updatedAt`. Also broadcast over WS. |
+| `POST` | `/me/progress/batch`    | Bulk upsert, ≤500 items (reader flushes offline progress here). Per-item results report `applied`.                  |
+| `POST` | `/me/books/{id}/mark`   | `{status: read\|unread}` convenience.                                                                               |
+| `GET`  | `/me/history`           | Reading history feed.                                                                                               |
+| `GET`  | `/me/stats`             | Aggregate stats (books read, pages, streaks, by month/genre).                                                       |
+| `GET`  | `/presence`             | Who's reading right now (household, most recent first). Viewer's content ceiling applied.                           |
 
 Progress writes are **debounced & batched** by the reader (e.g. every N page turns or on
-idle/blur) and reconciled by `updatedAt` + `device`.
+idle/blur) and reconciled **last-writer-wins by `updatedAt`** (ADR-008): `updatedAt` is
+optional and stamps when the reading actually happened (offline/standalone replay); a write
+older than the stored row is **not applied** — the response returns the authoritative row
+(PUT: compare `updatedAt`; batch: `applied: false`), so a stale device adopts the newer
+progress instead of clobbering it. Untimestamped (interactive) writes are stamped
+server-side and always apply.
 
 ## 7. Collections, reading lists, smart lists
 
@@ -174,12 +180,19 @@ idle/blur) and reconciled by `updatedAt` + `device`.
 Single multiplexed socket; client subscribes to topics. JSON frames:
 `{ "type": "<event>", "topic": "<topic>", "data": {…} }`.
 
-| Topic      | Events                                                         | Use                                                |
-| ---------- | -------------------------------------------------------------- | -------------------------------------------------- |
-| `jobs`     | `job.progress`, `job.done`, `job.failed`                       | Scan/thumbnail/match progress bars.                |
-| `library`  | `book.added`, `book.updated`, `book.removed`, `series.updated` | Live catalog updates → invalidate query cache.     |
-| `progress` | `progress.updated`                                             | Cross-device "now reading" sync (reader ↔ client). |
-| `presence` | `device.reading`                                               | Optional: show what's being read where.            |
+| Topic       | Events                                                         | Use                                                                             |
+| ----------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `jobs`      | `job.progress`, `job.done`, `job.failed`                       | Scan/thumbnail/match progress bars.                                             |
+| `library`   | `book.added`, `book.updated`, `book.removed`, `series.updated` | Live catalog updates → invalidate query cache.                                  |
+| `progress`  | `progress.updated`                                             | Cross-device progress sync — delivered only to the owning user's sockets.       |
+| `bookmarks` | `bookmarks.updated`                                            | A book's bookmarks changed — delivered only to the owning user's sockets.       |
+| `presence`  | `presence.updated`, `presence.cleared`                         | Household "now reading". Entries above a viewer's content ceiling are withheld. |
+
+Presence is derived from progress writes (no extra client wiring): an in-progress write
+marks the user as reading that book; finishing/marking clears it; idle readers expire
+after ~5 minutes. `GET /presence` serves the snapshot for initial render; entries carry
+`userId`, `displayName`, `bookId`, `bookTitle`, `seriesId`, `seriesTitle`, `page`,
+`pageCount`, `updatedAt`.
 
 Client→server frames: `subscribe {topics[]}`, `unsubscribe`, `ping`. Server heartbeats
 every 30s; clients reconnect with exponential backoff and re-subscribe.

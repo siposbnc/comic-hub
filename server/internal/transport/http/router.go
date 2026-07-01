@@ -22,6 +22,7 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/service/library"
 	"github.com/siposbnc/comic-hub/server/internal/service/metadata"
 	"github.com/siposbnc/comic-hub/server/internal/service/organize"
+	"github.com/siposbnc/comic-hub/server/internal/service/presence"
 	"github.com/siposbnc/comic-hub/server/internal/service/reader"
 	"github.com/siposbnc/comic-hub/server/internal/service/reading"
 )
@@ -43,6 +44,9 @@ type Deps struct {
 	Health   *health.Service
 	Auth     *auth.Service
 	Hub      *Hub
+	// Presence is the in-memory "now reading" tracker (Milestone E); nil disables the
+	// snapshot endpoint (tests that don't wire it).
+	Presence *presence.Tracker
 	// ReloadProviders rebuilds the metadata service's providers from persisted settings +
 	// env, after credentials change. Supplied by main.
 	ReloadProviders func(context.Context) error
@@ -174,6 +178,7 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/continue", handleContinueReading(d.Browse))
 			r.Get("/progress/{bookId}", handleGetProgress(d.Reading))
 			r.Put("/progress/{bookId}", handlePutProgress(d.Reading))
+			r.Post("/progress/batch", handleBatchProgress(d.Reading))
 			r.Post("/books/{id}/mark", handleMarkBook(d.Reading))
 			r.Get("/books/{id}/next", handleNextBook(d.Browse))
 			r.Get("/books/{id}/reader-prefs", handleGetReaderPrefs(d.Reading))
@@ -199,7 +204,13 @@ func NewRouter(d Deps) http.Handler {
 			})
 		})
 
-		// Multiplexed push socket (jobs/progress topics).
+		// Who's reading right now (Milestone E) — snapshot for initial render; live
+		// updates arrive on the WS presence topic.
+		if d.Presence != nil {
+			r.Get("/presence", handlePresence(d.Presence))
+		}
+
+		// Multiplexed push socket (jobs/progress/bookmarks/presence topics).
 		if d.Hub != nil {
 			r.Get("/ws", d.Hub.handle())
 		}

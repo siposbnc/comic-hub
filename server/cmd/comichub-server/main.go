@@ -37,6 +37,7 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/service/library"
 	"github.com/siposbnc/comic-hub/server/internal/service/metadata"
 	"github.com/siposbnc/comic-hub/server/internal/service/organize"
+	"github.com/siposbnc/comic-hub/server/internal/service/presence"
 	"github.com/siposbnc/comic-hub/server/internal/service/reader"
 	"github.com/siposbnc/comic-hub/server/internal/service/reading"
 	"github.com/siposbnc/comic-hub/server/internal/service/sidecar"
@@ -97,10 +98,19 @@ func run() error {
 	organizing := organize.New(store)
 	healthSvc := health.New(store)
 
-	// WebSocket hub for push (jobs/progress); services broadcast through it.
+	// WebSocket hub for push (jobs/progress/bookmarks/presence); services broadcast
+	// through it. Presence ("now reading", Milestone E) is derived from progress writes:
+	// an in-progress write touches the user's presence entry (enriched here for direct
+	// display); finishing or marking clears it; the tracker expires idle readers.
 	hub := httptransport.NewHub(logger)
-	readingSvc := reading.New(store, func(_ string, p domain.Progress) { hub.BroadcastProgress(p) })
-	readingSvc.OnBookmarkChange(func(_ string, bookID string) { hub.BroadcastBookmarks(bookID) })
+	presenceTracker := presence.New(presence.DefaultTTL)
+	presenceTracker.OnChange(hub.BroadcastPresence)
+	observePresence := presenceTracker.ObserveProgress(store)
+	readingSvc := reading.New(store, func(userID string, p domain.Progress) {
+		hub.BroadcastProgress(p)
+		observePresence(userID, p)
+	})
+	readingSvc.OnBookmarkChange(hub.BroadcastBookmarks)
 
 	// Shared format registry for scanning and reading.
 	registry := archive.DefaultRegistry()
@@ -234,6 +244,9 @@ func run() error {
 	appCtx, appCancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer appCancel()
 
+	// Expire idle readers out of the presence set.
+	go presenceTracker.Run(appCtx)
+
 	// File-watching: a debounced incremental rescan whenever a library's files change on
 	// disk. A moved/renamed file is reconciled by the scanner via content hash.
 	if watcher, werr := watch.New(logger, 2*time.Second, func(libraryID string) {
@@ -279,6 +292,7 @@ func run() error {
 		Health:   healthSvc,
 		Auth:     authSvc,
 		Hub:      hub,
+		Presence: presenceTracker,
 
 		ReloadProviders: reloadProviders,
 	})
