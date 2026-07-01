@@ -148,3 +148,33 @@ generator fails loudly until they agree). `pnpm codegen:check` enforces this in 
   just retry. Don't run two `pnpm` mutations concurrently.
 - **Git:** commit only when asked; branch off `main` first. End commit messages with the
   `Co-Authored-By: Claude` trailer.
+
+## Regenerating README screenshots / demo GIF
+
+The user-facing [README.md](README.md) embeds real screenshots (`docs/assets/*.png`) and an
+animated tour (`docs/assets/demo.gif`) captured from the app running against a throwaway demo
+library. The generators live in [`.demo/`](.demo/) (PowerShell, Windows-only, GDI+/WPF — no
+ffmpeg/ImageMagick needed). To reproduce:
+
+1. **Generate a demo library** (DC-themed CBZ + `ComicInfo.xml`, covers drawn with GDI+):
+   `pwsh .demo/gen-library.ps1` → writes to `%TEMP%\comichub-demo-library`.
+2. **Run the server standalone** so a browser can reach it:
+   `comichub-server.exe --mode server --bind 127.0.0.1:8099 --data-dir <tmp>` (auth stays off
+   without `--auth`; the client's web fallback in `apps/client/src/connection.ts` targets
+   `127.0.0.1:8099`).
+3. **Create + scan the library** via REST: `POST /api/v1/libraries {name,roots}` then
+   `POST /api/v1/libraries/{id}/scan`; poll `GET /api/v1/jobs/{id}`. Seed some
+   `PUT /api/v1/me/progress/{bookId}` so Continue Reading populates.
+4. **Series headers** (publisher/year/description + a green "matched" badge) come from an
+   online provider, which the demo has no key for — seed them straight into the demo SQLite
+   (`UPDATE series SET publisher=…, year=…, description=…, metadata_state='matched',
+match_provider='comicvine'`). Book-level metadata already comes from the sidecar.
+5. **Run the frontends** on their fixed dev ports and drive them with the Playwright MCP:
+   client `pnpm dev:client`-style Vite on `:1420`, reader `:1421` (open a book with
+   `?bookId=<id>&server=http://127.0.0.1:8099`). The reader's auto-hiding chrome can be forced
+   on for a screenshot by adding `chrome-on` to `.reader-shell`.
+6. **Assemble the GIF:** `pwsh .demo/make-gif.ps1 -Frames <pngs> -Out docs/assets/demo.gif`
+   (WPF `GifBitmapEncoder` + manual NETSCAPE-loop / per-frame-delay byte injection).
+
+`.demo/` is committed tooling; the generated library/data lives in `%TEMP%` and is never
+committed. `.playwright-mcp/` scratch is gitignored.
