@@ -1,4 +1,5 @@
 mod commands;
+mod discovery;
 mod server;
 
 use tauri::{Manager, RunEvent};
@@ -13,7 +14,8 @@ pub fn run() {
             server::start_server,
             server::stop_server,
             commands::pick_folder,
-            commands::launch_reader
+            commands::launch_reader,
+            discovery::discover_servers
         ])
         .build(tauri::generate_context!())
         .expect("error while building ComicHub client")

@@ -25,6 +25,29 @@ export async function stopEmbeddedServer(): Promise<void> {
   await invoke('stop_server');
 }
 
+/** One LAN server found via mDNS (shape returned by the Rust `discover_servers` command). */
+export interface DiscoveredServer {
+  /** Human-readable server name (the server's `--server-name`, default its hostname). */
+  name: string;
+  /** Ready-to-connect base URL, e.g. `http://192.168.1.10:8080`. */
+  url: string;
+  host: string;
+  port: number;
+  version: string | null;
+  /** Whether the server requires login, so the connect screen can label the row. */
+  auth_required: boolean;
+}
+
+/**
+ * Browses the LAN for ComicHub servers advertising over mDNS (Milestone D). Resolves
+ * after the browse window (default 2.5s) with everything found — possibly empty. Only
+ * meaningful inside Tauri; a plain browser can't multicast, so it resolves to [].
+ */
+export async function discoverServers(timeoutMs?: number): Promise<DiscoveredServer[]> {
+  if (!isTauri()) return [];
+  return invoke<DiscoveredServer[]>('discover_servers', { timeoutMs });
+}
+
 /** Web-dev fallback: talk to a server started by hand (see CLAUDE run notes). Auth is
  *  off in `--mode=server`, so the token is empty. */
 function webConnection(): Connection {

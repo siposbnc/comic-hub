@@ -22,6 +22,7 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/archive"
 	"github.com/siposbnc/comic-hub/server/internal/config"
 	"github.com/siposbnc/comic-hub/server/internal/connection"
+	"github.com/siposbnc/comic-hub/server/internal/discovery"
 	"github.com/siposbnc/comic-hub/server/internal/domain"
 	"github.com/siposbnc/comic-hub/server/internal/image"
 	"github.com/siposbnc/comic-hub/server/internal/jobs"
@@ -64,6 +65,10 @@ func run() error {
 
 	logger := logging.New(cfg.LogLevel, cfg.LogFormat)
 	slog.SetDefault(logger)
+	// Everything of ours logs through slog; what arrives via the std `log` bridge is
+	// third-party library chatter (e.g. zeroconf warns per interface on every mDNS
+	// response on Windows) — keep it out of production logs, visible at --log-level debug.
+	slog.SetLogLoggerLevel(slog.LevelDebug)
 	logger.Info("starting comichub-server",
 		"version", version.Version,
 		"mode", cfg.Mode,
@@ -296,6 +301,25 @@ func run() error {
 			return fmt.Errorf("write handshake: %w", err)
 		}
 		logger.Info("handshake published", "file", cfg.HandshakeFile, "port", addr.Port)
+	}
+
+	// In server mode, advertise over mDNS so clients on the LAN can discover this
+	// server without typing a URL (Milestone D). Best-effort: a network stack that
+	// can't do multicast just logs a warning and manual pairing still works.
+	if cfg.Mode == config.ModeServer && cfg.MDNS {
+		adv, err := discovery.Advertise(discovery.Info{
+			Instance:     cfg.ServerName,
+			Port:         addr.Port,
+			Version:      version.Version,
+			AuthRequired: cfg.AuthEnabled,
+		})
+		if err != nil {
+			logger.Warn("mDNS advertising disabled", "err", err)
+		} else {
+			defer adv.Close()
+			logger.Info("mDNS advertising enabled",
+				"instance", cfg.ServerName, "service", discovery.ServiceType, "port", addr.Port)
+		}
 	}
 
 	serveErr := make(chan error, 1)

@@ -50,6 +50,14 @@ type Config struct {
 	// login/refresh public. Off by default — embedded mode and dev runs use the implicit
 	// owner. (Phase 3 — Milestone A.)
 	AuthEnabled bool
+
+	// MDNS advertises the server over mDNS/DNS-SD on the LAN so clients can discover it
+	// (Phase 3 — Milestone D). On by default, but only effective in server mode — an
+	// embedded sidecar never advertises. `--mdns=false` / COMICHUB_MDNS=false opts out.
+	MDNS bool
+	// ServerName is the human-readable instance name shown in clients' discovery lists
+	// (--server-name / COMICHUB_SERVER_NAME; defaults to the machine hostname).
+	ServerName string
 	// JWTSecret signs access tokens (COMICHUB_JWT_SECRET). When auth is enabled and this is
 	// empty, the server generates and persists one.
 	JWTSecret string
@@ -91,6 +99,8 @@ func Load(args []string) (Config, error) {
 	logFormat := fs.String("log-format", env("LOG_FORMAT", "json"), "log format: json|text")
 	dbPath := fs.String("db", env("DB_PATH", ""), "sqlite database path (default <data-dir>/comichub.db)")
 	authEnabled := fs.Bool("auth", env("AUTH_ENABLED", "") == "true", "enable multi-user authentication (server mode)")
+	mdns := fs.Bool("mdns", env("MDNS", "true") != "false", "advertise the server over mDNS on the LAN (server mode)")
+	serverName := fs.String("server-name", env("SERVER_NAME", ""), "server name shown in clients' discovery lists (default: hostname)")
 
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
@@ -109,6 +119,9 @@ func Load(args []string) (Config, error) {
 		ComicVineAPIKey: strings.TrimSpace(os.Getenv("COMICVINE_API_KEY")),
 		MetronUsername:  strings.TrimSpace(os.Getenv("METRON_USERNAME")),
 		MetronPassword:  strings.TrimSpace(os.Getenv("METRON_PASSWORD")),
+
+		MDNS:       *mdns,
+		ServerName: *serverName,
 
 		// Auth: secret + admin bootstrap are env-only (sensitive); the toggle is a flag.
 		AuthEnabled:      *authEnabled,
@@ -135,6 +148,14 @@ func Load(args []string) (Config, error) {
 	}
 	if cfg.HandshakeFile == "" {
 		cfg.HandshakeFile = filepath.Join(cfg.DataDir, "connection.json")
+	}
+
+	if cfg.ServerName == "" {
+		if host, err := os.Hostname(); err == nil {
+			cfg.ServerName = host
+		} else {
+			cfg.ServerName = "ComicHub"
+		}
 	}
 
 	// In embedded mode, generate a loopback token if none was supplied.

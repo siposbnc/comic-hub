@@ -11,7 +11,7 @@ Phase 3 is mostly **auth machinery + deployment**, not a data-model rewrite — 
 built multi-user-ready from the start:
 
 - **`user` table** already carries `id, username, display_name, role, password_hash,
-  age_rating_max, prefs, created_at` (`0001_init.sql`) — the full shape for accounts, roles,
+age_rating_max, prefs, created_at` (`0001_init.sql`) — the full shape for accounts, roles,
   and content restrictions. `0002_seed_owner.sql` seeds the implicit `owner`.
 - **All per-user data is already keyed by `userID`** — progress, bookmarks, reading lists,
   reader prefs all take a user id. The only stub is `currentUserID()` in `transport/http`,
@@ -88,21 +88,22 @@ G Stats dashboards (preview) last
 
 ## Status
 
-| Milestone | Status |
-|-----------|--------|
-| A — Auth core (accounts, argon2id, JWT, middleware, context user) | ✅ done — server-side; opt-in via `--auth` (env bootstrap), tested e2e |
-| B — Roles + content restrictions | ✅ done — role-gating + admin `/users` CRUD + age-ceiling enforcement (browse/search/reader); A-review carry-overs landed |
-| C — Client auth UX (login / pairing / accounts) — preview-gated | ✅ done — connect/login boot flow, account chip + sign-out, admin Users card; built to the Design Preview v2 handoffs, verified e2e (stats G1 still pending) |
-| D — Server discovery (mDNS + manual pairing) | ⬜ not started |
-| E — Cross-device sync + presence | ⬜ not started |
-| F — Remote deployment (Docker / service / Postgres / TLS docs) | ⬜ not started |
-| G — Stats dashboards — preview-gated | ⬜ not started |
+| Milestone                                                         | Status                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A — Auth core (accounts, argon2id, JWT, middleware, context user) | ✅ done — server-side; opt-in via `--auth` (env bootstrap), tested e2e                                                                                                                                                                                                                                                                                                                           |
+| B — Roles + content restrictions                                  | ✅ done — role-gating + admin `/users` CRUD + age-ceiling enforcement (browse/search/reader); A-review carry-overs landed                                                                                                                                                                                                                                                                        |
+| C — Client auth UX (login / pairing / accounts) — preview-gated   | ✅ done — connect/login boot flow, account chip + sign-out, admin Users card; built to the Design Preview v2 handoffs, verified e2e (stats G1 still pending)                                                                                                                                                                                                                                     |
+| D — Server discovery (mDNS + manual pairing)                      | 🟨 backend done — server advertises `_comichub._tcp` in server mode (`--mdns`, `--server-name`); client `discover_servers` Tauri command browses + probes reachability; verified e2e. Remaining: the connect screen's "Servers on your network" list (preview-gated — needs a Design Preview v2 handoff for the _active_ list; the connect_login handoff only designed the disabled placeholder) |
+| E — Cross-device sync + presence                                  | ⬜ not started                                                                                                                                                                                                                                                                                                                                                                                   |
+| F — Remote deployment (Docker / service / Postgres / TLS docs)    | ⬜ not started                                                                                                                                                                                                                                                                                                                                                                                   |
+| G — Stats dashboards — preview-gated                              | ⬜ not started                                                                                                                                                                                                                                                                                                                                                                                   |
 
 ## Cross-cutting
 
 Accessibility gate per new screen; security review of the auth surface (token handling,
 password storage, role checks) before shipping; docs in lockstep (03-api.md for the new auth
-+ users endpoints, 09-tech-decisions.md for an auth ADR); bench thresholds unaffected.
+
+- users endpoints, 09-tech-decisions.md for an auth ADR); bench thresholds unaffected.
 
 ## Verification
 
