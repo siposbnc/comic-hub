@@ -12,22 +12,22 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/archive"
 	"github.com/siposbnc/comic-hub/server/internal/domain"
 	"github.com/siposbnc/comic-hub/server/internal/pkg/ulid"
-	"github.com/siposbnc/comic-hub/server/internal/store/sqlite"
+	"github.com/siposbnc/comic-hub/server/internal/store/sqlstore"
 )
 
-func newStore(t *testing.T) *sqlite.Store {
+func newStore(t *testing.T) *sqlstore.Store {
 	t.Helper()
 	dsn := "file:" + filepath.Join(t.TempDir(), "scan.db") +
 		"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)"
-	db, err := sqlite.Open(dsn)
+	db, err := sqlstore.OpenSQLite(dsn)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	if err := sqlite.Migrate(context.Background(), db); err != nil {
+	if err := sqlstore.Migrate(context.Background(), db); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	return sqlite.NewStore(db)
+	return sqlstore.NewStore(db)
 }
 
 func writeCBZ(t *testing.T, path string, entries map[string]string) {
@@ -50,7 +50,7 @@ func writeCBZ(t *testing.T, path string, entries map[string]string) {
 	}
 }
 
-func seriesByName(t *testing.T, store *sqlite.Store, libID, name string) domain.Series {
+func seriesByName(t *testing.T, store *sqlstore.Store, libID, name string) domain.Series {
 	t.Helper()
 	all, err := store.Series().ListByLibrary(context.Background(), libID)
 	if err != nil {

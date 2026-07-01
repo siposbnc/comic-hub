@@ -29,22 +29,22 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/service/organize"
 	"github.com/siposbnc/comic-hub/server/internal/service/reader"
 	"github.com/siposbnc/comic-hub/server/internal/service/reading"
-	"github.com/siposbnc/comic-hub/server/internal/store/sqlite"
+	"github.com/siposbnc/comic-hub/server/internal/store/sqlstore"
 )
 
 // newScanServer wires the full scan stack (store + runner + scanner) behind the router.
-func newScanServer(t *testing.T) (string, *sqlite.Store) {
+func newScanServer(t *testing.T) (string, *sqlstore.Store) {
 	t.Helper()
 	dsn := "file:" + filepath.Join(t.TempDir(), "scan.db") +
 		"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)"
-	db, err := sqlite.Open(dsn)
+	db, err := sqlstore.OpenSQLite(dsn)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	if err := sqlite.Migrate(context.Background(), db); err != nil {
+	if err := sqlstore.Migrate(context.Background(), db); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	store := sqlite.NewStore(db)
+	store := sqlstore.NewStore(db)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	registry := archive.DefaultRegistry()
 
@@ -72,7 +72,7 @@ func newScanServer(t *testing.T) (string, *sqlite.Store) {
 	metaSvc := metadata.New(store)
 	router := NewRouter(Deps{
 		Logger:   logger,
-		DB:       db,
+		DB:       db.Unwrap(),
 		Config:   config.Config{Mode: config.ModeServer},
 		Library:  library.New(store),
 		Repo:     store,

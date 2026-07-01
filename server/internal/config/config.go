@@ -68,14 +68,22 @@ type Config struct {
 	AdminDisplayName string
 }
 
-// DatabaseConfig describes the catalog store.
+// DatabaseConfig describes the catalog store. SQLite (a file in the data dir) is the
+// default; Postgres is opt-in for managed deployments (--db-driver postgres +
+// --db-dsn / COMICHUB_DB_DSN; see docs/10-deployment.md §4).
 type DatabaseConfig struct {
-	Driver string // sqlite (postgres planned)
+	Driver string // sqlite | postgres
 	Path   string // sqlite file path
+	// ConnString is the explicit connection string (required for postgres; overrides
+	// Path-derived DSN for sqlite when set).
+	ConnString string
 }
 
 // DSN returns the database connection string.
 func (d DatabaseConfig) DSN() string {
+	if d.ConnString != "" {
+		return d.ConnString
+	}
 	// modernc.org/sqlite pragma params: WAL for concurrent reads, FK enforcement,
 	// a busy timeout so transient locks retry instead of erroring.
 	return fmt.Sprintf(
@@ -98,6 +106,8 @@ func Load(args []string) (Config, error) {
 	logLevel := fs.String("log-level", env("LOG_LEVEL", "info"), "log level: debug|info|warn|error")
 	logFormat := fs.String("log-format", env("LOG_FORMAT", "json"), "log format: json|text")
 	dbPath := fs.String("db", env("DB_PATH", ""), "sqlite database path (default <data-dir>/comichub.db)")
+	dbDriver := fs.String("db-driver", env("DB_DRIVER", "sqlite"), "database driver: sqlite|postgres")
+	dbDSN := fs.String("db-dsn", env("DB_DSN", ""), "database connection string (required for postgres)")
 	authEnabled := fs.Bool("auth", env("AUTH_ENABLED", "") == "true", "enable multi-user authentication (server mode)")
 	mdns := fs.Bool("mdns", env("MDNS", "true") != "false", "advertise the server over mDNS on the LAN (server mode)")
 	serverName := fs.String("server-name", env("SERVER_NAME", ""), "server name shown in clients' discovery lists (default: hostname)")
@@ -114,7 +124,7 @@ func Load(args []string) (Config, error) {
 		HandshakeFile: *handshake,
 		LogLevel:      *logLevel,
 		LogFormat:     *logFormat,
-		Database:      DatabaseConfig{Driver: "sqlite", Path: *dbPath},
+		Database:      DatabaseConfig{Driver: *dbDriver, Path: *dbPath, ConnString: *dbDSN},
 		// Provider keys are env-only (never flags, so they don't leak into shell history).
 		ComicVineAPIKey: strings.TrimSpace(os.Getenv("COMICVINE_API_KEY")),
 		MetronUsername:  strings.TrimSpace(os.Getenv("METRON_USERNAME")),
@@ -133,6 +143,12 @@ func Load(args []string) (Config, error) {
 
 	if cfg.Mode != ModeEmbedded && cfg.Mode != ModeServer {
 		return Config{}, fmt.Errorf("invalid mode %q (want embedded|server)", cfg.Mode)
+	}
+	if cfg.Database.Driver != "sqlite" && cfg.Database.Driver != "postgres" {
+		return Config{}, fmt.Errorf("invalid db driver %q (want sqlite|postgres)", cfg.Database.Driver)
+	}
+	if cfg.Database.Driver == "postgres" && cfg.Database.ConnString == "" {
+		return Config{}, fmt.Errorf("--db-dsn (COMICHUB_DB_DSN) is required with the postgres driver")
 	}
 
 	// Mode-dependent defaults.

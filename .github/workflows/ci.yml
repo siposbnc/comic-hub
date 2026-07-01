@@ -24,6 +24,36 @@ jobs:
       - run: go vet ./...
       - run: go test ./...
 
+  # The store is dialect-aware (SQLite default, Postgres opt-in — ADR-005); this job
+  # runs the store suite against a real Postgres so dialect parity can't silently rot.
+  # Linux runner: service containers aren't supported on windows-latest.
+  server-postgres:
+    name: server (Postgres store)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - run: go test ./internal/store/sqlstore/
+        env:
+          COMICHUB_TEST_PG_DSN: postgres://postgres:test@127.0.0.1:5432/postgres?sslmode=disable
+
   web:
     name: web (TypeScript)
     runs-on: ubuntu-latest

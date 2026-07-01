@@ -10,7 +10,7 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/domain"
 	"github.com/siposbnc/comic-hub/server/internal/pkg/ulid"
 	"github.com/siposbnc/comic-hub/server/internal/service/browse"
-	"github.com/siposbnc/comic-hub/server/internal/store/sqlite"
+	"github.com/siposbnc/comic-hub/server/internal/store/sqlstore"
 )
 
 // TestContentRestrictionFiltersBrowse verifies a restricted user's age ceiling hides
@@ -20,15 +20,15 @@ func TestContentRestrictionFiltersBrowse(t *testing.T) {
 	ctx := context.Background()
 	dsn := "file:" + filepath.Join(t.TempDir(), "b.db") +
 		"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)"
-	db, err := sqlite.Open(dsn)
+	db, err := sqlstore.OpenSQLite(dsn)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
 	defer db.Close()
-	if err := sqlite.Migrate(ctx, db); err != nil {
+	if err := sqlstore.Migrate(ctx, db); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	store := sqlite.NewStore(db)
+	store := sqlstore.NewStore(db)
 
 	lib, err := store.Libraries().Create(ctx, domain.Library{
 		ID: ulid.New(), Name: "DC", Kind: "comic", Roots: []string{`C:\DC`}, CreatedAt: 1, UpdatedAt: 1,

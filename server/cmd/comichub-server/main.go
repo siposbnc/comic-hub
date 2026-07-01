@@ -41,7 +41,7 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/service/reader"
 	"github.com/siposbnc/comic-hub/server/internal/service/reading"
 	"github.com/siposbnc/comic-hub/server/internal/service/sidecar"
-	"github.com/siposbnc/comic-hub/server/internal/store/sqlite"
+	"github.com/siposbnc/comic-hub/server/internal/store/sqlstore"
 	httptransport "github.com/siposbnc/comic-hub/server/internal/transport/http"
 	"github.com/siposbnc/comic-hub/server/internal/version"
 	"github.com/siposbnc/comic-hub/server/internal/watch"
@@ -80,19 +80,20 @@ func run() error {
 		return fmt.Errorf("create data dir: %w", err)
 	}
 
-	db, err := sqlite.Open(cfg.Database.DSN())
+	db, err := sqlstore.Open(sqlstore.Driver(cfg.Database.Driver), cfg.Database.DSN())
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
 	defer db.Close()
 
-	if err := sqlite.Migrate(context.Background(), db); err != nil {
+	if err := sqlstore.Migrate(context.Background(), db); err != nil {
 		return fmt.Errorf("run migrations: %w", err)
 	}
-	logger.Info("database ready", "path", cfg.Database.Path)
+	// The Postgres DSN may carry credentials — log only the driver and sqlite path.
+	logger.Info("database ready", "driver", cfg.Database.Driver, "path", cfg.Database.Path)
 
 	// Catalog store + application services over the domain.Repository boundary.
-	store := sqlite.NewStore(db)
+	store := sqlstore.NewStore(db)
 	libraries := library.New(store)
 	browsing := browse.New(store)
 	organizing := organize.New(store)
@@ -278,7 +279,7 @@ func run() error {
 
 	handler := httptransport.NewRouter(httptransport.Deps{
 		Logger:   logger,
-		DB:       db,
+		DB:       db.Unwrap(),
 		Config:   cfg,
 		Shutdown: appCancel,
 		Library:  libraries,
@@ -364,7 +365,7 @@ func run() error {
 // persisted one, else a freshly generated 32-byte secret that is persisted so tokens survive
 // restarts. Generation/persistence only happens when auth is enabled (an unused secret in
 // embedded/dev mode stays ephemeral and never touches the database).
-func resolveJWTSecret(ctx context.Context, store *sqlite.Store, cfg config.Config) ([]byte, error) {
+func resolveJWTSecret(ctx context.Context, store *sqlstore.Store, cfg config.Config) ([]byte, error) {
 	if cfg.JWTSecret != "" {
 		return []byte(cfg.JWTSecret), nil
 	}

@@ -13,7 +13,7 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/domain"
 	"github.com/siposbnc/comic-hub/server/internal/pkg/ulid"
 	"github.com/siposbnc/comic-hub/server/internal/service/auth"
-	"github.com/siposbnc/comic-hub/server/internal/store/sqlite"
+	"github.com/siposbnc/comic-hub/server/internal/store/sqlstore"
 )
 
 // TestContentRestrictionBlocksReader verifies the reader content routes refuse (403) a
@@ -22,14 +22,14 @@ func TestContentRestrictionBlocksReader(t *testing.T) {
 	ctx := context.Background()
 	dsn := "file:" + filepath.Join(t.TempDir(), "r.db") +
 		"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)"
-	db, err := sqlite.Open(dsn)
+	db, err := sqlstore.OpenSQLite(dsn)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	if err := sqlite.Migrate(ctx, db); err != nil {
+	if err := sqlstore.Migrate(ctx, db); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	store := sqlite.NewStore(db)
+	store := sqlstore.NewStore(db)
 
 	lib, _ := store.Libraries().Create(ctx, domain.Library{
 		ID: ulid.New(), Name: "DC", Kind: "comic", Roots: []string{`C:\DC`}, CreatedAt: 1, UpdatedAt: 1,
@@ -51,7 +51,7 @@ func TestContentRestrictionBlocksReader(t *testing.T) {
 
 	router := NewRouter(Deps{
 		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
-		DB:     db,
+		DB:     db.Unwrap(),
 		Config: config.Config{Mode: config.ModeServer, AuthEnabled: true},
 		Repo:   store,
 		Auth:   authSvc,

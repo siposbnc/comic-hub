@@ -12,7 +12,7 @@ import (
 
 	"github.com/siposbnc/comic-hub/server/internal/config"
 	"github.com/siposbnc/comic-hub/server/internal/service/auth"
-	"github.com/siposbnc/comic-hub/server/internal/store/sqlite"
+	"github.com/siposbnc/comic-hub/server/internal/store/sqlstore"
 )
 
 // newAuthServer builds an auth-enabled test server with a bootstrapped admin "alice".
@@ -20,21 +20,21 @@ func newAuthServer(t *testing.T) (string, *auth.Service) {
 	t.Helper()
 	dsn := "file:" + filepath.Join(t.TempDir(), "auth.db") +
 		"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)"
-	db, err := sqlite.Open(dsn)
+	db, err := sqlstore.OpenSQLite(dsn)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	if err := sqlite.Migrate(context.Background(), db); err != nil {
+	if err := sqlstore.Migrate(context.Background(), db); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	store := sqlite.NewStore(db)
+	store := sqlstore.NewStore(db)
 	authSvc := auth.New(store, []byte("integration-secret"))
 	if err := authSvc.EnsureAdmin(context.Background(), "alice", "Alice", "hunter2hunter"); err != nil {
 		t.Fatalf("ensure admin: %v", err)
 	}
 	router := NewRouter(Deps{
 		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
-		DB:     db,
+		DB:     db.Unwrap(),
 		Config: config.Config{Mode: config.ModeServer, AuthEnabled: true},
 		Repo:   store,
 		Auth:   authSvc,

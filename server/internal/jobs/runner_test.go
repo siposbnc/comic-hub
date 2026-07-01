@@ -10,22 +10,22 @@ import (
 	"time"
 
 	"github.com/siposbnc/comic-hub/server/internal/domain"
-	"github.com/siposbnc/comic-hub/server/internal/store/sqlite"
+	"github.com/siposbnc/comic-hub/server/internal/store/sqlstore"
 )
 
 func newRepo(t *testing.T) domain.Repository {
 	t.Helper()
 	dsn := "file:" + filepath.Join(t.TempDir(), "jobs.db") +
 		"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)"
-	db, err := sqlite.Open(dsn)
+	db, err := sqlstore.OpenSQLite(dsn)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	if err := sqlite.Migrate(context.Background(), db); err != nil {
+	if err := sqlstore.Migrate(context.Background(), db); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	return sqlite.NewStore(db)
+	return sqlstore.NewStore(db)
 }
 
 func newRunner(t *testing.T, repo domain.Repository) *Runner {

@@ -9,7 +9,7 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/domain"
 	"github.com/siposbnc/comic-hub/server/internal/pkg/ulid"
 	"github.com/siposbnc/comic-hub/server/internal/providers"
-	"github.com/siposbnc/comic-hub/server/internal/store/sqlite"
+	"github.com/siposbnc/comic-hub/server/internal/store/sqlstore"
 )
 
 // fakeProvider returns canned data so the apply pipeline can be tested without network.
@@ -61,23 +61,23 @@ func (fakeProvider) Issue(_ context.Context, id string) (providers.IssueMeta, er
 	return providers.IssueMeta{}, nil
 }
 
-func newStore(t *testing.T) *sqlite.Store {
+func newStore(t *testing.T) *sqlstore.Store {
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "t.db")
 	dsn := fmt.Sprintf("file:%s?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)", dbPath)
-	db, err := sqlite.Open(dsn)
+	db, err := sqlstore.OpenSQLite(dsn)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	if err := sqlite.Migrate(context.Background(), db); err != nil {
+	if err := sqlstore.Migrate(context.Background(), db); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	return sqlite.NewStore(db)
+	return sqlstore.NewStore(db)
 }
 
 // seed creates a library + series + two books (#1, #2) and returns their ids.
-func seed(t *testing.T, store *sqlite.Store) (seriesID, book1, book2 string) {
+func seed(t *testing.T, store *sqlstore.Store) (seriesID, book1, book2 string) {
 	t.Helper()
 	ctx := context.Background()
 	libID := ulid.New()
@@ -248,7 +248,7 @@ func TestAutoMatchLibrarySkipsAlreadyMatched(t *testing.T) {
 	}
 }
 
-func seriesLibrary(t *testing.T, store *sqlite.Store, seriesID string) string {
+func seriesLibrary(t *testing.T, store *sqlstore.Store, seriesID string) string {
 	t.Helper()
 	ser, err := store.Series().Get(context.Background(), seriesID)
 	if err != nil {

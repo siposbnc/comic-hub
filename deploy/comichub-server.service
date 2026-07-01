@@ -1,0 +1,42 @@
+# ComicHub media server — systemd unit (docs/10-deployment.md).
+#
+#   sudo useradd --system --home /var/lib/comichub comichub
+#   sudo install -o comichub -d /var/lib/comichub
+#   sudo cp comichub-server /usr/local/bin/
+#   sudo cp deploy/comichub-server.service /etc/systemd/system/
+#   sudo systemctl edit comichub-server     # set the Environment= secrets
+#   sudo systemctl enable --now comichub-server
+#
+# Comics live wherever you keep them (e.g. /srv/comics) — grant the service user
+# read access and add the path to ReadOnlyPaths below.
+
+[Unit]
+Description=ComicHub media server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=comichub
+Group=comichub
+ExecStart=/usr/local/bin/comichub-server --mode server --bind 0.0.0.0:8080 --data-dir /var/lib/comichub --auth
+Restart=on-failure
+RestartSec=3
+
+# Secrets belong in a drop-in (systemctl edit), not here:
+#   [Service]
+#   Environment=COMICHUB_ADMIN_USERNAME=admin
+#   Environment=COMICHUB_ADMIN_PASSWORD=pick-a-long-one
+
+# Hardening — the server needs only its data dir (rw) and your comics (ro).
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/comichub
+ReadOnlyPaths=/srv/comics
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

@@ -97,6 +97,12 @@ installs may want concurrency/scale.
 **Consequences:** No DB to install locally; fast indexed reads; FTS5 for search. Postgres path
 exists when needed without touching domain code. Care to avoid SQLite-only SQL in shared queries.
 
+**Status (Phase 3, Milestone F):** implemented. One dialect-aware store (`store/sqlstore`)
+shares all repository SQL (`?` placeholders rebound to `$n` for Postgres); per-dialect
+migration sets with a parity test; search is FTS5 on SQLite, tsvector/tsquery GIN on
+Postgres. Opt-in via `--db-driver postgres --db-dsn …` (docs/10-deployment.md §4); CI runs
+the store suite against Postgres 17.
+
 ---
 
 ## ADR-006 — Catalog over files; never mutate by default

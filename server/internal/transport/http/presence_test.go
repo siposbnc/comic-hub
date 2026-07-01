@@ -19,25 +19,25 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/service/auth"
 	"github.com/siposbnc/comic-hub/server/internal/service/presence"
 	"github.com/siposbnc/comic-hub/server/internal/service/reading"
-	"github.com/siposbnc/comic-hub/server/internal/store/sqlite"
+	"github.com/siposbnc/comic-hub/server/internal/store/sqlstore"
 )
 
 // newPresenceServer wires an auth-enabled server with the presence stack (tracker +
 // hub + reading notifier, exactly as main wires it) and two seeded books: one adult,
 // one all-ages. Returns the server URL, the store, and the two book ids.
-func newPresenceServer(t *testing.T) (string, *sqlite.Store, string, string) {
+func newPresenceServer(t *testing.T) (string, *sqlstore.Store, string, string) {
 	t.Helper()
 	ctx := context.Background()
 	dsn := "file:" + filepath.Join(t.TempDir(), "p.db") +
 		"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)"
-	db, err := sqlite.Open(dsn)
+	db, err := sqlstore.OpenSQLite(dsn)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	if err := sqlite.Migrate(ctx, db); err != nil {
+	if err := sqlstore.Migrate(ctx, db); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	store := sqlite.NewStore(db)
+	store := sqlstore.NewStore(db)
 
 	lib, _ := store.Libraries().Create(ctx, domain.Library{
 		ID: ulid.New(), Name: "DC", Kind: "comic", Roots: []string{`C:\DC`}, CreatedAt: 1, UpdatedAt: 1,
@@ -79,7 +79,7 @@ func newPresenceServer(t *testing.T) (string, *sqlite.Store, string, string) {
 
 	router := NewRouter(Deps{
 		Logger:   logger,
-		DB:       db,
+		DB:       db.Unwrap(),
 		Config:   config.Config{Mode: config.ModeServer, AuthEnabled: true},
 		Repo:     store,
 		Reading:  readingSvc,

@@ -24,7 +24,7 @@ M Metadata (providers → matcher → schema/apply → API → client) ─► F 
   (`server/internal/domain/models.go`); Series/Book already carry the metadata fields.
 - **`series.provider_ids` JSON** column already in `0001_init.sql`; `tag`/`book_tag`,
   `collection`/`reading_list` tables already exist (organization foundation).
-- Forward-only migrations (`store/sqlite/migrations/NNNN_*.sql`), the job runner + WS `jobs`
+- Forward-only migrations (`store/sqlstore/migrations/<dialect>/NNNN_*.sql`), the job runner + WS `jobs`
   topic, and the **DS `Dialog`** primitive (just synced) for the candidate picker.
 - The **API contract is already specified** in [03-api.md §9](03-api.md) and the server
   design in [04-server.md §6](04-server.md) — this plan implements them.

@@ -1,0 +1,52 @@
+# ComicHub always-on server — the household deployment (docs/10-deployment.md).
+#
+#   cd deploy
+#   COMICHUB_ADMIN_PASSWORD='pick-a-long-one' docker compose up -d
+#
+# Then point clients at http://<host>:8080 (the connect screen also finds it via
+# mDNS discovery only on the same L2 network — containers usually aren't, so type
+# the URL or run the container with network_mode: host on Linux).
+#
+# SQLite (the default) lives in the comichub-data volume. To use Postgres instead,
+# uncomment the db service + the COMICHUB_DB_* environment below.
+
+services:
+  comichub:
+    build: ../server
+    # or, once you push an image somewhere: image: ghcr.io/<you>/comichub-server
+    restart: unless-stopped
+    ports:
+      - '8080:8080'
+    environment:
+      # Real accounts: required for a multi-user server. The admin is created on
+      # first boot; change the password after signing in.
+      COMICHUB_AUTH_ENABLED: 'true'
+      COMICHUB_ADMIN_USERNAME: ${COMICHUB_ADMIN_USERNAME:-admin}
+      COMICHUB_ADMIN_PASSWORD: ${COMICHUB_ADMIN_PASSWORD:?set COMICHUB_ADMIN_PASSWORD}
+      COMICHUB_SERVER_NAME: ${COMICHUB_SERVER_NAME:-ComicHub}
+      # Optional metadata providers (Settings → Metadata providers works too):
+      # COMICVINE_API_KEY: ...
+      # METRON_USERNAME: ...
+      # METRON_PASSWORD: ...
+      # Postgres instead of the bundled SQLite (uncomment the db service below):
+      # COMICHUB_DB_DRIVER: postgres
+      # COMICHUB_DB_DSN: postgres://comichub:comichub@db:5432/comichub?sslmode=disable
+    volumes:
+      - comichub-data:/data
+      # Mount your comics read-only; add one line per library root, then create the
+      # library in the client pointing at /comics.
+      - ${COMICS_DIR:-./comics}:/comics:ro
+
+  # db:
+  #   image: postgres:17
+  #   restart: unless-stopped
+  #   environment:
+  #     POSTGRES_USER: comichub
+  #     POSTGRES_PASSWORD: comichub
+  #     POSTGRES_DB: comichub
+  #   volumes:
+  #     - comichub-pg:/var/lib/postgresql/data
+
+volumes:
+  comichub-data:
+  # comichub-pg:

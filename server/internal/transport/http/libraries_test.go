@@ -13,7 +13,7 @@ import (
 
 	"github.com/siposbnc/comic-hub/server/internal/config"
 	"github.com/siposbnc/comic-hub/server/internal/service/library"
-	"github.com/siposbnc/comic-hub/server/internal/store/sqlite"
+	"github.com/siposbnc/comic-hub/server/internal/store/sqlstore"
 )
 
 // newTestServer wires a real migrated store + library service behind the router, with
@@ -22,18 +22,18 @@ func newTestServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	dsn := "file:" + filepath.Join(t.TempDir(), "test.db") +
 		"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)"
-	db, err := sqlite.Open(dsn)
+	db, err := sqlstore.OpenSQLite(dsn)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	if err := sqlite.Migrate(context.Background(), db); err != nil {
+	if err := sqlstore.Migrate(context.Background(), db); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	store := sqlite.NewStore(db)
+	store := sqlstore.NewStore(db)
 
 	router := NewRouter(Deps{
 		Logger:  slog.New(slog.NewTextHandler(io.Discard, nil)),
-		DB:      db,
+		DB:      db.Unwrap(),
 		Config:  config.Config{Mode: config.ModeServer}, // Token empty -> auth disabled
 		Library: library.New(store),
 	})
