@@ -6,12 +6,14 @@ For **Claude Design** to fix in the **design-system project**
 `/design-sync` — please don't hand-edit the synced copy.
 
 ## Symptom
+
 When a `Select` is opened on the **dark theme**, the native option list renders **light grey
 text on a white background** — effectively unreadable (see the Role dropdown in the user
 dialog: "Owner / Admin / Member / Restricted" are barely visible). The **closed** control is
 fine; only the open popup is broken.
 
 ## Root cause
+
 `Select` styles a wrapper `<div>` (dark `--surface-card` fill, border, chevron) and makes the
 inner native `<select>` **`background: transparent`** with `color: var(--text-primary)` (light
 on dark). The colour tokens already set `color-scheme: dark` on the root, but with a
@@ -47,6 +49,7 @@ Either way, keep the closed-control appearance unchanged (ink fill, hairline bor
 focus ring, chevron) — only the open option list should change.
 
 ## Acceptance
+
 - Open any `Select` on the **dark** theme → options are clearly legible (light text on an
   ink/`--surface-card` background, matching the rest of the UI), with the selected/hovered row
   distinguishable.
@@ -54,6 +57,7 @@ focus ring, chevron) — only the open option list should change.
 - The closed control is visually unchanged in both themes.
 
 ## Where it shows up in the app (for QA)
+
 Library sort (`Library.tsx`), Smart-list rule builder (`smartlist.tsx`), and the new admin
 **Users** dialog (Role + content-rating-ceiling selects, `UsersCard.tsx`). All use the DS
 `Select`, so all are fixed by the one change.

@@ -5,22 +5,23 @@ libraries, see stats. It also bundles and supervises the local server (embedded 
 
 ## 1. Tech choices
 
-| Concern | Choice | Why |
-|---------|--------|-----|
-| Shell | Tauri 2 (Rust) | Tiny binary, low memory, native OS integration, mobile-later path. |
-| UI | React 18 + TypeScript | Expressive, huge ecosystem for complex UI. |
-| Build | Vite | Fast HMR + builds. |
-| Server cache/state | TanStack Query | Caching, invalidation, optimistic updates, infinite lists. |
-| UI/local state | Zustand | Lightweight global UI state (reader prefs, selection, layout). |
-| Routing | TanStack Router (typed) | Type-safe routes + search params. |
-| Virtualization | TanStack Virtual | 60fps grids over 10k+ covers. |
-| Styling | Tailwind + design tokens (see [07](07-design-system.md)) | Fast, consistent, themable. |
-| Forms | React Hook Form + Zod | Validated metadata editing. |
-| i18n | `i18next` | Localization-ready from day one. |
+| Concern            | Choice                                                   | Why                                                                |
+| ------------------ | -------------------------------------------------------- | ------------------------------------------------------------------ |
+| Shell              | Tauri 2 (Rust)                                           | Tiny binary, low memory, native OS integration, mobile-later path. |
+| UI                 | React 18 + TypeScript                                    | Expressive, huge ecosystem for complex UI.                         |
+| Build              | Vite                                                     | Fast HMR + builds.                                                 |
+| Server cache/state | TanStack Query                                           | Caching, invalidation, optimistic updates, infinite lists.         |
+| UI/local state     | Zustand                                                  | Lightweight global UI state (reader prefs, selection, layout).     |
+| Routing            | TanStack Router (typed)                                  | Type-safe routes + search params.                                  |
+| Virtualization     | TanStack Virtual                                         | 60fps grids over 10k+ covers.                                      |
+| Styling            | Tailwind + design tokens (see [07](07-design-system.md)) | Fast, consistent, themable.                                        |
+| Forms              | React Hook Form + Zod                                    | Validated metadata editing.                                        |
+| i18n               | `i18next`                                                | Localization-ready from day one.                                   |
 
 ## 2. Responsibilities split (Rust vs React)
 
 **Rust (thin host):**
+
 - Spawn/locate/health-check the sidecar server; own the handshake + token.
 - Store the auth token in the OS keychain (Tauri stronghold/keyring).
 - Native dialogs (folder picker for adding libraries), tray icon, notifications.
@@ -53,22 +54,23 @@ IPC: a small, typed set of Tauri `commands` (`get_connection`, `pick_folder`,
 
 ### Routes
 
-| Route | Screen |
-|-------|--------|
-| `/` | **Home / Discover** — Continue Reading, On Deck, Recently Added, New Series, Random. |
-| `/library/:id` | Series grid for a library, with filter/sort/group bar. |
-| `/series/:id` | Series detail — header (cover, metadata, aggregate progress), issue grid/list. |
-| `/book/:id` | Book detail — metadata, page strip, "Read"/"Continue" CTA, edit, history. |
-| `/lists/reading/:id` | A personal reading list (ordered, drag-reorder). |
-| `/collections/:id` | A curated collection. |
-| `/smart/:id` | Smart list results (live query). |
-| `/search?q=` | Grouped search results. |
-| `/stats` | Reading stats dashboards. |
-| `/settings/*` | Libraries, providers, users, appearance, server, about. |
+| Route                | Screen                                                                               |
+| -------------------- | ------------------------------------------------------------------------------------ |
+| `/`                  | **Home / Discover** — Continue Reading, On Deck, Recently Added, New Series, Random. |
+| `/library/:id`       | Series grid for a library, with filter/sort/group bar.                               |
+| `/series/:id`        | Series detail — header (cover, metadata, aggregate progress), issue grid/list.       |
+| `/book/:id`          | Book detail — metadata, page strip, "Read"/"Continue" CTA, edit, history.            |
+| `/lists/reading/:id` | A personal reading list (ordered, drag-reorder).                                     |
+| `/collections/:id`   | A curated collection.                                                                |
+| `/smart/:id`         | Smart list results (live query).                                                     |
+| `/search?q=`         | Grouped search results.                                                              |
+| `/stats`             | Reading stats dashboards.                                                            |
+| `/settings/*`        | Libraries, providers, users, appearance, server, about.                              |
 
 ## 4. Key screens
 
 ### 4.1 Home / Discover
+
 - **Continue Reading** rail (most important): horizontally-scrolling cards with progress
   bars; one click → reader at the right page.
 - **On Deck:** next unread issue in series you're actively reading.
@@ -76,17 +78,20 @@ IPC: a small, typed set of Tauri `commands` (`get_connection`, `pick_folder`,
 - Each card: cover (blur-up), title, series, progress overlay; primary action = read.
 
 ### 4.2 Library grid
+
 - Virtualized cover grid; adjustable cover size; group by series; sort (name, added, year,
   unread count); filter (status, genre, tag, publisher, year, rating, format, reading dir).
 - Multi-select for bulk actions (mark read/unread, add to list/collection, rematch metadata).
 - Series cards show unread badge + read-progress ring.
 
 ### 4.3 Series detail
+
 - Hero header: large cover, title/year/publisher, summary, aggregate progress
   ("12 of 30 read"), actions (read next, mark all, edit, rematch).
 - Issues as grid or table (number, title, date, your status). Inline status toggles.
 
 ### 4.4 Book detail
+
 - Cover + metadata panel (people, genres, tags, characters, file info).
 - Page strip (thumbnails) with cover/story/ad markers.
 - CTA: **Read** / **Continue at p.N**. Secondary: download file, edit metadata, match,
@@ -94,11 +99,13 @@ IPC: a small, typed set of Tauri `commands` (`get_connection`, `pick_folder`,
 - Reading history for this book.
 
 ### 4.5 Metadata editor
+
 - Form (React Hook Form + Zod) over book/series metadata; "Match online" opens a candidate
   picker (provider results with covers + confidence); field-level lock toggles; bulk-edit
   mode for multi-select.
 
 ### 4.6 Settings
+
 - **Libraries:** add/remove roots (native folder picker), scan now, watch toggle, naming rules.
 - **Providers:** enable, enter API keys, test connection.
 - **Users** (auth mode): create users, roles, age-rating ceilings.

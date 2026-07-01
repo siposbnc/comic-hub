@@ -40,7 +40,7 @@ S2 Archives (CBZ/CBR) ─┼─► S3 Scanner+Jobs ─► S4 Image pipeline ─�
 
 - **S1 — Catalog store + Libraries API.** SQLite repos for Library/Series/Book/Page/
   Progress; pkg/ulid; library service (validation, path normalization); `GET/POST
-  /libraries`, `GET/DELETE /libraries/{id}`; implicit owner seed.
+/libraries`, `GET/DELETE /libraries/{id}`; implicit owner seed.
 - **S2 — Archive readers.** `archive.Reader`/`PageSource` for CBZ (archive/zip) and CBR
   (nwaples/rardecode); natural page sort; ComicInfo.xml sidecar extraction; zip-bomb +
   traversal guards; registry dispatch by extension.
@@ -53,7 +53,7 @@ S2 Archives (CBZ/CBR) ─┼─► S3 Scanner+Jobs ─► S4 Image pipeline ─�
   `/pages/{idx}`, `/pages/{idx}/thumb`, `POST /prefetch`; ETag + immutable cache, ranges.
 - **S5 — Browse + progress + WS.** `GET /series`, `/series/{id}`, `/books`,
   `/books/{id}`; `GET /me/continue`, `PUT /me/progress/{bookId}`, `POST
-  /me/books/{id}/mark`, `GET /discover`; WS hub `/api/v1/ws` (jobs/library/progress).
+/me/books/{id}/mark`, `GET /discover`; WS hub `/api/v1/ws` (jobs/library/progress).
 
 ## Reader (Tauri + React) — `comichub-reader`
 
@@ -81,16 +81,16 @@ latency, cache hit); docs kept in lockstep (03-api.md, 09-tech-decisions.md).
 
 ## Status
 
-| Milestone | Status |
-|-----------|--------|
-| M0 — Design-system foundation synced | ✅ done |
-| S1 — Catalog store + Libraries API | ✅ done |
-| S2 — Archive readers (CBZ + CBR) | ✅ done |
-| S3 — Scanner + job system | ✅ done |
-| S4 — Image pipeline + page streaming | ✅ done (pure-Go; govips swap later) |
-| S5 — Browse + progress + WS | ✅ done — **server backbone complete** |
-| R1 / R2 — Reader | ✅ done (connected mode + UX; standalone CBZ/CBT via Rust) |
-| C1–C4 — Client | ✅ done (shell, add+scan, browse, one-click read) |
+| Milestone                            | Status                                                     |
+| ------------------------------------ | ---------------------------------------------------------- |
+| M0 — Design-system foundation synced | ✅ done                                                    |
+| S1 — Catalog store + Libraries API   | ✅ done                                                    |
+| S2 — Archive readers (CBZ + CBR)     | ✅ done                                                    |
+| S3 — Scanner + job system            | ✅ done                                                    |
+| S4 — Image pipeline + page streaming | ✅ done (pure-Go; govips swap later)                       |
+| S5 — Browse + progress + WS          | ✅ done — **server backbone complete**                     |
+| R1 / R2 — Reader                     | ✅ done (connected mode + UX; standalone CBZ/CBT via Rust) |
+| C1–C4 — Client                       | ✅ done (shell, add+scan, browse, one-click read)          |
 
 **Phase 1 is functionally complete and packaged** — server backbone, reader, and client all
 built, integrated, and **building to installers**:
@@ -113,6 +113,7 @@ added). Mock-only elements (genre filters, writer/artist, the Lists/Stats nav) a
 until the data/features exist.
 
 Remaining (follow-on, none blocking the core loop):
+
 - **Verification:** ✅ _API-surface end-to-end done_ — drove the real server socket on a
   generated 1000-book/50-series library (add library → full scan → browse → manifest/cover/
   page/prefetch → progress → mark/Continue-Reading). MVP criteria 2 (browse <100ms cached),

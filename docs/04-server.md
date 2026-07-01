@@ -5,18 +5,18 @@ background work. It's the only component that touches your comic files.
 
 ## 1. Tech choices
 
-| Concern | Choice | Why |
-|---------|--------|-----|
-| Language | Go 1.22+ | Fast, simple concurrency, single static binary, great I/O. |
-| HTTP | `net/http` + `chi` router | Stdlib-grade, fast, middleware-friendly, no heavy framework. |
-| DB | SQLite (`modernc.org/sqlite` pure-Go, or `mattn/go-sqlite3`) | Embedded, zero-admin, WAL. Postgres via same repo interface for remote. |
-| Query layer | `sqlc` (typed queries) | Compile-time-checked SQL, no ORM overhead. |
-| Images | libvips via `govips` | Best-in-class speed/memory for thumbnail + resize + transcode. |
-| Archives | `archive/zip` (CBZ), `nwaples/rardecode` (CBR), `bodgit/sevenzip` (CB7), `archive/tar` (CBT) | Pure-Go where possible; read-only RAR. |
-| PDF | `go-fitz` (MuPDF) or `pdfium` binding | Page rasterization. Optional build tag (CGo). |
-| Jobs | In-process worker pool + SQLite-backed queue | No external broker; survives restarts. |
-| Logging | `log/slog` (JSON) | Structured, stdlib. |
-| Config | `koanf`/`viper` (TOML + env + flags) | Layered config. |
+| Concern     | Choice                                                                                       | Why                                                                     |
+| ----------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Language    | Go 1.22+                                                                                     | Fast, simple concurrency, single static binary, great I/O.              |
+| HTTP        | `net/http` + `chi` router                                                                    | Stdlib-grade, fast, middleware-friendly, no heavy framework.            |
+| DB          | SQLite (`modernc.org/sqlite` pure-Go, or `mattn/go-sqlite3`)                                 | Embedded, zero-admin, WAL. Postgres via same repo interface for remote. |
+| Query layer | `sqlc` (typed queries)                                                                       | Compile-time-checked SQL, no ORM overhead.                              |
+| Images      | libvips via `govips`                                                                         | Best-in-class speed/memory for thumbnail + resize + transcode.          |
+| Archives    | `archive/zip` (CBZ), `nwaples/rardecode` (CBR), `bodgit/sevenzip` (CB7), `archive/tar` (CBT) | Pure-Go where possible; read-only RAR.                                  |
+| PDF         | `go-fitz` (MuPDF) or `pdfium` binding                                                        | Page rasterization. Optional build tag (CGo).                           |
+| Jobs        | In-process worker pool + SQLite-backed queue                                                 | No external broker; survives restarts.                                  |
+| Logging     | `log/slog` (JSON)                                                                            | Structured, stdlib.                                                     |
+| Config      | `koanf`/`viper` (TOML + env + flags)                                                         | Layered config.                                                         |
 
 > **CGo note:** libvips and MuPDF need CGo. We ship prebuilt Windows binaries with these
 > statically linked (or as bundled DLLs alongside the binary). A `nocgo` build drops PDF +

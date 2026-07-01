@@ -14,9 +14,10 @@ one HTTP/WS API.
 open `.cbz` files directly (file association) _or_ be launched from the client.
 
 **Alternatives rejected:**
-- *Monolith (one app does everything):* can't satisfy instant, server-independent double-click
+
+- _Monolith (one app does everything):_ can't satisfy instant, server-independent double-click
   reading; couples reader updates to the whole app; heavier to launch.
-- *Reader as a window inside the client:* opening a loose file would boot the entire client and
+- _Reader as a window inside the client:_ opening a loose file would boot the entire client and
   ideally a server — too heavy for "one-click read," fragile when no server is running.
 
 **Consequences:** Clean failure isolation and independent updates; a tiny bit of duplicated
@@ -33,11 +34,12 @@ images, serve concurrent streams, run background jobs). Performance is a stated 
 the team must implement complex features _confidently_.
 
 **Alternatives rejected:**
-- *Rust:* best raw numbers but the slowest place to deliver evolving, complex features
+
+- _Rust:_ best raw numbers but the slowest place to deliver evolving, complex features
   confidently — the feature gap would hurt more than microseconds.
-- *Node/TS:* fastest to write and shares types with the frontend, but CPU-bound image/archive
+- _Node/TS:_ fastest to write and shares types with the frontend, but CPU-bound image/archive
   work forces native addons and a long-running media server stresses the single-threaded model.
-- *.NET:* strong on Windows but heavier to deploy as a drop-anywhere single binary for the NAS
+- _.NET:_ strong on Windows but heavier to deploy as a drop-anywhere single binary for the NAS
   future.
 
 **Consequences:** Single static binary (great for sidecar + NAS), excellent concurrency for the
@@ -54,8 +56,9 @@ binaries and a `nocgo` fallback build.
 Windows-first with a mobile-later requirement; performance emphasis.
 
 **Alternatives rejected:**
-- *Electron:* most mature but larger memory/disk footprint and no first-class mobile path.
-- *Flutter / .NET MAUI:* viable, but pull us out of the richest web-UI ecosystem where the
+
+- _Electron:_ most mature but larger memory/disk footprint and no first-class mobile path.
+- _Flutter / .NET MAUI:_ viable, but pull us out of the richest web-UI ecosystem where the
   complex reader/library UI is fastest and best to build.
 
 **Consequences:** Tiny binaries, low memory, native OS integration (file assoc, deep links,
@@ -73,8 +76,9 @@ sidecar; it can instead point at a remote URL.
 yet scale to an always-on NAS without a rewrite.
 
 **Alternatives rejected:**
-- *Embedded-only:* no remote streaming to other devices — fails the "optional server" goal.
-- *Server-required:* heavier first-run; breaks dependency-free double-click reading.
+
+- _Embedded-only:_ no remote streaming to other devices — fails the "optional server" goal.
+- _Server-required:_ heavier first-run; breaks dependency-free double-click reading.
 
 **Consequences:** A small handshake/connection module is the _only_ place that differs per mode;
 the server never assumes it's local, the client never assumes it's embedded. Slightly more care
@@ -168,6 +172,7 @@ publisher/date/credits/genres. Its dump is CC BY-SA 4.0 and regenerated bi-weekl
 it centrally turns "get an API key first" into "metadata just works."
 
 **Alternatives rejected:**
+
 - _Local per-server import_ of the dump (8–15 GB + multi-hour imports + bi-weekly refresh on
   every user's machine) — far too heavy for a desktop-first app.
 - _GCD-only, removing CV/Metron_ — loses normalized characters (GCD stores them as free text),
@@ -176,6 +181,7 @@ it centrally turns "get an API key first" into "metadata just works."
 - _Scraping comics.org_ — fragile and against the site's spirit; the dump is the sanctioned path.
 
 **Consequences:**
+
 - Zero-config metadata for everyone; CV/Metron become opt-in "extra character/arc data."
 - Introduces ComicHub-operated infrastructure: a slim Postgres (~5–8 GB) + thin API + a
   cron that downloads the dump → loads a staging DB → atomic swap. Est. **~$10/mo** DIY VPS to
@@ -183,7 +189,7 @@ it centrally turns "get an API key first" into "metadata just works."
   stays low as usage grows. This mirrors the existing "call an external provider API" model — it
   is not a new architectural dependency class.
 - **Attribution required** (CC BY-SA 4.0); surface a GCD credit in the UI/docs. **Do not** serve
-  GCD cover *images* (separate, unclear image rights) — ComicHub already draws covers from the
+  GCD cover _images_ (separate, unclear image rights) — ComicHub already draws covers from the
   comic files themselves; provider cover URLs only feed the match-picker thumbnail.
 - Character/story-arc coverage from GCD is weaker; those tabs stay best-served by an enrichment
   provider until/unless GCD free-text parsing proves good enough.

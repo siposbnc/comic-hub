@@ -4,11 +4,11 @@
 
 Three deployable artifacts, one shared contract:
 
-| Artifact | Tech | Role |
-|----------|------|------|
-| `comichub-server` | Go, single static binary | Owns library, DB, files, jobs, API. |
-| `comichub` (client) | Tauri + React | Browse & manage. Bundles the server as a sidecar. |
-| `comichub-reader` | Tauri + React | Read a book. Works with or without a server. |
+| Artifact            | Tech                     | Role                                              |
+| ------------------- | ------------------------ | ------------------------------------------------- |
+| `comichub-server`   | Go, single static binary | Owns library, DB, files, jobs, API.               |
+| `comichub` (client) | Tauri + React            | Browse & manage. Bundles the server as a sidecar. |
+| `comichub-reader`   | Tauri + React            | Read a book. Works with or without a server.      |
 
 All clients talk to the server over **HTTP + WebSocket**. The reader can _also_ read a
 file directly from disk with no server (standalone mode). There is exactly **one** API
@@ -182,11 +182,11 @@ server later becomes available, the reader **reconciles** local progress into th
 
 ## 8. Security model
 
-| Mode | AuthN | AuthZ | Transport |
-|------|-------|-------|-----------|
-| Embedded | Loopback + bearer token (handshake) | Single implicit owner | Plain HTTP on 127.0.0.1 |
-| Local shared | Bearer token / account login | Per-user roles | Plain HTTP on LAN (warned) |
-| Remote | Account login → JWT (access + refresh) | Roles: owner/admin/member/restricted | TLS required |
+| Mode         | AuthN                                  | AuthZ                                | Transport                  |
+| ------------ | -------------------------------------- | ------------------------------------ | -------------------------- |
+| Embedded     | Loopback + bearer token (handshake)    | Single implicit owner                | Plain HTTP on 127.0.0.1    |
+| Local shared | Bearer token / account login           | Per-user roles                       | Plain HTTP on LAN (warned) |
+| Remote       | Account login → JWT (access + refresh) | Roles: owner/admin/member/restricted | TLS required               |
 
 - **Roles:** `owner` (full), `admin` (manage libraries/users), `member` (read + own
   progress/lists), `restricted` (member + content rating ceiling, no settings).

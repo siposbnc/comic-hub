@@ -35,6 +35,7 @@ Milestone D; for now, manual entry). This precedes login.
 the user isn't connected). ComicHub wordmark/logo at top.
 
 **Fields/states:**
+
 - A single **Server URL** text field (`http://host:port`), with a primary **Connect** button.
 - **Connecting** state (spinner on the button, field disabled).
 - **Error** state: "Couldn't reach that server" (network) — inline, calm danger tone.
@@ -56,6 +57,7 @@ server it's logging into (host shown small above/below the title, e.g. "Sign in 
 comichub.home.lan").
 
 **Fields/states:**
+
 - **Username** + **Password** fields, primary **Sign in** button.
 - **Submitting** state (button spinner, fields disabled).
 - **Error** state: "Incorrect username or password" (the server returns a single 401 for both
@@ -96,12 +98,14 @@ member/restricted users.
 card layout — see the "Metadata providers" card for the pattern).
 
 **Layout:**
+
 - A **list of users**: each row shows avatar/initial, display name, `@username`, a role
   `Badge`, and (for restricted users) their content ceiling. Row actions: **Edit**, **Delete**
   (Delete hidden/disabled for the owner account; confirm via `Dialog`).
 - An **"Add user"** primary button → opens a **create dialog** (`Dialog`).
 
 **Create / Edit dialog fields:**
+
 - **Username** (create only; immutable after).
 - **Display name**.
 - **Role** — a `Seg`/select of: Owner · Admin · Member · Restricted.
@@ -115,6 +119,7 @@ confirm, validation errors (e.g. "Password must be at least 8 characters", "User
 taken" → 409).
 
 **Wire (already built):**
+
 - `GET /users` → `{ users: [{ id, username, displayName, role, ageRatingMax }] }`
 - `POST /users {username, displayName, role, password, ageRatingMax}` → 201
 - `PATCH /users/{id} {displayName?, role?, ageRatingMax?, password?}`
@@ -135,6 +140,7 @@ So no new "blocked" UI is needed; just ensure grids/empty-states read well when 
 section on Home — your call; propose what fits the longbox shell.
 
 **Content (design the cards/charts; data shapes will follow the design):**
+
 - **Headline numbers:** books read, pages read, current streak (days).
 - **Over time:** a simple bar/area chart of issues read per month.
 - **By genre / publisher:** a small ranked breakdown (top genres).

@@ -255,16 +255,19 @@ whitelisted field/operator map — never raw SQL from clients).
 
 ```jsonc
 {
-  "match": "all",            // all | any
+  "match": "all", // all | any
   "rules": [
-    { "field": "library",   "op": "is",       "value": "DC" },
-    { "field": "status",    "op": "is_not",   "value": "read" },
-    { "field": "year",      "op": "gte",      "value": 2024 },
-    { "match": "any", "rules": [
+    { "field": "library", "op": "is", "value": "DC" },
+    { "field": "status", "op": "is_not", "value": "read" },
+    { "field": "year", "op": "gte", "value": 2024 },
+    {
+      "match": "any",
+      "rules": [
         { "field": "genre", "op": "contains", "value": "Cosmic" },
-        { "field": "tag",   "op": "contains", "value": "Crossover" }
-    ]}
-  ]
+        { "field": "tag", "op": "contains", "value": "Crossover" },
+      ],
+    },
+  ],
 }
 ```
 

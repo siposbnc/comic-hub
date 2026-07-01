@@ -15,11 +15,11 @@ and Go definitions can never drift apart.
 
 ## Generated files (do not edit by hand)
 
-| Target | Consumes it |
-|--------|-------------|
-| `packages/reader-core/src/formats.gen.ts` | client + reader frontends |
+| Target                                     | Consumes it                      |
+| ------------------------------------------ | -------------------------------- |
+| `packages/reader-core/src/formats.gen.ts`  | client + reader frontends        |
 | `apps/reader/src-tauri/src/formats_gen.rs` | reader Tauri core (`formats.rs`) |
-| `server/internal/domain/formats_gen.go` | server (`formats.go`, scanner) |
+| `server/internal/domain/formats_gen.go`    | server (`formats.go`, scanner)   |
 
 Each format has:
 

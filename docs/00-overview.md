@@ -62,33 +62,33 @@ The product is three cooperating pieces:
 
 ## 5. Key concepts & glossary
 
-| Term | Meaning |
-|------|---------|
-| **Library** | A named root folder (or set of roots) ComicHub scans. e.g. "Manga", "DC". |
-| **Series** | A grouping of issues that belong together (e.g. _Saga_). Usually a folder. |
-| **Volume** | A numbered run/version of a series, usually distinguished by relaunch year (e.g. _Wonder Woman_ Vol. 1 (1942) vs Vol. 2 (1987)). Groups issues within a series and disambiguates renumbered runs. May also denote a collected edition where publishers use it that way. |
-| **Issue / Book** | A single comic file — one `.cbz`/`.cbr`/`.pdf`. The atomic readable unit. |
-| **Page** | One image inside a book. |
-| **Collection** | A manually-curated, ordered grouping (e.g. "Crisis on Infinite Earths crossover"). |
-| **Reading List** | A user's personal ordered queue ("To Read"). |
-| **Smart List** | A saved query (rule-based) that auto-populates (e.g. "Unread DC 2024"). |
-| **Tag** | A free-form label (genre, character, mood). |
-| **Progress** | Per-user, per-book reading state: current page, %, status, timestamps. |
-| **Metadata** | Structured info about a book/series: title, number, writer, date, etc. |
-| **Sidecar** | `ComicInfo.xml` embedded in the archive — the de-facto metadata standard. |
-| **Provider** | An external metadata source (Comic Vine, GCD, Metron, AniList). |
-| **Sidecar binary** | The Go server shipped _inside_ the client for local-first mode. |
+| Term               | Meaning                                                                                                                                                                                                                                                                 |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Library**        | A named root folder (or set of roots) ComicHub scans. e.g. "Manga", "DC".                                                                                                                                                                                               |
+| **Series**         | A grouping of issues that belong together (e.g. _Saga_). Usually a folder.                                                                                                                                                                                              |
+| **Volume**         | A numbered run/version of a series, usually distinguished by relaunch year (e.g. _Wonder Woman_ Vol. 1 (1942) vs Vol. 2 (1987)). Groups issues within a series and disambiguates renumbered runs. May also denote a collected edition where publishers use it that way. |
+| **Issue / Book**   | A single comic file — one `.cbz`/`.cbr`/`.pdf`. The atomic readable unit.                                                                                                                                                                                               |
+| **Page**           | One image inside a book.                                                                                                                                                                                                                                                |
+| **Collection**     | A manually-curated, ordered grouping (e.g. "Crisis on Infinite Earths crossover").                                                                                                                                                                                      |
+| **Reading List**   | A user's personal ordered queue ("To Read").                                                                                                                                                                                                                            |
+| **Smart List**     | A saved query (rule-based) that auto-populates (e.g. "Unread DC 2024").                                                                                                                                                                                                 |
+| **Tag**            | A free-form label (genre, character, mood).                                                                                                                                                                                                                             |
+| **Progress**       | Per-user, per-book reading state: current page, %, status, timestamps.                                                                                                                                                                                                  |
+| **Metadata**       | Structured info about a book/series: title, number, writer, date, etc.                                                                                                                                                                                                  |
+| **Sidecar**        | `ComicInfo.xml` embedded in the archive — the de-facto metadata standard.                                                                                                                                                                                               |
+| **Provider**       | An external metadata source (Comic Vine, GCD, Metron, AniList).                                                                                                                                                                                                         |
+| **Sidecar binary** | The Go server shipped _inside_ the client for local-first mode.                                                                                                                                                                                                         |
 
 ## 6. Format support
 
-| Format | Container | Read | Metadata | Notes |
-|--------|-----------|------|----------|-------|
-| CBZ | ZIP | ✅ | `ComicInfo.xml` | Primary, fastest. |
-| CBR | RAR | ✅ | `ComicInfo.xml` | Read-only (no RAR writing). |
-| CB7 | 7z | ✅ | `ComicInfo.xml` | |
-| CBT | TAR | ✅ | `ComicInfo.xml` | Rare but cheap to support. |
-| PDF | PDF | ✅ | PDF info dict | Rasterized per-page; slower. |
-| EPUB | ZIP/XHTML | ⚠️ later | OPF | Fixed-layout comics only; phase 3+. |
+| Format | Container | Read     | Metadata        | Notes                               |
+| ------ | --------- | -------- | --------------- | ----------------------------------- |
+| CBZ    | ZIP       | ✅       | `ComicInfo.xml` | Primary, fastest.                   |
+| CBR    | RAR       | ✅       | `ComicInfo.xml` | Read-only (no RAR writing).         |
+| CB7    | 7z        | ✅       | `ComicInfo.xml` |                                     |
+| CBT    | TAR       | ✅       | `ComicInfo.xml` | Rare but cheap to support.          |
+| PDF    | PDF       | ✅       | PDF info dict   | Rasterized per-page; slower.        |
+| EPUB   | ZIP/XHTML | ⚠️ later | OPF             | Fixed-layout comics only; phase 3+. |
 
 Page images inside archives: JPEG, PNG, WebP, AVIF, GIF, BMP. Natural sort order by
 filename determines page order unless `ComicInfo.xml` specifies otherwise.

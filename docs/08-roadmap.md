@@ -22,6 +22,7 @@ Plumbing that everything depends on. No user-facing features yet.
 The minimum lovable product. Embedded mode, single implicit user.
 
 **Server**
+
 - Scanner: walk roots, classify, change-detect, parse **CBZ + CBR**, page lists, natural sort.
 - ComicInfo.xml parsing; filename-heuristic fallback for series/number/year.
 - libvips thumbnail generation at scan time; content-addressed cache.
@@ -30,12 +31,14 @@ The minimum lovable product. Embedded mode, single implicit user.
 - Progress upsert + Continue Reading + WS `progress`/`jobs` topics.
 
 **Client**
+
 - Add library (folder picker) → scan with live progress.
 - Home (Continue Reading, Recently Added), Library grid, Series detail, Book detail.
 - One-click **Read** launches the reader (connected mode).
 - Design system v1: CoverCard, Rail, grid, hero, JobIndicator.
 
 **Reader**
+
 - Standalone (double-click `.cbz`/`.cbr`) **and** connected modes via `PageProvider`.
 - Single + double page, fit modes, LTR/RTL, keyboard + mouse nav, scrubber, zoom/pan.
 - Prefetch window (instant page turns), resume, mark-finished.

@@ -23,21 +23,21 @@ heritage color of comic printing, and notably _not_ the AI-default vermilion/aci
 Magenta — the second process ink — is the single "new / unread" highlight. Yellow appears
 only as a rare warning/key accent.
 
-| Token | Hex | Use |
-|-------|-----|-----|
-| `ink-900` | `#0C0E12` | App background (the longbox interior). |
-| `ink-800` | `#13161C` | Raised surfaces / sidebar. |
-| `ink-700` | `#1C212B` | Cards, inputs, hover fills. |
-| `ink-600` | `#2A313D` | Borders, dividers, hairlines. |
-| `paper-100` | `#ECEEF2` | Primary text on ink. |
-| `paper-400` | `#9BA3B0` | Secondary text, metadata. |
-| `paper-600` | `#5C6573` | Tertiary / disabled. |
-| `cyan-500` | `#16B9E6` | **Primary accent** — actions, focus, read-progress, links. Process cyan. |
-| `cyan-600` | `#0E93B8` | Pressed / accent border. |
-| `magenta-500` | `#E6398B` | **Unread / new** highlight only. Process magenta. |
-| `yellow-400` | `#F4C13C` | Key / warning accent (rare). |
-| `danger-500` | `#E5484D` | Destructive. |
-| `success-500` | `#46A758` | Confirmations. |
+| Token         | Hex       | Use                                                                      |
+| ------------- | --------- | ------------------------------------------------------------------------ |
+| `ink-900`     | `#0C0E12` | App background (the longbox interior).                                   |
+| `ink-800`     | `#13161C` | Raised surfaces / sidebar.                                               |
+| `ink-700`     | `#1C212B` | Cards, inputs, hover fills.                                              |
+| `ink-600`     | `#2A313D` | Borders, dividers, hairlines.                                            |
+| `paper-100`   | `#ECEEF2` | Primary text on ink.                                                     |
+| `paper-400`   | `#9BA3B0` | Secondary text, metadata.                                                |
+| `paper-600`   | `#5C6573` | Tertiary / disabled.                                                     |
+| `cyan-500`    | `#16B9E6` | **Primary accent** — actions, focus, read-progress, links. Process cyan. |
+| `cyan-600`    | `#0E93B8` | Pressed / accent border.                                                 |
+| `magenta-500` | `#E6398B` | **Unread / new** highlight only. Process magenta.                        |
+| `yellow-400`  | `#F4C13C` | Key / warning accent (rare).                                             |
+| `danger-500`  | `#E5484D` | Destructive.                                                             |
+| `success-500` | `#46A758` | Confirmations.                                                           |
 
 - **Light theme** inverts to a true paper white (`#F7F6F2`, a hair warm — newsprint, not
   cream) with ink text; cyan/magenta keep their hues but darken one step for contrast.
@@ -48,11 +48,11 @@ only as a rare warning/key accent.
 
 Three roles, each doing one job — chosen to feel like **comic production**, not a generic UI kit.
 
-| Role | Family | Rationale |
-|------|--------|-----------|
-| **Display** | **Archivo Expanded** (wide, 700/800) | Wide grotesque reads like a cover logo / masthead. Used sparingly: page titles, series heroes, the wordmark. |
-| **Body / UI** | **Inter** (400/500/600) | Workhorse for dense catalog data; neutral so it disappears. |
-| **Data / labels** | **IBM Plex Mono** (500) | Issue numbers, page counts, dates, file info — the "spine label / catalog card" voice. Monospace makes `#001`, `44 pp`, `2012` tabular and unmistakable. |
+| Role              | Family                               | Rationale                                                                                                                                                |
+| ----------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Display**       | **Archivo Expanded** (wide, 700/800) | Wide grotesque reads like a cover logo / masthead. Used sparingly: page titles, series heroes, the wordmark.                                             |
+| **Body / UI**     | **Inter** (400/500/600)              | Workhorse for dense catalog data; neutral so it disappears.                                                                                              |
+| **Data / labels** | **IBM Plex Mono** (500)              | Issue numbers, page counts, dates, file info — the "spine label / catalog card" voice. Monospace makes `#001`, `44 pp`, `2012` tabular and unmistakable. |
 
 Type scale (1.25 ratio, rem):
 

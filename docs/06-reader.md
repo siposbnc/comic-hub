@@ -6,14 +6,14 @@ seamlessly **when a server is present**.
 
 ## 1. Two operating modes
 
-| | **Standalone** | **Connected** |
-|-|----------------|----------------|
-| Trigger | Double-click `.cbz`/`.cbr`/… (file association) | Launched from client, or file-open while a server is running |
-| Page source | Read archive **directly from disk** (Rust side) | Server `/pages/{idx}` streaming |
-| Manifest | Built locally by the Rust core | `GET /books/{id}/manifest` |
-| Progress | Local store keyed by `content_hash` (`reader.db`) | `PUT /me/progress`, live WS sync |
-| Metadata | `ComicInfo.xml` from the archive | Full catalog metadata |
-| Reconciliation | On next server contact, local progress merges by `content_hash` | n/a |
+|                | **Standalone**                                                  | **Connected**                                                |
+| -------------- | --------------------------------------------------------------- | ------------------------------------------------------------ |
+| Trigger        | Double-click `.cbz`/`.cbr`/… (file association)                 | Launched from client, or file-open while a server is running |
+| Page source    | Read archive **directly from disk** (Rust side)                 | Server `/pages/{idx}` streaming                              |
+| Manifest       | Built locally by the Rust core                                  | `GET /books/{id}/manifest`                                   |
+| Progress       | Local store keyed by `content_hash` (`reader.db`)               | `PUT /me/progress`, live WS sync                             |
+| Metadata       | `ComicInfo.xml` from the archive                                | Full catalog metadata                                        |
+| Reconciliation | On next server contact, local progress merges by `content_hash` | n/a                                                          |
 
 The UI is identical; only a `PageProvider` abstraction differs (see §4). Mode is decided at
 launch and can upgrade (standalone → connected) if a server appears.
@@ -32,6 +32,7 @@ launch and can upgrade (standalone → connected) if a server appears.
 ## 3. Reading experience
 
 ### 3.1 Page layout modes
+
 - **Single page** (fit options below).
 - **Double / spread** (two pages side-by-side; auto-detects wide/double-spread pages and
   shows them solo; configurable cover-alone for correct spread pairing).
@@ -39,15 +40,18 @@ launch and can upgrade (standalone → connected) if a server appears.
 - **Continuous horizontal**.
 
 ### 3.2 Fit modes
+
 - Fit width, fit height, fit screen (contain), original size, and **smart fit** (fills the
   reading area, respecting max zoom). Per-book and global defaults; remembers last used.
 
 ### 3.3 Reading direction
+
 - LTR / RTL (manga). Inherited from series/library (`reading_dir`) in connected mode;
   detected from `ComicInfo.xml` Manga flag in standalone; user-overridable. Affects page-turn
   direction, spread pairing, and scrubber orientation.
 
 ### 3.4 Navigation & input
+
 - **Keyboard:** ←/→ or Space/Shift-Space (direction-aware), Home/End, `F` fullscreen, `+`/`-`
   zoom, `D` toggle double, `V` toggle vertical, `B` bookmark, `Esc` exit, `1-9` jump to %,
   `,`/`.` prev/next chapter (book in series, connected mode).
@@ -58,10 +62,12 @@ launch and can upgrade (standalone → connected) if a server appears.
   jump anywhere.
 
 ### 3.5 Zoom & pan
+
 - Smooth pinch/scroll zoom centered on cursor; momentum pan; double-click/tap to toggle
   fit↔100%; constrained to image bounds.
 
 ### 3.6 Visual comfort
+
 - Background color (black/gray/white/sepia), optional page gap, two-page gutter handling.
 - Brightness/dim overlay; optional auto-crop of uniform page borders.
 - Color filters: grayscale, sepia, night/warmth (eye comfort). All client-side, non-destructive.
@@ -70,11 +76,11 @@ launch and can upgrade (standalone → connected) if a server appears.
 
 ```ts
 interface PageProvider {
-  manifest(): Promise<Manifest>;            // page count, dims, types, reading dir
-  page(idx: number, opts?: PageOpts): Promise<Blob>;  // full image
-  thumb(idx: number): Promise<Blob>;        // scrubber thumbnail
+  manifest(): Promise<Manifest>; // page count, dims, types, reading dir
+  page(idx: number, opts?: PageOpts): Promise<Blob>; // full image
+  thumb(idx: number): Promise<Blob>; // scrubber thumbnail
   prefetch(from: number, count: number): void;
-  saveProgress(p: Progress): void;          // debounced upstream
+  saveProgress(p: Progress): void; // debounced upstream
   restoreProgress(): Promise<Progress | null>;
 }
 ```
@@ -124,13 +130,13 @@ The point of the reader is that **the next page is already there**.
 
 ## 9. Performance targets
 
-| Action | Target |
-|--------|--------|
-| Cold open of a 40-page CBZ (standalone) | First page visible < 400ms |
-| Page turn (within prefetch window) | < 16ms (next frame) — no spinner ever |
-| Zoom interaction | 60fps |
-| Connected open (warm cache) | First page < 250ms |
-| Memory (single book, single mode) | Bounded by LRU window, not page count |
+| Action                                  | Target                                |
+| --------------------------------------- | ------------------------------------- |
+| Cold open of a 40-page CBZ (standalone) | First page visible < 400ms            |
+| Page turn (within prefetch window)      | < 16ms (next frame) — no spinner ever |
+| Zoom interaction                        | 60fps                                 |
+| Connected open (warm cache)             | First page < 250ms                    |
+| Memory (single book, single mode)       | Bounded by LRU window, not page count |
 
 ## 10. Resilience
 
