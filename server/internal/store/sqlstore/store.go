@@ -24,6 +24,7 @@ type Store struct {
 	readerPrefs  *readerPrefRepo
 	settings     *settingsRepo
 	users        *userRepo
+	stats        *statsRepo
 	sessions     *sessionRepo
 }
 
@@ -46,6 +47,7 @@ func NewStore(db *DB) *Store {
 		readerPrefs:  &readerPrefRepo{db: db},
 		settings:     &settingsRepo{db: db},
 		users:        &userRepo{db: db},
+		stats:        &statsRepo{db: db},
 		sessions:     &sessionRepo{db: db},
 	}
 }
@@ -66,6 +68,7 @@ func (s *Store) ReaderPrefs() domain.ReaderPrefRepository   { return s.readerPre
 func (s *Store) Settings() domain.SettingsRepository        { return s.settings }
 func (s *Store) Users() domain.UserRepository               { return s.users }
 func (s *Store) Sessions() domain.SessionRepository         { return s.sessions }
+func (s *Store) Stats() domain.StatsRepository              { return s.stats }
 
 // compile-time assertion that Store satisfies the domain boundary.
 var _ domain.Repository = (*Store)(nil)

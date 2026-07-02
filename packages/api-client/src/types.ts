@@ -183,6 +183,43 @@ export interface PresenceEntry {
   updatedAt: number;
 }
 
+/** One bar of the stats dashboard's issues-per-month chart (oldest first). */
+export interface StatsMonth {
+  /** Short month label, e.g. "Jul". */
+  m: string;
+  n: number;
+}
+
+/** A ranked aggregate row (top genres / publishers). */
+export interface StatsNameCount {
+  name: string;
+  n: number;
+}
+
+/** A recently finished issue for the stats dashboard's cover rail. */
+export interface StatsFinished {
+  bookId: string;
+  title?: string;
+  number?: string;
+  seriesId: string;
+  seriesName: string;
+  finishedAt: number;
+}
+
+/** The per-user reading dashboard (GET /me/stats — design_handoff_stats shape). */
+export interface ReadingStats {
+  booksRead: number;
+  pagesRead: number;
+  thisYear: number;
+  /** Consecutive reading days ending today/yesterday (approximated from progress). */
+  streak: number;
+  bestStreak: number;
+  months: StatsMonth[];
+  genres: StatsNameCount[];
+  publishers: StatsNameCount[];
+  finished: StatsFinished[];
+}
+
 /** A user's saved place in a book: a page with an optional short note. */
 export interface Bookmark {
   id: string;

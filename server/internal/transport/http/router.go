@@ -25,6 +25,7 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/service/presence"
 	"github.com/siposbnc/comic-hub/server/internal/service/reader"
 	"github.com/siposbnc/comic-hub/server/internal/service/reading"
+	"github.com/siposbnc/comic-hub/server/internal/service/stats"
 )
 
 // Deps are the dependencies the HTTP layer needs.
@@ -39,6 +40,7 @@ type Deps struct {
 	Reader   *reader.Service
 	Browse   *browse.Service
 	Reading  *reading.Service
+	Stats    *stats.Service
 	Metadata *metadata.Service
 	Organize *organize.Service
 	Health   *health.Service
@@ -176,6 +178,7 @@ func NewRouter(d Deps) http.Handler {
 		// Progress & reading state (acting user = implicit owner in embedded mode).
 		r.Route("/me", func(r chi.Router) {
 			r.Get("/continue", handleContinueReading(d.Browse))
+			r.Get("/stats", handleMyStats(d.Stats))
 			r.Get("/progress/{bookId}", handleGetProgress(d.Reading))
 			r.Put("/progress/{bookId}", handlePutProgress(d.Reading))
 			r.Post("/progress/batch", handleBatchProgress(d.Reading, d.Repo))

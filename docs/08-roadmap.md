@@ -62,7 +62,7 @@ Organization, metadata quality, more formats.
 
 **Exit:** a messy 30k library becomes clean, searchable, well-tagged with minimal manual work.
 
-## Phase 3 — Multi-user & remote
+## Phase 3 — Multi-user & remote ✅ (complete)
 
 Turn on the "optional server" half of the promise.
 
@@ -76,6 +76,7 @@ Turn on the "optional server" half of the promise.
 - **Stats dashboards:** books/pages read, streaks, by genre/month.
 
 **Exit:** a household runs one always-on server; each member reads independently from any client.
+**Status:** complete — see [phase-3-plan.md](phase-3-plan.md) for the milestone log.
 
 ## Phase 4 — Polish, scale, reach
 

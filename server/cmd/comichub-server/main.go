@@ -41,6 +41,7 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/service/reader"
 	"github.com/siposbnc/comic-hub/server/internal/service/reading"
 	"github.com/siposbnc/comic-hub/server/internal/service/sidecar"
+	"github.com/siposbnc/comic-hub/server/internal/service/stats"
 	"github.com/siposbnc/comic-hub/server/internal/store/sqlstore"
 	httptransport "github.com/siposbnc/comic-hub/server/internal/transport/http"
 	"github.com/siposbnc/comic-hub/server/internal/version"
@@ -98,6 +99,7 @@ func run() error {
 	browsing := browse.New(store)
 	organizing := organize.New(store)
 	healthSvc := health.New(store)
+	statsSvc := stats.New(store)
 
 	// WebSocket hub for push (jobs/progress/bookmarks/presence); services broadcast
 	// through it. Presence ("now reading", Milestone E) is derived from progress writes:
@@ -288,6 +290,7 @@ func run() error {
 		Reader:   readerSvc,
 		Browse:   browsing,
 		Reading:  readingSvc,
+		Stats:    statsSvc,
 		Metadata: metaSvc,
 		Organize: organizing,
 		Health:   healthSvc,

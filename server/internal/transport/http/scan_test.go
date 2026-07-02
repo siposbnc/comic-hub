@@ -29,6 +29,7 @@ import (
 	"github.com/siposbnc/comic-hub/server/internal/service/organize"
 	"github.com/siposbnc/comic-hub/server/internal/service/reader"
 	"github.com/siposbnc/comic-hub/server/internal/service/reading"
+	"github.com/siposbnc/comic-hub/server/internal/service/stats"
 	"github.com/siposbnc/comic-hub/server/internal/store/sqlstore"
 )
 
@@ -80,6 +81,7 @@ func newScanServer(t *testing.T) (string, *sqlstore.Store) {
 		Reader:   readerSvc,
 		Browse:   browse.New(store),
 		Reading:  reading.New(store, func(_ string, p domain.Progress) { hub.BroadcastProgress(p) }),
+		Stats:    stats.New(store),
 		Metadata: metaSvc,
 		Organize: organize.New(store),
 		Health:   health.New(store),

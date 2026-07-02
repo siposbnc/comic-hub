@@ -184,6 +184,23 @@ func TestPostgresEndToEnd(t *testing.T) {
 		t.Fatalf("SearchBooks(court* owl*) = %+v (%v), want 1 hit", bhits, err)
 	}
 
+	// Stats aggregates (Milestone G SQL) run on the dialect too.
+	if _, err := store.Progress().Upsert(ctx, domain.Progress{
+		UserID: u.ID, BookID: book.ID, Page: 19, PageCount: 20,
+		Status: domain.StatusRead, StartedAt: now, FinishedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("finish book: %v", err)
+	}
+	if booksRead, pagesRead, err := store.Stats().ReadCounts(ctx, u.ID); err != nil || booksRead != 1 || pagesRead != 20 {
+		t.Fatalf("ReadCounts = %d/%d (%v), want 1/20", booksRead, pagesRead, err)
+	}
+	if fin, err := store.Stats().RecentlyFinished(ctx, u.ID, 5); err != nil || len(fin) != 1 || fin[0].SeriesName != "Batman" {
+		t.Fatalf("RecentlyFinished = %+v (%v), want 1 Batman entry", fin, err)
+	}
+	if times, err := store.Stats().ActivityTimes(ctx, u.ID); err != nil || len(times) == 0 {
+		t.Fatalf("ActivityTimes = %v (%v), want entries", times, err)
+	}
+
 	// Settings k/v round-trip.
 	if err := store.Settings().Set(ctx, "k", "v"); err != nil {
 		t.Fatalf("settings set: %v", err)

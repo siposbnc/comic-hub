@@ -25,6 +25,7 @@ import type {
   ProviderStatus,
   ReadingList,
   ReadingListDetail,
+  ReadingStats,
   ReadStatus,
   ScanMode,
   SearchResults,
@@ -368,6 +369,11 @@ export class ComicHubClient {
       `/api/v1/me/books/${encodeURIComponent(bookId)}/reader-prefs`,
       { body: { settings } },
     );
+  }
+
+  /** The acting user's reading dashboard (headline numbers, month buckets, streaks…). */
+  stats(): Promise<ReadingStats> {
+    return this.request<ReadingStats>('GET', '/api/v1/me/stats');
   }
 
   markBook(bookId: string, status: 'read' | 'unread'): Promise<Progress> {

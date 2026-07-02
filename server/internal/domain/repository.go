@@ -24,6 +24,7 @@ type Repository interface {
 	Settings() SettingsRepository
 	Users() UserRepository
 	Sessions() SessionRepository
+	Stats() StatsRepository
 }
 
 // LibraryRepository persists libraries and their roots.

@@ -44,6 +44,12 @@ const bookRoute = createRoute({
   component: lazyRouteComponent(() => import('./routes/Book.js'), 'Book'),
 });
 
+const statsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/stats',
+  component: lazyRouteComponent(() => import('./routes/Stats.js'), 'Stats'),
+});
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
@@ -105,6 +111,7 @@ const routeTree = rootRoute.addChildren([
   storyArcRoute,
   volumeRoute,
   bookRoute,
+  statsRoute,
   settingsRoute,
   collectionsRoute,
   collectionDetailRoute,

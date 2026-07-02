@@ -195,6 +195,13 @@ export function Sidebar() {
           <NavSection>System</NavSection>
           <SpineTab
             index={next()}
+            icon="stats"
+            label="Stats"
+            active={pathname === '/stats'}
+            onClick={() => navigate({ to: '/stats' })}
+          />
+          <SpineTab
+            index={next()}
             icon="settings"
             label="Settings"
             active={pathname === '/settings'}

@@ -2,8 +2,8 @@
 
 The working plan for [Phase 3 of the roadmap](08-roadmap.md): _turn on the "optional server"
 half of the promise — a household runs one always-on server; each member reads independently
-from any client_. Phases 1 (browse + read) and 2 (library platform) are complete. This is a
-living document — milestone status is updated as work lands.
+from any client_. **All milestones (A–G) are complete** — the table below is the log of what
+landed where.
 
 ## What already exists (foundation laid in Phase 0/1)
 
@@ -96,7 +96,7 @@ G Stats dashboards (preview) last
 | D — Server discovery (mDNS + manual pairing)                      | ✅ done — server advertises `_comichub._tcp` in server mode (`--mdns`, `--server-name`); client `discover_servers` browses + probes reachability; connect screen's "Servers on your network" list built to the updated connect_login handoff (scanning/results/empty/row-connecting states); open servers skip login, verified e2e in-browser                                                                                                                                                                                                                                                                              |
 | E — Cross-device sync + presence                                  | ✅ done — WS `presence` topic + `GET /presence` (derived from progress writes, TTL expiry, ceiling-filtered per viewer); progress/bookmarks WS delivery per-user; ADR-008 LWW enforced (`updatedAt` on PUT, `POST /me/progress/batch`, stale writes return the authoritative row); Home "Now reading" strip built to design_handoff_presence, verified live e2e (two users over WS). Reader offline flush landed too: failed connected-mode writes queue in localStorage per server and drain via the batch endpoint; standalone progress (keyed by content hash) reconciles into the catalog on the next connected launch |
 | F — Remote deployment (Docker / service / Postgres / TLS docs)    | ✅ done — distroless Dockerfile + compose (smoke-tested), hardened systemd unit, Windows-service installer, TLS/reverse-proxy guide (docs/10-deployment.md); store refactored dialect-aware (`store/sqlstore`): Postgres opt-in via `--db-driver postgres --db-dsn`, parallel migrations with a parity test, tsquery search, verified live (full scan + search + LWW on Postgres 17) with a CI job                                                                                                                                                                                                                         |
-| G — Stats dashboards — preview-gated                              | ⬜ not started                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| G — Stats dashboards — preview-gated                              | ✅ done — `GET /me/stats` (headline counts, 12-month buckets, streaks approximated from progress timestamps, top genres/publishers, recently finished) over a new dialect-portable `StatsRepository`; client Stats screen built to design_handoff_stats (nav item, StatCards, month bars with cyan peak, genre bars, cover rail), verified live in-browser; SQL covered on Postgres in the dialect e2e                                                                                                                                                                                                                     |
 
 ## Cross-cutting
 
