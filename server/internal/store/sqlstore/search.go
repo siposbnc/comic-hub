@@ -35,8 +35,10 @@ func (r *searchRepo) SearchSeries(ctx context.Context, libraryID, match string, 
 		SELECT s.id, s.name, s.year,
 			COALESCE(s.cover_book_id,
 				(SELECT b.id FROM book b WHERE b.series_id = s.id
-					ORDER BY b.sort_number, b.number LIMIT 1)) AS cover_book_id
+					ORDER BY b.sort_number, b.number LIMIT 1)) AS cover_book_id,
+			l.name AS library_name
 		FROM series s
+		JOIN library l ON l.id = s.library_id
 		WHERE to_tsvector('simple', s.name) @@ to_tsquery('simple', ?)`
 		args = []any{pgQuery(match)}
 		if libraryID != "" {
@@ -50,9 +52,11 @@ func (r *searchRepo) SearchSeries(ctx context.Context, libraryID, match string, 
 		SELECT s.id, s.name, s.year,
 			COALESCE(s.cover_book_id,
 				(SELECT b.id FROM book b WHERE b.series_id = s.id
-					ORDER BY b.sort_number, b.number LIMIT 1)) AS cover_book_id
+					ORDER BY b.sort_number, b.number LIMIT 1)) AS cover_book_id,
+			l.name AS library_name
 		FROM series_fts f
 		JOIN series s ON s.id = f.series_id
+		JOIN library l ON l.id = s.library_id
 		WHERE f.name MATCH ?`
 		args = []any{match}
 		if libraryID != "" {
@@ -76,7 +80,7 @@ func (r *searchRepo) SearchSeries(ctx context.Context, libraryID, match string, 
 			year  sql.NullInt64
 			cover sql.NullString
 		)
-		if err := rows.Scan(&h.ID, &h.Name, &year, &cover); err != nil {
+		if err := rows.Scan(&h.ID, &h.Name, &year, &cover, &h.LibraryName); err != nil {
 			return nil, err
 		}
 		h.Year = int(i64(year))
@@ -91,9 +95,10 @@ func (r *searchRepo) SearchBooks(ctx context.Context, libraryID, match string, l
 	var args []any
 	if r.db.Driver() == DriverPostgres {
 		q = `
-		SELECT b.id, b.series_id, s.name, b.number, b.title, b.file_format
+		SELECT b.id, b.series_id, s.name, b.number, b.title, b.file_format, l.name
 		FROM book b
 		JOIN series s ON s.id = b.series_id
+		JOIN library l ON l.id = b.library_id
 		WHERE to_tsvector('simple', coalesce(b.title, '')) @@ to_tsquery('simple', ?)`
 		args = []any{pgQuery(match)}
 		if libraryID != "" {
@@ -104,10 +109,11 @@ func (r *searchRepo) SearchBooks(ctx context.Context, libraryID, match string, l
 		args = append(args, pgQuery(match), limit)
 	} else {
 		q = `
-		SELECT b.id, b.series_id, s.name, b.number, b.title, b.file_format
+		SELECT b.id, b.series_id, s.name, b.number, b.title, b.file_format, l.name
 		FROM book_fts f
 		JOIN book b ON b.id = f.book_id
 		JOIN series s ON s.id = b.series_id
+		JOIN library l ON l.id = b.library_id
 		WHERE f.title MATCH ?`
 		args = []any{match}
 		if libraryID != "" {
@@ -131,7 +137,7 @@ func (r *searchRepo) SearchBooks(ctx context.Context, libraryID, match string, l
 			number sql.NullString
 			title  sql.NullString
 		)
-		if err := rows.Scan(&h.ID, &h.SeriesID, &h.SeriesName, &number, &title, &h.Format); err != nil {
+		if err := rows.Scan(&h.ID, &h.SeriesID, &h.SeriesName, &number, &title, &h.Format, &h.LibraryName); err != nil {
 			return nil, err
 		}
 		h.Number = str(number)

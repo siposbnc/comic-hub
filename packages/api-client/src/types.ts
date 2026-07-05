@@ -424,6 +424,8 @@ export interface SeriesHit {
   name: string;
   year?: number;
   coverBookId?: string;
+  /** Disambiguates same-named series that exist in more than one library. */
+  libraryName?: string;
 }
 
 /** A book matched by full-text search (carries its series name for display). */
@@ -434,6 +436,7 @@ export interface BookHit {
   number?: string;
   title?: string;
   format: string;
+  libraryName?: string;
 }
 
 /** Grouped, ranked results from `GET /search`. */

@@ -18,22 +18,25 @@ const (
 // defaultSearchLimit caps each result group; tuned for a type-ahead dropdown.
 const defaultSearchLimit = 10
 
-// SeriesHit is a series in a search result.
+// SeriesHit is a series in a search result. LibraryName lets pickers disambiguate
+// same-named series that exist in more than one library.
 type SeriesHit struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Year        int    `json:"year,omitempty"`
 	CoverBookID string `json:"coverBookId,omitempty"`
+	LibraryName string `json:"libraryName,omitempty"`
 }
 
 // BookHit is a book in a search result.
 type BookHit struct {
-	ID         string `json:"id"`
-	SeriesID   string `json:"seriesId"`
-	SeriesName string `json:"seriesName,omitempty"`
-	Number     string `json:"number,omitempty"`
-	Title      string `json:"title,omitempty"`
-	Format     string `json:"format"`
+	ID          string `json:"id"`
+	SeriesID    string `json:"seriesId"`
+	SeriesName  string `json:"seriesName,omitempty"`
+	Number      string `json:"number,omitempty"`
+	Title       string `json:"title,omitempty"`
+	Format      string `json:"format"`
+	LibraryName string `json:"libraryName,omitempty"`
 }
 
 // SearchResults is the grouped search payload.
@@ -101,6 +104,7 @@ func (s *Service) Search(ctx context.Context, libraryID, query, typeFilter strin
 				Name:        h.Name,
 				Year:        h.Year,
 				CoverBookID: cover,
+				LibraryName: h.LibraryName,
 			})
 		}
 	}
@@ -119,12 +123,13 @@ func (s *Service) Search(ctx context.Context, libraryID, query, typeFilter strin
 				}
 			}
 			out.Books = append(out.Books, BookHit{
-				ID:         h.ID,
-				SeriesID:   h.SeriesID,
-				SeriesName: h.SeriesName,
-				Number:     h.Number,
-				Title:      h.Title,
-				Format:     h.Format,
+				ID:          h.ID,
+				SeriesID:    h.SeriesID,
+				SeriesName:  h.SeriesName,
+				Number:      h.Number,
+				Title:       h.Title,
+				Format:      h.Format,
+				LibraryName: h.LibraryName,
 			})
 		}
 	}

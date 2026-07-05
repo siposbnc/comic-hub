@@ -64,6 +64,9 @@ func TestSearchSeriesAndBooks(t *testing.T) {
 	if !ids[batman] || ids[beyond] || len(hits) != 1 {
 		t.Fatalf("scoped series search = %+v", hits)
 	}
+	if hits[0].LibraryName != "DC" {
+		t.Fatalf("series hit library name = %q, want DC", hits[0].LibraryName)
+	}
 
 	// Unscoped spans both libraries.
 	hits, _ = repo.SearchSeries(ctx, "", "bat*", 10)
@@ -78,7 +81,7 @@ func TestSearchSeriesAndBooks(t *testing.T) {
 		t.Fatalf("search books: %v", err)
 	}
 	if len(books) != 1 || books[0].ID != owls || books[0].SeriesName != "Batman" ||
-		books[0].Number != "1" || books[0].Format != "cbz" {
+		books[0].Number != "1" || books[0].Format != "cbz" || books[0].LibraryName != "DC" {
 		t.Fatalf("book search = %+v", books)
 	}
 }

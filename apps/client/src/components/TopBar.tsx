@@ -197,7 +197,7 @@ function SearchResultsPanel({
           key={s.id}
           cover={s.coverBookId ? client.coverUrl(s.coverBookId, 80) : undefined}
           title={s.name}
-          subtitle={s.year ? String(s.year) : 'Series'}
+          subtitle={[s.year ?? 'Series', s.libraryName].filter(Boolean).join(' · ')}
           onClick={() => onPick('/series/$id', s.id)}
         />
       ))}
@@ -209,7 +209,7 @@ function SearchResultsPanel({
           cover={client.coverUrl(b.id, 80)}
           title={b.title || b.seriesName || issueLabel(b.number) || 'Untitled'}
           subtitle={
-            [b.seriesName, issueLabel(b.number)].filter(Boolean).join(' · ') ||
+            [b.seriesName, issueLabel(b.number), b.libraryName].filter(Boolean).join(' · ') ||
             b.format.toUpperCase()
           }
           onClick={() => onPick('/book/$id', b.id)}

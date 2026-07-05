@@ -11,10 +11,18 @@ interface Pick {
   seriesName?: string;
   number?: string;
   title?: string;
+  /** Shown on search hits so same-named series in different libraries are tellable apart. */
+  libraryName?: string;
 }
 
 function fromHit(b: BookHit): Pick {
-  return { id: b.id, seriesName: b.seriesName, number: b.number, title: b.title };
+  return {
+    id: b.id,
+    seriesName: b.seriesName,
+    number: b.number,
+    title: b.title,
+    libraryName: b.libraryName,
+  };
 }
 function fromCard(b: BookCard, seriesName: string): Pick {
   return { id: b.id, seriesName, number: b.number, title: b.title };
@@ -44,7 +52,11 @@ export function AddIssuesDialog({
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [expanded, setExpanded] = useState<{ id: string; name: string } | null>(null);
+  const [expanded, setExpanded] = useState<{
+    id: string;
+    name: string;
+    libraryName?: string;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -167,6 +179,7 @@ export function AddIssuesDialog({
           {expanded ? (
             <ExpandedSeries
               name={expanded.name}
+              libraryName={expanded.libraryName}
               picks={expandedPicks}
               loading={seriesDetail.isLoading}
               selected={selected}
@@ -190,13 +203,17 @@ export function AddIssuesDialog({
                 <button
                   key={s.id}
                   type="button"
-                  onClick={() => setExpanded({ id: s.id, name: s.name })}
+                  onClick={() =>
+                    setExpanded({ id: s.id, name: s.name, libraryName: s.libraryName })
+                  }
                   style={rowStyle}
                 >
                   <Cover client={client} bookId={s.coverBookId} />
                   <span style={rowMain}>
                     <span style={rowTitle}>{s.name}</span>
-                    <span style={rowSub}>{s.year ? `Series · ${s.year}` : 'Series'}</span>
+                    <span style={rowSub}>
+                      {['Series', s.year, s.libraryName].filter(Boolean).join(' · ')}
+                    </span>
                   </span>
                   <Icon name="chevron-right" size={16} color="var(--text-tertiary)" />
                 </button>
@@ -246,6 +263,7 @@ export function AddIssuesDialog({
 
 function ExpandedSeries({
   name,
+  libraryName,
   picks,
   loading,
   selected,
@@ -256,6 +274,7 @@ function ExpandedSeries({
   onSelectAll,
 }: {
   name: string;
+  libraryName?: string;
   picks: Pick[];
   loading: boolean;
   selected: Set<string>;
@@ -284,7 +303,10 @@ function ExpandedSeries({
         >
           <Icon name="chevron-left" size={15} /> Back
         </button>
-        <span style={{ ...rowTitle, flex: 1, minWidth: 0 }}>{name}</span>
+        <span style={{ ...rowTitle, flex: 1, minWidth: 0 }}>
+          {name}
+          {libraryName && <span style={{ color: 'var(--text-tertiary)' }}> · {libraryName}</span>}
+        </span>
         <Button variant="ghost" size="sm" onClick={onSelectAll} disabled={picks.length === 0}>
           Select all
         </Button>
@@ -331,7 +353,7 @@ function IssueRow({
       <span style={rowMain}>
         <span style={rowTitle}>{pickLabel(pick)}</span>
         <span style={rowSub}>
-          {[pick.seriesName, issueLabel(pick.number)].filter(Boolean).join(' · ')}
+          {[pick.seriesName, issueLabel(pick.number), pick.libraryName].filter(Boolean).join(' · ')}
         </span>
       </span>
       {added ? (
