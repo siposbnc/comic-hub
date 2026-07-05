@@ -248,6 +248,13 @@ func (s *Scanner) resolveSeries(ctx context.Context, lib domain.Library, path st
 	if err == nil {
 		series.ID = existing.ID
 		series.CreatedAt = existing.CreatedAt
+		// The scanner has no file-level source for these — they only ever come from a
+		// provider match (WriteMatch) or the user — so a rescan must carry them over,
+		// not wipe them via the upsert.
+		series.Year = existing.Year
+		series.Publisher = existing.Publisher
+		series.Description = existing.Description
+		series.CoverBookID = existing.CoverBookID
 	} else {
 		series.ID = ulid.New()
 		series.CreatedAt = now
@@ -309,9 +316,20 @@ func (s *Scanner) buildBook(
 	if haveExisting {
 		book.ID = existing.ID
 		book.AddedAt = existing.AddedAt
-		// Don't downgrade user-locked metadata back to sidecar/none.
-		if existing.MetadataState == domain.MetaLocked {
-			book.MetadataState = domain.MetaLocked
+		// Provider-matched and user-locked metadata outrank anything re-derivable from
+		// the file: a rescan refreshes file facts (size, hash, pages) but must not
+		// overwrite these fields or downgrade their state back to sidecar/none.
+		if existing.MetadataState == domain.MetaMatched || existing.MetadataState == domain.MetaLocked {
+			book.Title = existing.Title
+			book.Number = existing.Number
+			book.SortNumber = existing.SortNumber
+			book.Volume = existing.Volume
+			book.ReleaseDate = existing.ReleaseDate
+			book.AgeRating = existing.AgeRating
+			book.Language = existing.Language
+			book.Summary = existing.Summary
+			book.CoverPage = existing.CoverPage
+			book.MetadataState = existing.MetadataState
 		}
 	} else {
 		book.ID = ulid.New()

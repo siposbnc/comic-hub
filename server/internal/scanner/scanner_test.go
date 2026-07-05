@@ -220,6 +220,78 @@ func TestScanReconcilesMovedFile(t *testing.T) {
 	}
 }
 
+// TestFullRescanRepairsStaleAndPreservesMatched models a library scanned under an older
+// parser (a stale wrong number in the catalog, files unchanged on disk) that has since
+// been provider-matched. A full rescan must re-parse the stale book, but must not wipe
+// the matched series header or matched/locked book fields.
+func TestFullRescanRepairsStaleAndPreservesMatched(t *testing.T) {
+	ctx := context.Background()
+	store := newStore(t)
+	root := t.TempDir()
+
+	writeCBZ(t, filepath.Join(root, "Wonder Woman", "Wonder Woman 023.1 - Cheetah 001 (2013).cbz"),
+		map[string]string{"p1.jpg": "a"})
+	writeCBZ(t, filepath.Join(root, "Wonder Woman", "Wonder Woman 024 (2013).cbz"),
+		map[string]string{"p1.jpg": "b"})
+
+	lib := domain.Library{ID: ulid.New(), Name: "L", Kind: "comic", Roots: []string{root}, CreatedAt: 1, UpdatedAt: 1}
+	_, _ = store.Libraries().Create(ctx, lib)
+	sc := New(store, archive.DefaultRegistry(), slog.New(slog.NewTextHandler(io.Discard, nil)), 0)
+	if err := sc.Scan(ctx, lib.ID, true, nil); err != nil {
+		t.Fatalf("scan 1: %v", err)
+	}
+
+	ww := seriesByName(t, store, lib.ID, "Wonder Woman")
+	books, _ := store.Books().ListBySeries(ctx, ww.ID)
+	if len(books) != 2 {
+		t.Fatalf("expected 2 books, got %d", len(books))
+	}
+
+	// Simulate the pre-fix catalog: the point-one issue carries a stale wrong number.
+	stale := books[0]
+	stale.Number = "1"
+	stale.SortNumber = 1
+	if _, err := store.Books().Upsert(ctx, stale); err != nil {
+		t.Fatalf("stale upsert: %v", err)
+	}
+	// Provider-match the series header and the other book.
+	if err := store.Series().WriteMatch(ctx, ww.ID, domain.SeriesMatch{
+		Publisher: "DC Comics", Year: 2011, Description: "The Amazon warrior.",
+		State: domain.MetaMatched, Provider: "comicvine", ProviderID: "v1",
+	}); err != nil {
+		t.Fatalf("series match: %v", err)
+	}
+	matched := books[1]
+	matched.Title = "Dark Gods Part 1"
+	matched.Summary = "From the provider."
+	matched.MetadataState = domain.MetaMatched
+	if _, err := store.Books().Upsert(ctx, matched); err != nil {
+		t.Fatalf("matched upsert: %v", err)
+	}
+
+	// Files on disk never changed; a full rescan re-parses everything.
+	if err := sc.Scan(ctx, lib.ID, true, nil); err != nil {
+		t.Fatalf("scan 2: %v", err)
+	}
+
+	ww2, _ := store.Series().Get(ctx, ww.ID)
+	if ww2.Publisher != "DC Comics" || ww2.Year != 2011 || ww2.Description != "The Amazon warrior." {
+		t.Fatalf("full rescan wiped matched series header: %+v", ww2)
+	}
+	after, _ := store.Books().ListBySeries(ctx, ww.ID)
+	byID := make(map[string]domain.Book, len(after))
+	for _, b := range after {
+		byID[b.ID] = b
+	}
+	if got := byID[stale.ID]; got.Number != "23.1" || got.SortNumber != 23.1 {
+		t.Fatalf("stale number not repaired: %+v", got)
+	}
+	if got := byID[matched.ID]; got.Title != "Dark Gods Part 1" || got.Summary != "From the provider." ||
+		got.MetadataState != domain.MetaMatched {
+		t.Fatalf("full rescan clobbered matched book fields: %+v", got)
+	}
+}
+
 func TestScanIncrementalIdempotent(t *testing.T) {
 	ctx := context.Background()
 	store := newStore(t)
