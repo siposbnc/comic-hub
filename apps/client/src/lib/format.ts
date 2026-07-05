@@ -18,11 +18,15 @@ export function progressFraction(progress?: ProgressSummary): number {
   return Math.max(0, Math.min(1, progress.percent / 100));
 }
 
-/** Issue number in the print voice: "#012" when numeric, otherwise the raw label. */
+/** Issue number in the print voice: "#012" when numeric ("#023.1" for point issues),
+ * otherwise the raw label. */
 export function issueLabel(number?: string): string | undefined {
   if (number == null || number === '') return undefined;
   const n = Number(number);
-  if (Number.isFinite(n)) return `#${String(n).padStart(3, '0')}`;
+  if (Number.isFinite(n)) {
+    const [int = '', frac] = String(n).split('.');
+    return `#${int.padStart(3, '0')}${frac ? `.${frac}` : ''}`;
+  }
   return `#${number}`;
 }
 

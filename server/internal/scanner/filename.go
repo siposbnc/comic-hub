@@ -28,6 +28,12 @@ var (
 	reJustNumber    = regexp.MustCompile(`^#?(\d{1,5}(?:\.\d+)?)$`)
 	reSpecialTail   = regexp.MustCompile(`(?i)^(.*?)\s+(annual|special|one[- ]?shot|tpb|gn)$`)
 	reLeadingZeros  = regexp.MustCompile(`^0+(\d)`)
+	// Decimal issue number mid-name with a subtitle after it (New 52 villain-month style:
+	// "Wonder Woman 023.1 - Cheetah"). Only decimals — a bare integer mid-name is far more
+	// likely part of the series ("Spider-Man 2099") than an issue number, but a decimal
+	// never is. Tried before the trailing rule so the subtitle's own trailing digits
+	// ("… - Cheetah 001") don't win.
+	reDecimalIssue = regexp.MustCompile(`^(.*\S)\s+#?(\d{1,5}\.\d+)(?:\s*[-–—]\s*|\s+)\S.*$`)
 )
 
 // ParseFilename derives series/number/volume/year from a file path. folder (the file's
@@ -55,7 +61,10 @@ func ParseFilename(filePath string) ParsedName {
 
 	series := work
 	number := ""
-	if m := reTrailingIssue.FindStringSubmatch(work); m != nil {
+	if m := reDecimalIssue.FindStringSubmatch(work); m != nil {
+		series = strings.TrimSpace(m[1])
+		number = normalizeNumber(m[2])
+	} else if m := reTrailingIssue.FindStringSubmatch(work); m != nil {
 		series = strings.TrimSpace(m[1])
 		number = normalizeNumber(m[2])
 	} else if m := reJustNumber.FindStringSubmatch(work); m != nil {

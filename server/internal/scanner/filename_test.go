@@ -15,6 +15,13 @@ func TestParseFilename(t *testing.T) {
 		{`X\SM2099\Spider-Man 2099 001.cbz`, ParsedName{Series: "Spider-Man 2099", Number: "1"}},
 		{`X\Saga\001.cbz`, ParsedName{Series: "Saga", Number: "1"}}, // number-only -> folder is series
 		{`X\Watchmen\Watchmen.cbz`, ParsedName{Series: "Watchmen", Number: ""}},
+		// New 52 point-one issues (villain month): decimal numbers, with and without a
+		// trailing subtitle.
+		{`X\WW\Wonder Woman 023.1 (2013).cbz`, ParsedName{Series: "Wonder Woman", Number: "23.1", Year: 2013}},
+		{`X\WW\Wonder Woman #23.2 (2013).cbz`, ParsedName{Series: "Wonder Woman", Number: "23.2", Year: 2013}},
+		{`X\WW\Wonder Woman 023.1 - Cheetah (2013).cbz`, ParsedName{Series: "Wonder Woman", Number: "23.1", Year: 2013}},
+		{`X\WW\Wonder Woman 023.1 - Cheetah 001 (2013).cbz`, ParsedName{Series: "Wonder Woman", Number: "23.1", Year: 2013}},
+		{`X\WW\023.1.cbz`, ParsedName{Series: "WW", Number: "23.1"}},
 	}
 	for _, c := range cases {
 		got := ParseFilename(c.path)
@@ -31,6 +38,7 @@ func TestSortNumber(t *testing.T) {
 	}{
 		{"1", 1},
 		{"1.5", 1.5},
+		{"23.1", 23.1},
 		{"750", 750},
 		{"1.MU", 1},
 		{"", 0},
