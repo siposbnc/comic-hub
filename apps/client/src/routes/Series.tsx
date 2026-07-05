@@ -98,38 +98,39 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
 
   return (
     <div>
-      {/* Hero */}
+      {/* Hero. zIndex lifts it (and the overflow menu inside) above the body content;
+          only the background wash is clipped, so the popover can escape the hero. */}
       <div
         style={{
           position: 'relative',
-          overflow: 'hidden',
+          zIndex: 3,
           borderBottom: '1px solid var(--border-hairline)',
         }}
       >
-        {coverUrl && (
+        <div aria-hidden style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+          {coverUrl && (
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                backgroundImage: `url(${coverUrl})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                filter: 'blur(40px) saturate(1.3)',
+                transform: 'scale(1.2)',
+                opacity: 0.5,
+              }}
+            />
+          )}
           <div
-            aria-hidden
             style={{
               position: 'absolute',
               inset: 0,
-              backgroundImage: `url(${coverUrl})`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              filter: 'blur(40px) saturate(1.3)',
-              transform: 'scale(1.2)',
-              opacity: 0.5,
+              background:
+                'linear-gradient(180deg, color-mix(in oklab, var(--ink-900) 70%, transparent), var(--ink-900) 88%)',
             }}
           />
-        )}
-        <div
-          aria-hidden
-          style={{
-            position: 'absolute',
-            inset: 0,
-            background:
-              'linear-gradient(180deg, color-mix(in oklab, var(--ink-900) 70%, transparent), var(--ink-900) 88%)',
-          }}
-        />
+        </div>
         <div
           style={{
             position: 'relative',
