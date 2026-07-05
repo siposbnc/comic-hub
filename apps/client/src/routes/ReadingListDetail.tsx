@@ -19,6 +19,7 @@ import {
   useSeriesNames,
 } from '../lib/queries.js';
 import { useReadLaunch } from '../lib/launch.js';
+import { useUiStore } from '../store/ui.js';
 import { LoadingState, ErrorState } from '../components/Page.js';
 import { AddIssuesDialog, MissingPill } from '../components/AddIssuesDialog.js';
 import { LinkIssueDialog } from '../components/LinkIssueDialog.js';
@@ -108,8 +109,10 @@ function QueueView({ data, listId }: { data: ReadingListDetailData; listId: stri
   const [adding, setAdding] = useState(false);
   const [linking, setLinking] = useState<ReadingListEntry | null>(null);
   // Long queues bury the current spot under everything already finished, so read issues are
-  // hidden by default; the toolbar toggle brings them back.
-  const [showRead, setShowRead] = useState(false);
+  // hidden by default; the toolbar toggle brings them back. The choice persists across lists
+  // and sessions (localStorage-backed UI store).
+  const showRead = useUiStore((s) => s.showReadInLists);
+  const setShowRead = useUiStore((s) => s.setShowReadInLists);
 
   const { readingList, items } = data;
   // Linked entries carry a BookCard; stale placeholders hold their slot but can't be read.
@@ -365,7 +368,7 @@ function QueueView({ data, listId }: { data: ReadingListDetailData; listId: stri
           <>
             <button
               type="button"
-              onClick={() => setShowRead((v) => !v)}
+              onClick={() => setShowRead(!showRead)}
               aria-pressed={showRead}
               className="ch-mono"
               style={{

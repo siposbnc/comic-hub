@@ -27,6 +27,8 @@ interface UiState {
   theme: Theme;
   accent: Accent;
   density: Density;
+  /** Whether reading lists reveal already-read issues (off = collapsed to the current spot). */
+  showReadInLists: boolean;
   search: string;
   jobs: Record<string, TrackedJob>;
   toasts: ToastEntry[];
@@ -34,6 +36,7 @@ interface UiState {
   toggleTheme: () => void;
   setAccent: (accent: Accent) => void;
   setDensity: (density: Density) => void;
+  setShowReadInLists: (show: boolean) => void;
   setSearch: (q: string) => void;
   upsertJob: (job: TrackedJob) => void;
   clearFinishedJobs: () => void;
@@ -44,6 +47,7 @@ interface UiState {
 const THEME_KEY = 'comichub.theme';
 const ACCENT_KEY = 'comichub.accent';
 const DENSITY_KEY = 'comichub.density';
+const SHOW_READ_KEY = 'comichub.showReadInLists';
 
 function initialTheme(): Theme {
   if (typeof localStorage !== 'undefined') {
@@ -69,6 +73,13 @@ function initialDensity(): Density {
   return 'm';
 }
 
+function initialShowReadInLists(): boolean {
+  if (typeof localStorage !== 'undefined') {
+    return localStorage.getItem(SHOW_READ_KEY) === '1';
+  }
+  return false;
+}
+
 /** Reflects the theme onto the document so the design tokens (`[data-theme]`) switch. */
 export function applyTheme(theme: Theme): void {
   if (typeof document !== 'undefined') {
@@ -90,6 +101,7 @@ export const useUiStore = create<UiState>((set) => ({
   theme: initialTheme(),
   accent: initialAccent(),
   density: initialDensity(),
+  showReadInLists: initialShowReadInLists(),
   search: '',
   jobs: {},
   toasts: [],
@@ -113,6 +125,10 @@ export const useUiStore = create<UiState>((set) => ({
   setDensity: (density) => {
     if (typeof localStorage !== 'undefined') localStorage.setItem(DENSITY_KEY, density);
     set({ density });
+  },
+  setShowReadInLists: (show) => {
+    if (typeof localStorage !== 'undefined') localStorage.setItem(SHOW_READ_KEY, show ? '1' : '0');
+    set({ showReadInLists: show });
   },
   setSearch: (search) => set({ search }),
   upsertJob: (job) => set((s) => ({ jobs: { ...s.jobs, [job.id]: job } })),
