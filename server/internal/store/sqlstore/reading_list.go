@@ -4,9 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/siposbnc/comic-hub/server/internal/domain"
+	"github.com/siposbnc/comic-hub/server/internal/pkg/ulid"
 )
 
 // readingListRepo persists per-user reading lists (reading_list + reading_list_item).
@@ -114,8 +116,9 @@ func (r *readingListRepo) Delete(ctx context.Context, userID, id string) error {
 }
 
 func (r *readingListRepo) Items(ctx context.Context, listID string) ([]domain.ReadingListItem, error) {
-	rows, err := r.db.QueryContext(ctx,
-		`SELECT book_id, position FROM reading_list_item WHERE list_id = ? ORDER BY position`, listID)
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, book_id, position, added_at, series_name, number, title, content_hash
+		FROM reading_list_item WHERE list_id = ? ORDER BY position`, listID)
 	if err != nil {
 		return nil, err
 	}
@@ -123,14 +126,25 @@ func (r *readingListRepo) Items(ctx context.Context, listID string) ([]domain.Re
 
 	var out []domain.ReadingListItem
 	for rows.Next() {
-		var it domain.ReadingListItem
-		if err := rows.Scan(&it.BookID, &it.Position); err != nil {
+		var (
+			it     domain.ReadingListItem
+			bookID sql.NullString
+		)
+		if err := rows.Scan(&it.ID, &bookID, &it.Position, &it.AddedAt,
+			&it.SeriesName, &it.Number, &it.Title, &it.ContentHash); err != nil {
 			return nil, err
 		}
+		it.BookID = str(bookID)
 		out = append(out, it)
 	}
 	return out, rows.Err()
 }
+
+// itemSnapshotSelect pulls the display snapshot for a book (series name, number, title,
+// content hash) — captured on add/relink so the row outlives the book.
+const itemSnapshotSelect = `
+	SELECT COALESCE(s.name, ''), COALESCE(b.number, ''), COALESCE(b.title, ''), COALESCE(b.content_hash, '')
+	FROM book b LEFT JOIN series s ON s.id = b.series_id WHERE b.id = ?`
 
 func (r *readingListRepo) AddItems(ctx context.Context, listID string, bookIDs []string) error {
 	tx, err := r.db.BeginTx(ctx, nil)
@@ -150,9 +164,15 @@ func (r *readingListRepo) AddItems(ctx context.Context, listID string, bookIDs [
 	pos := maxPos.Float64
 	for _, bookID := range bookIDs {
 		pos += positionGap
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO reading_list_item (list_id, book_id, position, added_at) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING`,
-			listID, bookID, pos, now,
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO reading_list_item
+				(id, list_id, book_id, position, added_at, series_name, number, title, content_hash)
+			SELECT ?, ?, b.id, ?, ?,
+				COALESCE(s.name, ''), COALESCE(b.number, ''), COALESCE(b.title, ''), COALESCE(b.content_hash, '')
+			FROM book b LEFT JOIN series s ON s.id = b.series_id
+			WHERE b.id = ?
+			ON CONFLICT DO NOTHING`,
+			ulid.New(), listID, pos, now, bookID,
 		); err != nil {
 			return err
 		}
@@ -160,23 +180,120 @@ func (r *readingListRepo) AddItems(ctx context.Context, listID string, bookIDs [
 	return tx.Commit()
 }
 
-func (r *readingListRepo) RemoveItem(ctx context.Context, listID, bookID string) error {
+func (r *readingListRepo) AddManualItems(ctx context.Context, listID string, entries []domain.ManualListItem) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var maxPos sql.NullFloat64
+	if err := tx.QueryRowContext(ctx,
+		`SELECT MAX(position) FROM reading_list_item WHERE list_id = ?`, listID,
+	).Scan(&maxPos); err != nil {
+		return err
+	}
+
+	now := time.Now().UnixMilli()
+	pos := maxPos.Float64
+	for _, e := range entries {
+		pos += positionGap
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO reading_list_item
+				(id, list_id, book_id, position, added_at, series_name, number, title, content_hash)
+			VALUES (?, ?, NULL, ?, ?, ?, ?, ?, '')`,
+			ulid.New(), listID, pos, now, e.SeriesName, e.Number, e.Title,
+		); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (r *readingListRepo) RemoveItem(ctx context.Context, listID, ref string) error {
 	res, err := r.db.ExecContext(ctx,
-		`DELETE FROM reading_list_item WHERE list_id = ? AND book_id = ?`, listID, bookID)
+		`DELETE FROM reading_list_item WHERE list_id = ? AND (id = ? OR book_id = ?)`,
+		listID, ref, ref)
 	if err != nil {
 		return err
 	}
 	return mustAffect(res)
 }
 
-func (r *readingListRepo) SetPosition(ctx context.Context, listID, bookID string, position float64) error {
+func (r *readingListRepo) SetPosition(ctx context.Context, listID, ref string, position float64) error {
 	res, err := r.db.ExecContext(ctx,
-		`UPDATE reading_list_item SET position = ? WHERE list_id = ? AND book_id = ?`,
-		position, listID, bookID)
+		`UPDATE reading_list_item SET position = ? WHERE list_id = ? AND (id = ? OR book_id = ?)`,
+		position, listID, ref, ref)
 	if err != nil {
 		return err
 	}
 	return mustAffect(res)
+}
+
+func (r *readingListRepo) Relink(ctx context.Context, listID, itemID, bookID string) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var name, number, title, hash string
+	err = tx.QueryRowContext(ctx, itemSnapshotSelect, bookID).Scan(&name, &number, &title, &hash)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+
+	// The unique (list_id, book_id) index would reject this anyway; pre-check so the
+	// caller gets a friendly validation error instead of a driver-specific one.
+	var already int
+	if err := tx.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM reading_list_item WHERE list_id = ? AND book_id = ? AND id <> ?`,
+		listID, bookID, itemID).Scan(&already); err != nil {
+		return err
+	}
+	if already > 0 {
+		return fmt.Errorf("%w: that issue is already in this list", domain.ErrValidation)
+	}
+
+	res, err := tx.ExecContext(ctx, `
+		UPDATE reading_list_item
+		SET book_id = ?, series_name = ?, number = ?, title = ?, content_hash = ?
+		WHERE list_id = ? AND id = ?`,
+		bookID, name, number, title, hash, listID, itemID)
+	if err != nil {
+		return err
+	}
+	if err := mustAffect(res); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (r *readingListRepo) RelinkStaleByHash(ctx context.Context, contentHash, bookID string) (int, error) {
+	if contentHash == "" {
+		return 0, nil
+	}
+	// Snapshot refresh happens via subselects; the NOT EXISTS guard skips lists that
+	// already contain the book (e.g. duplicate stale rows for the same file).
+	res, err := r.db.ExecContext(ctx, `
+		UPDATE reading_list_item
+		SET book_id = ?,
+			series_name = COALESCE((SELECT s.name FROM book b LEFT JOIN series s ON s.id = b.series_id WHERE b.id = ?), ''),
+			number      = COALESCE((SELECT b.number FROM book b WHERE b.id = ?), ''),
+			title       = COALESCE((SELECT b.title FROM book b WHERE b.id = ?), '')
+		WHERE book_id IS NULL AND content_hash = ?
+		  AND NOT EXISTS (
+			SELECT 1 FROM reading_list_item x
+			WHERE x.list_id = reading_list_item.list_id AND x.book_id = ?)`,
+		bookID, bookID, bookID, bookID, contentHash, bookID)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
 }
 
 func (r *readingListRepo) IDsForBook(ctx context.Context, userID, bookID string) ([]string, error) {

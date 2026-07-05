@@ -524,6 +524,9 @@ func (s *Service) nextUpFromActiveList(ctx context.Context, userID string) (*Nex
 		return nil, err
 	}
 	for _, it := range items {
+		if it.Stale() {
+			continue // placeholder with no backing book — nothing to read
+		}
 		b, err := s.repo.Books().Get(ctx, it.BookID)
 		if err != nil {
 			continue
@@ -590,9 +593,13 @@ func (s *Service) cardAfter(ctx context.Context, userID, bookID string, ordered 
 }
 
 func itemBookIDs(items []domain.ReadingListItem) []string {
-	out := make([]string, len(items))
-	for i, it := range items {
-		out[i] = it.BookID
+	out := make([]string, 0, len(items))
+	for _, it := range items {
+		// Stale placeholders hold a queue slot but can't be read; the reading chain
+		// skips over them to the next real issue.
+		if !it.Stale() {
+			out = append(out, it.BookID)
+		}
 	}
 	return out
 }

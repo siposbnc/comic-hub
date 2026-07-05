@@ -104,6 +104,14 @@ func (r *seriesRepo) SetMetadataState(ctx context.Context, id string, state doma
 	return err
 }
 
+func (r *seriesRepo) Delete(ctx context.Context, id string) error {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM series WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	return mustAffect(res)
+}
+
 // DeleteEmpty removes a library's series with no books, returning the count deleted.
 func (r *seriesRepo) DeleteEmpty(ctx context.Context, libraryID string) (int, error) {
 	res, err := r.db.ExecContext(ctx, `

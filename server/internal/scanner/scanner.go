@@ -174,6 +174,13 @@ func (s *Scanner) processFile(ctx context.Context, lib domain.Library, full bool
 	if err != nil {
 		return err
 	}
+	if !haveExisting {
+		// A newly cataloged book may be the return of a deleted one (series rescan,
+		// re-imported file): re-attach any stale reading-list entries with its hash.
+		if _, err := s.repo.ReadingLists().RelinkStaleByHash(ctx, hash, saved.ID); err != nil {
+			s.logger.Warn("relink stale reading-list entries", "book", saved.ID, "err", err)
+		}
+	}
 	return s.repo.Books().ReplacePages(ctx, saved.ID, pages)
 }
 

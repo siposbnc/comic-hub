@@ -63,17 +63,18 @@ owner, so everything is permitted.
 
 ## 4. Browse: series & books
 
-| Method  | Path                   | Purpose                                              |
-| ------- | ---------------------- | ---------------------------------------------------- |
-| `GET`   | `/series`              | List/filter series (`?library=&sort=&filter[...]`).  |
-| `GET`   | `/series/{id}`         | Series detail + book list + aggregate progress.      |
-| `PATCH` | `/series/{id}`         | Edit series metadata (sets `locked`).                |
-| `GET`   | `/series/{id}/cover`   | Series cover image (content-addressed).              |
-| `GET`   | `/books`               | List/filter books across libraries.                  |
-| `GET`   | `/books/{id}`          | Book detail: metadata, pages summary, your progress. |
-| `PATCH` | `/books/{id}`          | Edit book metadata.                                  |
-| `GET`   | `/books/{id}/cover?w=` | Cover thumbnail at requested width.                  |
-| `GET`   | `/books/{id}/file`     | Download original file (range supported).            |
+| Method  | Path                   | Purpose                                                                                                              |
+| ------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `GET`   | `/series`              | List/filter series (`?library=&sort=&filter[...]`).                                                                  |
+| `GET`   | `/series/{id}`         | Series detail + book list + aggregate progress.                                                                      |
+| `PATCH` | `/series/{id}`         | Edit series metadata (sets `locked`).                                                                                |
+| `GET`   | `/series/{id}/cover`   | Series cover image (content-addressed).                                                                              |
+| `POST`  | `/series/{id}/rescan`  | Delete the series + re-catalog its files → `{jobId}`. Reading-list entries go stale and auto-relink by content hash. |
+| `GET`   | `/books`               | List/filter books across libraries.                                                                                  |
+| `GET`   | `/books/{id}`          | Book detail: metadata, pages summary, your progress.                                                                 |
+| `PATCH` | `/books/{id}`          | Edit book metadata.                                                                                                  |
+| `GET`   | `/books/{id}/cover?w=` | Cover thumbnail at requested width.                                                                                  |
+| `GET`   | `/books/{id}/file`     | Download original file (range supported).                                                                            |
 
 ### Browse response example — `GET /books/{id}`
 
@@ -144,17 +145,29 @@ server-side and always apply.
 
 ## 7. Collections, reading lists, smart lists
 
-| Method             | Path                               | Purpose                                        |
-| ------------------ | ---------------------------------- | ---------------------------------------------- |
-| `GET/POST`         | `/collections`                     | List / create collections.                     |
-| `GET/PATCH/DELETE` | `/collections/{id}`                | Manage a collection.                           |
-| `POST`             | `/collections/{id}/items`          | Add books `{bookIds[]}`.                       |
-| `PATCH`            | `/collections/{id}/items/reorder`  | `{bookId, beforeId?}` → fractional reposition. |
-| `DELETE`           | `/collections/{id}/items/{bookId}` | Remove.                                        |
-| `GET/POST`         | `/me/reading-lists`                | Personal lists.                                |
-| `…`                | `/me/reading-lists/{id}/items…`    | Same item ops, per-user.                       |
-| `GET/POST`         | `/smart-lists`                     | List / create rule-based lists.                |
-| `GET`              | `/smart-lists/{id}/results`        | Evaluate + return matching books (paginated).  |
+| Method             | Path                                         | Purpose                                             |
+| ------------------ | -------------------------------------------- | --------------------------------------------------- |
+| `GET/POST`         | `/collections`                               | List / create collections.                          |
+| `GET/PATCH/DELETE` | `/collections/{id}`                          | Manage a collection.                                |
+| `POST`             | `/collections/{id}/items`                    | Add books `{bookIds[]}`.                            |
+| `PATCH`            | `/collections/{id}/items/reorder`            | `{bookId, beforeId?}` → fractional reposition.      |
+| `DELETE`           | `/collections/{id}/items/{bookId}`           | Remove.                                             |
+| `GET/POST`         | `/me/reading-lists`                          | Personal lists.                                     |
+| `…`                | `/me/reading-lists/{id}/items…`              | Same item ops, per-user (see below).                |
+| `PATCH`            | `/me/reading-lists/{id}/items/{itemId}/link` | `{bookId}` → point a (stale) entry at a real issue. |
+| `GET/POST`         | `/smart-lists`                               | List / create rule-based lists.                     |
+| `GET`              | `/smart-lists/{id}/results`                  | Evaluate + return matching books (paginated).       |
+
+**Reading lists never lose entries.** Each entry snapshots its display data (series name,
+number, title, content hash) when added. Deleting a book/series/library leaves the entry
+as a **stale placeholder** (`stale: true`, no `book`) that keeps the list's order; the
+reader queue and Next-Up skip it. A rescan that re-creates the same file (content-hash
+match) re-attaches the placeholder automatically. `POST …/items` also accepts
+`manual: [{seriesName, number, title}]` to add placeholders for issues not in the
+library. `GET /me/reading-lists/{id}` returns ordered `items`
+(`{id, stale, seriesName?, number?, title?, addedAt, book?}`); the legacy `books` array
+(linked entries only) remains for older clients. Item delete/reorder accept an entry id
+or, for linked entries, the book id.
 
 ## 8. Search & discovery
 

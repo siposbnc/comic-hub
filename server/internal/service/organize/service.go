@@ -216,20 +216,30 @@ func (s *Service) GetReadingList(ctx context.Context, userID, id string) (domain
 	return s.repo.ReadingLists().Get(ctx, userID, id)
 }
 
-// ReadingListItems returns the list's book ids in display order (owner-checked).
+// ReadingListItems returns the list's linked book ids in display order (owner-checked).
+// Stale placeholder entries have no book and are skipped here; use ReadingListEntries for
+// the full order including placeholders.
 func (s *Service) ReadingListItems(ctx context.Context, userID, id string) ([]string, error) {
-	if _, err := s.repo.ReadingLists().Get(ctx, userID, id); err != nil {
-		return nil, err
-	}
-	items, err := s.repo.ReadingLists().Items(ctx, id)
+	items, err := s.ReadingListEntries(ctx, userID, id)
 	if err != nil {
 		return nil, err
 	}
-	ids := make([]string, len(items))
-	for i, it := range items {
-		ids[i] = it.BookID
+	ids := make([]string, 0, len(items))
+	for _, it := range items {
+		if !it.Stale() {
+			ids = append(ids, it.BookID)
+		}
 	}
 	return ids, nil
+}
+
+// ReadingListEntries returns every entry of the list — linked and stale — in display
+// order (owner-checked).
+func (s *Service) ReadingListEntries(ctx context.Context, userID, id string) ([]domain.ReadingListItem, error) {
+	if _, err := s.repo.ReadingLists().Get(ctx, userID, id); err != nil {
+		return nil, err
+	}
+	return s.repo.ReadingLists().Items(ctx, id)
 }
 
 // RenameReadingList updates a list's name (the only editable field).
@@ -275,16 +285,51 @@ func (s *Service) AddReadingListItems(ctx context.Context, userID, id string, bo
 	return s.repo.ReadingLists().AddItems(ctx, id, clean)
 }
 
-// RemoveReadingListItem drops one book from a user's list.
-func (s *Service) RemoveReadingListItem(ctx context.Context, userID, id, bookID string) error {
+// AddReadingListManualItems appends stale placeholder entries — issues not (yet) in the
+// library — to a user's list. Each entry needs at least a series name or a title.
+func (s *Service) AddReadingListManualItems(ctx context.Context, userID, id string, entries []domain.ManualListItem) error {
 	if _, err := s.repo.ReadingLists().Get(ctx, userID, id); err != nil {
 		return err
 	}
-	return s.repo.ReadingLists().RemoveItem(ctx, id, bookID)
+	clean := make([]domain.ManualListItem, 0, len(entries))
+	for _, e := range entries {
+		e.SeriesName = strings.TrimSpace(e.SeriesName)
+		e.Number = strings.TrimSpace(e.Number)
+		e.Title = strings.TrimSpace(e.Title)
+		if e.SeriesName == "" && e.Title == "" {
+			return fmt.Errorf("%w: a manual entry needs a series name or a title", domain.ErrValidation)
+		}
+		clean = append(clean, e)
+	}
+	if len(clean) == 0 {
+		return fmt.Errorf("%w: no entries given", domain.ErrValidation)
+	}
+	return s.repo.ReadingLists().AddManualItems(ctx, id, clean)
 }
 
-// ReorderReadingList moves bookID before beforeID within a user's list (empty = to end).
-func (s *Service) ReorderReadingList(ctx context.Context, userID, id, bookID, beforeID string) error {
+// RelinkReadingListItem points an entry (usually a stale placeholder) at a real book.
+func (s *Service) RelinkReadingListItem(ctx context.Context, userID, listID, itemID, bookID string) error {
+	if _, err := s.repo.ReadingLists().Get(ctx, userID, listID); err != nil {
+		return err
+	}
+	if strings.TrimSpace(bookID) == "" {
+		return fmt.Errorf("%w: bookId is required", domain.ErrValidation)
+	}
+	return s.repo.ReadingLists().Relink(ctx, listID, itemID, bookID)
+}
+
+// RemoveReadingListItem drops one entry from a user's list; ref is an item id or a
+// linked book id.
+func (s *Service) RemoveReadingListItem(ctx context.Context, userID, id, ref string) error {
+	if _, err := s.repo.ReadingLists().Get(ctx, userID, id); err != nil {
+		return err
+	}
+	return s.repo.ReadingLists().RemoveItem(ctx, id, ref)
+}
+
+// ReorderReadingList moves an entry before another within a user's list (empty = to end).
+// Refs are item ids or linked book ids, so stale placeholders reorder like anything else.
+func (s *Service) ReorderReadingList(ctx context.Context, userID, id, ref, beforeRef string) error {
 	if _, err := s.repo.ReadingLists().Get(ctx, userID, id); err != nil {
 		return err
 	}
@@ -292,15 +337,29 @@ func (s *Service) ReorderReadingList(ctx context.Context, userID, id, bookID, be
 	if err != nil {
 		return err
 	}
+	// Resolve refs to item ids and key the position math on those.
+	resolve := func(ref string) string {
+		for _, it := range items {
+			if it.ID == ref || (it.BookID != "" && it.BookID == ref) {
+				return it.ID
+			}
+		}
+		return ref // unresolved: reorderPosition reports the validation error
+	}
 	cur := make([]positioned, len(items))
 	for i, it := range items {
-		cur[i] = positioned{bookID: it.BookID, position: it.Position}
+		cur[i] = positioned{bookID: it.ID, position: it.Position}
 	}
-	newPos, err := reorderPosition(cur, bookID, beforeID)
+	target := resolve(ref)
+	before := beforeRef
+	if before != "" {
+		before = resolve(beforeRef)
+	}
+	newPos, err := reorderPosition(cur, target, before)
 	if err != nil {
 		return err
 	}
-	return s.repo.ReadingLists().SetPosition(ctx, id, bookID, newPos)
+	return s.repo.ReadingLists().SetPosition(ctx, id, target, newPos)
 }
 
 // ── Tags ─────────────────────────────────────────────────────────────────────────────

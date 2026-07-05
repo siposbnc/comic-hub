@@ -123,6 +123,7 @@ func NewRouter(d Deps) http.Handler {
 			r.Get("/{id}/volumes/{volume}", handleVolumeDetail(d.Browse))
 			r.Get("/{id}/match/candidates", handleSeriesCandidates(d.Metadata))
 			r.Post("/{id}/match/apply", handleSeriesMatch(d.Metadata, d.Runner))
+			r.Post("/{id}/rescan", handleRescanSeries(d.Repo, d.Runner))
 		})
 
 		r.Route("/books", func(r chi.Router) {
@@ -203,6 +204,8 @@ func NewRouter(d Deps) http.Handler {
 				r.Post("/{id}/active", handleSetActiveReadingList(d.Organize))
 				r.Post("/{id}/items", handleAddReadingListItems(d.Organize))
 				r.Patch("/{id}/items/reorder", handleReorderReadingListItem(d.Organize))
+				r.Patch("/{id}/items/{itemId}/link", handleRelinkReadingListItem(d.Organize))
+				// {ref} is an item id or a linked book id (older clients pass book ids).
 				r.Delete("/{id}/items/{bookId}", handleRemoveReadingListItem(d.Organize))
 			})
 		})

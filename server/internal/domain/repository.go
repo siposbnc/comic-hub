@@ -54,6 +54,9 @@ type SeriesRepository interface {
 	// DeleteEmpty removes a library's series that have no books (e.g. left behind when the
 	// series-folder grouping changes), returning how many were deleted.
 	DeleteEmpty(ctx context.Context, libraryID string) (int, error)
+	// Delete removes a series and (via cascade) its books and pages. Reading-list entries
+	// pointing at those books go stale (book_id SET NULL) rather than vanishing.
+	Delete(ctx context.Context, id string) error
 }
 
 // BookRepository persists books and their pages.

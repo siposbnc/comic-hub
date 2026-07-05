@@ -14,15 +14,36 @@ type ReadingList struct {
 	UpdatedAt int64
 }
 
-// ReadingListItem is a book's membership in a reading list, with its sort position.
+// ReadingListItem is an entry in a reading list. It always carries a display snapshot
+// (series name, number, title, content hash) captured when the item was added, so the
+// entry survives — and stays renderable — even after the underlying book is deleted.
+// BookID is empty for such stale entries, and for placeholders added manually for issues
+// not (yet) in the library. Stale entries keep the list's order intact but can't be read.
 type ReadingListItem struct {
-	BookID   string
-	Position float64
+	ID          string
+	BookID      string // empty = stale placeholder
+	Position    float64
+	AddedAt     int64
+	SeriesName  string
+	Number      string
+	Title       string
+	ContentHash string // hash of the book the entry pointed at; drives auto-relink on rescan
+}
+
+// Stale reports whether the entry has no backing book (deleted, or added manually).
+func (it ReadingListItem) Stale() bool { return it.BookID == "" }
+
+// ManualListItem describes a placeholder entry for an issue that isn't in the library.
+type ManualListItem struct {
+	SeriesName string
+	Number     string
+	Title      string
 }
 
 // ReadingListRepository persists per-user reading lists and their ordered items. Every
 // method is scoped to the owning user; reads/writes for a list not owned by userID return
-// ErrNotFound.
+// ErrNotFound. Item mutations that take a `ref` accept either an item id or a (linked)
+// book id, so callers keyed on books keep working.
 type ReadingListRepository interface {
 	Create(ctx context.Context, l ReadingList) (ReadingList, error)
 	Get(ctx context.Context, userID, id string) (ReadingList, error)
@@ -37,8 +58,16 @@ type ReadingListRepository interface {
 
 	Items(ctx context.Context, listID string) ([]ReadingListItem, error)
 	AddItems(ctx context.Context, listID string, bookIDs []string) error
-	RemoveItem(ctx context.Context, listID, bookID string) error
-	SetPosition(ctx context.Context, listID, bookID string, position float64) error
+	// AddManualItems appends stale placeholder entries (no backing book).
+	AddManualItems(ctx context.Context, listID string, entries []ManualListItem) error
+	RemoveItem(ctx context.Context, listID, ref string) error
+	SetPosition(ctx context.Context, listID, ref string, position float64) error
+	// Relink points an entry at a (new) book and refreshes its snapshot from that book.
+	// ErrNotFound if the entry doesn't exist; ErrValidation if the book is already in the list.
+	Relink(ctx context.Context, listID, itemID, bookID string) error
+	// RelinkStaleByHash re-attaches stale entries (across all lists) whose snapshot hash
+	// matches a book — called by the scanner when a book (re)appears. Returns rows relinked.
+	RelinkStaleByHash(ctx context.Context, contentHash, bookID string) (int, error)
 	// IDsForBook returns the ids of the user's reading lists that already contain a book.
 	IDsForBook(ctx context.Context, userID, bookID string) ([]string, error)
 }

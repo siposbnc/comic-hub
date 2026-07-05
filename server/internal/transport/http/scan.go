@@ -75,6 +75,37 @@ func handleScanLibrary(lib *library.Service, runner *jobs.Runner, repo domain.Re
 	}
 }
 
+// handleRescanSeries deletes a series (its books cascade; reading-list entries pointing
+// at them go stale instead of vanishing) and starts an incremental scan of its library,
+// which re-catalogs the files from scratch. Stale reading-list entries re-attach
+// automatically when the rescan re-creates books with the same content hash.
+func handleRescanSeries(repo domain.Repository, runner *jobs.Runner) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		series, err := repo.Series().Get(r.Context(), id)
+		if err != nil {
+			writeDomainError(w, err)
+			return
+		}
+		if err := repo.Series().Delete(r.Context(), id); err != nil {
+			writeDomainError(w, err)
+			return
+		}
+
+		if existing, ok := ActiveScanJobID(r.Context(), repo, series.LibraryID); ok {
+			writeJSON(w, http.StatusAccepted, map[string]any{"jobId": existing, "coalesced": true})
+			return
+		}
+		payload, _ := json.Marshal(scanner.JobPayload{LibraryID: series.LibraryID})
+		jobID, err := runner.Submit(r.Context(), domain.JobScan, string(payload))
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "scan_failed", "series deleted but rescan could not start; scan the library manually")
+			return
+		}
+		writeJSON(w, http.StatusAccepted, map[string]any{"jobId": jobID})
+	}
+}
+
 // handleCancelScan cancels any running or queued scan jobs for a library.
 func handleCancelScan(runner *jobs.Runner, repo domain.Repository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

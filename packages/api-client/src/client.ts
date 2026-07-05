@@ -19,6 +19,7 @@ import type {
   LibraryHealth,
   NextContext,
   PresenceEntry,
+  ManualListEntry,
   Progress,
   ProgressBatchItem,
   ProgressBatchResult,
@@ -191,6 +192,17 @@ export class ComicHubClient {
       'POST',
       `/api/v1/libraries/${encodeURIComponent(id)}/scan/cancel`,
     );
+  }
+
+  /** Deletes a series and re-catalogs its files from scratch (returns the scan job id).
+   * Reading-list entries pointing at its issues go stale and re-attach automatically
+   * when the rescan re-creates the same files. */
+  async rescanSeries(id: string): Promise<string> {
+    const res = await this.request<{ jobId: string }>(
+      'POST',
+      `/api/v1/series/${encodeURIComponent(id)}/rescan`,
+    );
+    return res.jobId;
   }
 
   getJob(id: string): Promise<Job> {
@@ -585,19 +597,39 @@ export class ComicHubClient {
     );
   }
 
-  /** Moves bookId before beforeId (omit beforeId to move it to the end). */
-  async reorderReadingList(id: string, bookId: string, beforeId?: string): Promise<void> {
+  /** Appends stale placeholder entries for issues not (yet) in the library. */
+  async addManualToReadingList(id: string, manual: ManualListEntry[]): Promise<void> {
     await this.request<unknown>(
-      'PATCH',
-      `/api/v1/me/reading-lists/${encodeURIComponent(id)}/items/reorder`,
-      { body: { bookId, beforeId } },
+      'POST',
+      `/api/v1/me/reading-lists/${encodeURIComponent(id)}/items`,
+      { body: { manual } },
     );
   }
 
-  async removeFromReadingList(id: string, bookId: string): Promise<void> {
+  /** Points an entry (usually a stale placeholder) at a real book. */
+  async relinkReadingListItem(id: string, itemId: string, bookId: string): Promise<void> {
+    await this.request<unknown>(
+      'PATCH',
+      `/api/v1/me/reading-lists/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}/link`,
+      { body: { bookId } },
+    );
+  }
+
+  /** Moves an entry before another (omit `before` for the end). Refs are entry ids;
+   * linked entries also accept their book id. */
+  async reorderReadingList(id: string, ref: string, before?: string): Promise<void> {
+    await this.request<unknown>(
+      'PATCH',
+      `/api/v1/me/reading-lists/${encodeURIComponent(id)}/items/reorder`,
+      { body: { bookId: ref, beforeId: before } },
+    );
+  }
+
+  /** Removes an entry by entry id (linked entries also accept their book id). */
+  async removeFromReadingList(id: string, ref: string): Promise<void> {
     await this.request<unknown>(
       'DELETE',
-      `/api/v1/me/reading-lists/${encodeURIComponent(id)}/items/${encodeURIComponent(bookId)}`,
+      `/api/v1/me/reading-lists/${encodeURIComponent(id)}/items/${encodeURIComponent(ref)}`,
     );
   }
 

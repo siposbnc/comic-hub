@@ -477,9 +477,31 @@ export interface ReadingList {
   updatedAt: number;
 }
 
-/** A reading list plus its books in display order. */
+/** One ordered entry of a reading list. Stale entries (their book was deleted, or they
+ * were added manually for an issue not in the library) have no `book`: they render from
+ * the snapshot fields and hold their slot in the order, but can't be opened. */
+export interface ReadingListEntry {
+  id: string;
+  stale: boolean;
+  seriesName?: string;
+  number?: string;
+  title?: string;
+  addedAt: number;
+  book?: BookCard;
+}
+
+/** A placeholder entry for an issue that isn't in the library (yet). */
+export interface ManualListEntry {
+  seriesName?: string;
+  number?: string;
+  title?: string;
+}
+
+/** A reading list plus its entries in display order. `books` repeats the linked entries'
+ * cards for older callers; `items` is the full order including stale placeholders. */
 export interface ReadingListDetail {
   readingList: ReadingList;
+  items: ReadingListEntry[];
   books: BookCard[];
 }
 
