@@ -107,11 +107,15 @@ function QueueView({ data, listId }: { data: ReadingListDetailData; listId: stri
   const relink = useRelinkReadingListItem();
   const [adding, setAdding] = useState(false);
   const [linking, setLinking] = useState<ReadingListEntry | null>(null);
+  // Long queues bury the current spot under everything already finished, so read issues are
+  // hidden by default; the toolbar toggle brings them back.
+  const [showRead, setShowRead] = useState(false);
 
   const { readingList, items } = data;
   // Linked entries carry a BookCard; stale placeholders hold their slot but can't be read.
   const books = items.flatMap((it) => (it.book ? [it.book] : []));
   const staleCount = items.length - books.length;
+  const isReadEntry = (it: ReadingListEntry) => it.book != null && stateOf(it.book) === 'read';
 
   // Smart resume target + next unread for the header CTAs.
   const nextItem =
@@ -132,6 +136,8 @@ function QueueView({ data, listId }: { data: ReadingListDetailData; listId: stri
   const mins = Math.round((totalPages - pagesRead) * 0.4);
   const timeLeft =
     mins >= 60 ? `${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, '0')}m` : `${mins}m`;
+  // How many rows are on screen with read hidden — drives the toggle + the all-caught-up state.
+  const visibleCount = showRead ? items.length : items.length - readCount;
 
   const openReader = (b: BookCard) =>
     launch(b.id, stateOf(b) === 'reading' ? resumePage(b.progress) : 0);
@@ -355,6 +361,33 @@ function QueueView({ data, listId }: { data: ReadingListDetailData; listId: stri
           Reading order
         </span>
         <span style={{ flex: 1, height: 1, background: 'var(--border-hairline)' }} />
+        {readCount > 0 && (
+          <>
+            <button
+              type="button"
+              onClick={() => setShowRead((v) => !v)}
+              aria-pressed={showRead}
+              className="ch-mono"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                fontSize: '0.64rem',
+                color: 'var(--paper-600)',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-secondary)')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--paper-600)')}
+            >
+              <Icon name="filter" size={12} color="currentColor" />
+              {showRead ? `Hide ${readCount} read` : `Show ${readCount} read`}
+            </button>
+            <span style={{ width: 1, height: 14, background: 'var(--border-hairline)' }} />
+          </>
+        )}
         <span
           className="ch-mono"
           style={{
@@ -369,14 +402,21 @@ function QueueView({ data, listId }: { data: ReadingListDetailData; listId: stri
         </span>
       </div>
 
-      {/* Rows with insertion indicators */}
+      {/* Rows with insertion indicators. Read rows are skipped when collapsed, but the row
+          index (order number + drag slot) stays keyed to the full list so positions and
+          reordering never shift as issues get read. */}
       {items.length === 0 ? (
         <EmptyState title="This queue is empty">
           Use “Add issues” to build your queue, then drag issues to reorder them.
         </EmptyState>
+      ) : visibleCount === 0 ? (
+        <EmptyState title="You’re all caught up">
+          Every issue in this list is read. Use “Show {readCount} read” above to see them.
+        </EmptyState>
       ) : (
         <div onDragOver={(e) => e.preventDefault()}>
           {items.map((it, idx) => {
+            if (!showRead && isReadEntry(it)) return null;
             const dragHandlers = {
               onGripDragStart: (e: React.DragEvent) => {
                 e.dataTransfer.effectAllowed = 'move';
