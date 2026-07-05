@@ -12,8 +12,9 @@ import {
 } from '@comichub/ui';
 import type { BookCard, SeriesDetail, GroupingCard, MetadataState } from '@comichub/api-client';
 import { useClient } from '../lib/client.js';
-import { useSeriesDetail } from '../lib/queries.js';
+import { useSeriesDetail, useRescanSeries } from '../lib/queries.js';
 import { useReadLaunch } from '../lib/launch.js';
+import { useUiStore } from '../store/ui.js';
 import { LoadingState, ErrorState } from '../components/Page.js';
 import { MatchDialog } from '../components/MatchDialog.js';
 import { issueLabel, resumePage, toCoverStatus, progressFraction } from '../lib/format.js';
@@ -51,8 +52,31 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
   const client = useClient();
   const navigate = useNavigate();
   const launch = useReadLaunch();
+  const addToast = useUiStore((s) => s.addToast);
+  const rescan = useRescanSeries();
   const [tab, setTab] = useState('issues');
   const [matching, setMatching] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmingRescan, setConfirmingRescan] = useState(false);
+
+  const onRescan = async () => {
+    setConfirmingRescan(false);
+    try {
+      await rescan.mutateAsync(detail.id);
+      addToast({
+        tone: 'info',
+        title: `Rescanning ${detail.name}`,
+        message: 'Re-cataloging its files from disk. Reading lists keep every issue.',
+      });
+      navigate({ to: '/' });
+    } catch (err) {
+      addToast({
+        tone: 'danger',
+        title: 'Could not rescan',
+        message: err instanceof Error ? err.message : 'Unexpected error.',
+      });
+    }
+  };
 
   const resumeBook =
     detail.books.find((b) => b.progress?.status === 'in_progress') ??
@@ -176,8 +200,8 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
                 />
               </div>
             )}
-            {resumeBook && (
-              <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+            <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+              {resumeBook && (
                 <Button
                   icon="book-open"
                   onClick={() => launch(resumeBook.id, resumePage(resumeBook.progress))}
@@ -186,13 +210,73 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
                     ? `Continue · ${issueLabel(resumeBook.number) ?? ''}`
                     : 'Read first issue'}
                 </Button>
-                {detail.metadataState === 'matched' && (
-                  <Button variant="ghost" icon="search" onClick={() => setMatching(true)}>
-                    Re-match
-                  </Button>
+              )}
+              {detail.metadataState === 'matched' && (
+                <Button variant="ghost" icon="search" onClick={() => setMatching(true)}>
+                  Re-match
+                </Button>
+              )}
+              <div style={{ position: 'relative' }}>
+                <IconButton
+                  icon="more-horizontal"
+                  label="More"
+                  variant="solid"
+                  onClick={() => setMenuOpen((o) => !o)}
+                />
+                {menuOpen && (
+                  <>
+                    <div
+                      role="presentation"
+                      onClick={() => setMenuOpen(false)}
+                      style={{ position: 'fixed', inset: 0, zIndex: 41 }}
+                    />
+                    <div
+                      role="menu"
+                      style={{
+                        position: 'absolute',
+                        top: 'calc(100% + 6px)',
+                        right: 0,
+                        zIndex: 42,
+                        minWidth: 216,
+                        padding: 6,
+                        background: 'var(--surface-raised)',
+                        border: '1px solid var(--border-hairline)',
+                        borderRadius: 'var(--radius-md)',
+                        boxShadow: 'var(--shadow-popover)',
+                      }}
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setConfirmingRescan(true);
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--ink-700)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                        style={{
+                          width: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          padding: '9px 10px',
+                          background: 'none',
+                          border: 'none',
+                          borderRadius: 5,
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          color: 'var(--text-primary)',
+                          fontFamily: 'var(--font-body)',
+                          fontSize: '0.86rem',
+                        }}
+                      >
+                        <Icon name="refresh" size={16} color="var(--paper-400)" /> Rescan series
+                      </button>
+                    </div>
+                  </>
                 )}
               </div>
-            )}
+            </div>
           </div>
         </div>
       </div>
@@ -366,6 +450,125 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
           onClose={() => setMatching(false)}
         />
       )}
+      {confirmingRescan && (
+        <RescanConfirmDialog
+          name={detail.name}
+          onClose={() => setConfirmingRescan(false)}
+          onConfirm={onRescan}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Confirm for the semi-destructive series rescan (per the design preview): one calm
+ * sentence about what resets, and an explicit note that reading lists are safe.
+ */
+function RescanConfirmDialog({
+  name,
+  onClose,
+  onConfirm,
+}: {
+  name: string;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      role="presentation"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 1100,
+        display: 'grid',
+        placeItems: 'center',
+        background: 'color-mix(in oklab, var(--ink-900) 70%, transparent)',
+        padding: 24,
+      }}
+    >
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-label={`Rescan ${name}?`}
+        style={{
+          width: 'min(460px, 100%)',
+          background: 'var(--surface-raised)',
+          border: '1px solid var(--border-strong)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: 'var(--shadow-popover)',
+          overflow: 'hidden',
+        }}
+      >
+        <div style={{ padding: '22px 24px 6px', display: 'flex', gap: 14 }}>
+          <span
+            style={{
+              flex: 'none',
+              width: 38,
+              height: 38,
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'color-mix(in oklab, var(--warning) 18%, transparent)',
+            }}
+          >
+            <Icon name="refresh" size={19} color="var(--warning)" />
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontWeight: 800,
+                fontSize: '1.15rem',
+                letterSpacing: '-0.01em',
+                color: 'var(--text-primary)',
+              }}
+            >
+              Rescan {name}?
+            </div>
+            <p
+              style={{
+                margin: '10px 0 0',
+                color: 'var(--text-secondary)',
+                fontSize: 'var(--text-body)',
+                lineHeight: 1.55,
+              }}
+            >
+              ComicHub deletes this series and re-catalogs it from the files on disk. Local metadata
+              and your read progress for {name} reset — your reading lists keep every issue.
+            </p>
+          </div>
+        </div>
+        <div
+          style={{
+            margin: '18px 24px 0',
+            padding: '11px 14px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 9,
+            background: 'var(--accent-soft)',
+            borderRadius: 'var(--radius-md)',
+          }}
+        >
+          <Icon name="bookmark" size={15} color="var(--accent)" />
+          <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+            Reading-list entries hold their place and re-attach automatically once the files come
+            back.
+          </span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '20px 24px' }}>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" icon="refresh" onClick={onConfirm}>
+            Rescan series
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

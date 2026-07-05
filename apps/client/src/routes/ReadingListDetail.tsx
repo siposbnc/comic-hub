@@ -1,21 +1,28 @@
 import { useRef, useState } from 'react';
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
 import { Button, Badge, Icon, IconButton, EmptyState } from '@comichub/ui';
-import type { BookCard, ReadingListDetail as ReadingListDetailData } from '@comichub/api-client';
+import type {
+  BookCard,
+  ReadingListDetail as ReadingListDetailData,
+  ReadingListEntry,
+} from '@comichub/api-client';
 import { useClient } from '../lib/client.js';
 import {
   useReadingList,
   useDeleteReadingList,
   useRemoveFromReadingList,
   useAddToReadingList,
+  useAddManualToReadingList,
+  useRelinkReadingListItem,
   useReorderReadingList,
   useSetActiveReadingList,
   useSeriesNames,
 } from '../lib/queries.js';
 import { useReadLaunch } from '../lib/launch.js';
 import { LoadingState, ErrorState } from '../components/Page.js';
-import { AddIssuesDialog } from '../components/AddIssuesDialog.js';
-import { issueLabel, resumePage } from '../lib/format.js';
+import { AddIssuesDialog, MissingPill } from '../components/AddIssuesDialog.js';
+import { LinkIssueDialog } from '../components/LinkIssueDialog.js';
+import { issueLabel, relativeTime, resumePage } from '../lib/format.js';
 
 const route = getRouteApi('/reading-lists/$id');
 
@@ -96,9 +103,15 @@ function QueueView({ data, listId }: { data: ReadingListDetailData; listId: stri
   const reorder = useReorderReadingList();
   const setActive = useSetActiveReadingList();
   const add = useAddToReadingList();
+  const addManual = useAddManualToReadingList();
+  const relink = useRelinkReadingListItem();
   const [adding, setAdding] = useState(false);
+  const [linking, setLinking] = useState<ReadingListEntry | null>(null);
 
-  const { readingList, books } = data;
+  const { readingList, items } = data;
+  // Linked entries carry a BookCard; stale placeholders hold their slot but can't be read.
+  const books = items.flatMap((it) => (it.book ? [it.book] : []));
+  const staleCount = items.length - books.length;
 
   // Smart resume target + next unread for the header CTAs.
   const nextItem =
@@ -150,9 +163,10 @@ function QueueView({ data, listId }: { data: ReadingListDetailData; listId: stri
     const o = overRef.current;
     endDrag();
     if (d == null || o == null) return;
-    const beforeId = o < books.length ? books[o]!.id : undefined; // undefined → move to end
-    if (beforeId === books[d]!.id) return; // dropped onto itself
-    reorder.mutate({ id: listId, bookId: books[d]!.id, beforeId });
+    // Reorder by entry id so stale placeholders move like any other row.
+    const beforeId = o < items.length ? items[o]!.id : undefined; // undefined → move to end
+    if (beforeId === items[d]!.id) return; // dropped onto itself
+    reorder.mutate({ id: listId, bookId: items[d]!.id, beforeId });
   };
 
   const onDelete = async () => {
@@ -165,10 +179,20 @@ function QueueView({ data, listId }: { data: ReadingListDetailData; listId: stri
     <div style={{ padding: 'var(--pad-screen)', maxWidth: 'var(--content-max)', margin: '0 auto' }}>
       {adding && (
         <AddIssuesDialog
-          title="Add issues to reading list"
+          title="Add issues"
+          subtitle={readingList.name}
           existingIds={new Set(books.map((b) => b.id))}
           onAdd={(bookIds) => add.mutateAsync({ id: listId, bookIds })}
+          onAddManual={(manual) => addManual.mutateAsync({ id: listId, manual })}
           onClose={() => setAdding(false)}
+        />
+      )}
+      {linking && (
+        <LinkIssueDialog
+          entry={linking}
+          existingIds={new Set(books.map((b) => b.id))}
+          onLink={(bookId) => relink.mutateAsync({ id: listId, itemId: linking.id, bookId })}
+          onClose={() => setLinking(null)}
         />
       )}
 
@@ -273,8 +297,22 @@ function QueueView({ data, listId }: { data: ReadingListDetailData; listId: stri
           }}
         >
           <span className="ch-mono" style={{ fontSize: '0.74rem', color: 'var(--text-primary)' }}>
-            {books.length} issues
+            {items.length} issues
           </span>
+          {staleCount > 0 && (
+            <span
+              className="ch-mono"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: '0.74rem',
+                color: 'var(--warning)',
+              }}
+            >
+              <Icon name="alert-triangle" size={13} color="var(--warning)" /> {staleCount} missing
+            </span>
+          )}
           <span style={{ width: 1, height: 14, background: 'var(--border-hairline)' }} />
           <span className="ch-mono" style={{ fontSize: '0.74rem', color: 'var(--paper-400)' }}>
             {readCount} read · {readingCount} reading · {toGo} to go
@@ -332,44 +370,60 @@ function QueueView({ data, listId }: { data: ReadingListDetailData; listId: stri
       </div>
 
       {/* Rows with insertion indicators */}
-      {books.length === 0 ? (
+      {items.length === 0 ? (
         <EmptyState title="This queue is empty">
           Use “Add issues” to build your queue, then drag issues to reorder them.
         </EmptyState>
       ) : (
         <div onDragOver={(e) => e.preventDefault()}>
-          {books.map((b, idx) => (
-            <div key={b.id}>
-              <DropLine active={drag != null && over === idx} />
-              <ReadingRow
-                book={b}
-                order={String(idx + 1).padStart(2, '0')}
-                cover={client.coverUrl(b.id, 80)}
-                seriesName={seriesNames.get(b.seriesId)}
-                dragging={drag === idx}
-                onOpenIssue={() => openIssue(b)}
-                onOpenReader={() => openReader(b)}
-                onRemove={() => removeItem.mutate({ id: listId, bookId: b.id })}
-                onGripDragStart={(e) => {
-                  e.dataTransfer.effectAllowed = 'move';
-                  e.dataTransfer.setData('text/plain', String(idx));
-                  startDrag(idx);
-                }}
-                onGripDragEnd={endDrag}
-                onRowDragOver={(e) => {
-                  e.preventDefault();
-                  e.dataTransfer.dropEffect = 'move';
-                  const r = e.currentTarget.getBoundingClientRect();
-                  setOverSlot(e.clientY < r.top + r.height / 2 ? idx : idx + 1);
-                }}
-                onRowDrop={(e) => {
-                  e.preventDefault();
-                  drop();
-                }}
-              />
-            </div>
-          ))}
-          <DropLine active={drag != null && over === books.length} />
+          {items.map((it, idx) => {
+            const dragHandlers = {
+              onGripDragStart: (e: React.DragEvent) => {
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', String(idx));
+                startDrag(idx);
+              },
+              onGripDragEnd: endDrag,
+              onRowDragOver: (e: React.DragEvent<HTMLDivElement>) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                const r = e.currentTarget.getBoundingClientRect();
+                setOverSlot(e.clientY < r.top + r.height / 2 ? idx : idx + 1);
+              },
+              onRowDrop: (e: React.DragEvent<HTMLDivElement>) => {
+                e.preventDefault();
+                drop();
+              },
+            };
+            return (
+              <div key={it.id}>
+                <DropLine active={drag != null && over === idx} />
+                {it.book ? (
+                  <ReadingRow
+                    book={it.book}
+                    order={String(idx + 1).padStart(2, '0')}
+                    cover={client.coverUrl(it.book.id, 80)}
+                    seriesName={seriesNames.get(it.book.seriesId)}
+                    dragging={drag === idx}
+                    onOpenIssue={() => openIssue(it.book!)}
+                    onOpenReader={() => openReader(it.book!)}
+                    onRemove={() => removeItem.mutate({ id: listId, bookId: it.id })}
+                    {...dragHandlers}
+                  />
+                ) : (
+                  <StaleRow
+                    entry={it}
+                    order={String(idx + 1).padStart(2, '0')}
+                    dragging={drag === idx}
+                    onLink={() => setLinking(it)}
+                    onRemove={() => removeItem.mutate({ id: listId, bookId: it.id })}
+                    {...dragHandlers}
+                  />
+                )}
+              </div>
+            );
+          })}
+          <DropLine active={drag != null && over === items.length} />
         </div>
       )}
     </div>
@@ -408,6 +462,159 @@ function Grip({ active }: { active?: boolean }) {
         />
       ))}
     </span>
+  );
+}
+
+/**
+ * A kept placeholder row (per the design preview): no cover, no progress, no Read action.
+ * It holds its slot and drag handle, renders from its snapshot, and offers Link issue +
+ * Remove. Quiet warning treatment — intentionally kept, not broken.
+ */
+function StaleRow({
+  entry,
+  order,
+  dragging,
+  onLink,
+  onRemove,
+  onGripDragStart,
+  onGripDragEnd,
+  onRowDragOver,
+  onRowDrop,
+}: {
+  entry: ReadingListEntry;
+  order: string;
+  dragging: boolean;
+  onLink: () => void;
+  onRemove: () => void;
+  onGripDragStart: (e: React.DragEvent) => void;
+  onGripDragEnd: () => void;
+  onRowDragOver: (e: React.DragEvent<HTMLDivElement>) => void;
+  onRowDrop: (e: React.DragEvent<HTMLDivElement>) => void;
+}) {
+  const [hover, setHover] = useState(false);
+  const label =
+    [entry.seriesName, issueLabel(entry.number)].filter(Boolean).join(' ') ||
+    entry.title ||
+    'Unknown issue';
+  return (
+    <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onDragOver={onRowDragOver}
+      onDrop={onRowDrop}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 14,
+        padding: '10px 12px 10px 8px',
+        borderRadius: 6,
+        background: hover ? 'var(--ink-700)' : 'transparent',
+        opacity: dragging ? 0.35 : 1,
+        border: '1px solid',
+        borderColor: hover ? 'var(--border-hairline)' : 'transparent',
+        transition: 'background 110ms',
+      }}
+    >
+      <span
+        draggable
+        onDragStart={onGripDragStart}
+        onDragEnd={onGripDragEnd}
+        title="Drag to reorder"
+        style={{ flex: 'none', padding: '6px 2px' }}
+      >
+        <Grip active={hover} />
+      </span>
+
+      <span
+        className="ch-mono"
+        style={{
+          flex: 'none',
+          width: 22,
+          textAlign: 'right',
+          fontSize: '0.78rem',
+          fontVariantNumeric: 'tabular-nums',
+          color: 'var(--paper-600)',
+        }}
+      >
+        {order}
+      </span>
+
+      {/* Dashed "missing" cover slot — quietly kept, not broken */}
+      <span
+        aria-hidden
+        style={{
+          flex: 'none',
+          width: 46,
+          height: 69,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          border: '1px dashed var(--border-strong)',
+          borderRadius: 3,
+          background:
+            'repeating-linear-gradient(135deg, transparent, transparent 5px, color-mix(in oklab, var(--ink-600) 55%, transparent) 5px, color-mix(in oklab, var(--ink-600) 55%, transparent) 6px)',
+        }}
+      >
+        <Icon name="book-open" size={16} color="var(--paper-600)" />
+      </span>
+
+      {/* Snapshot title block */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span
+            style={{
+              fontFamily: 'var(--font-body)',
+              fontWeight: 600,
+              fontSize: '0.95rem',
+              color: 'var(--paper-400)',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              maxWidth: 260,
+            }}
+          >
+            {label}
+          </span>
+          <MissingPill />
+        </div>
+        <div
+          className="ch-mono"
+          style={{
+            fontSize: '0.68rem',
+            color: 'var(--paper-600)',
+            marginTop: 4,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {entry.title && entry.seriesName ? `${entry.title} · ` : ''}
+          Kept from snapshot · added {relativeTime(entry.addedAt)}
+        </div>
+      </div>
+
+      {/* Actions — link to a real issue, or remove. No Read. */}
+      <div
+        style={{
+          flex: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+          opacity: hover ? 1 : 0.85,
+        }}
+      >
+        <Button size="sm" variant="secondary" icon="link" onClick={onLink}>
+          Link issue
+        </Button>
+        <IconButton
+          icon="trash"
+          label="Remove from list"
+          variant="ghost"
+          size="sm"
+          onClick={onRemove}
+        />
+      </div>
+    </div>
   );
 }
 

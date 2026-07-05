@@ -305,6 +305,50 @@ export function useReorderReadingList() {
   });
 }
 
+export function useAddManualToReadingList() {
+  const client = useClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      manual,
+    }: {
+      id: string;
+      manual: { seriesName?: string; number?: string; title?: string }[];
+    }) => client.addManualToReadingList(id, manual),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: qk.readingList(id) });
+      qc.invalidateQueries({ queryKey: qk.readingLists });
+    },
+  });
+}
+
+export function useRelinkReadingListItem() {
+  const client = useClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, itemId, bookId }: { id: string; itemId: string; bookId: string }) =>
+      client.relinkReadingListItem(id, itemId, bookId),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: qk.readingList(id) });
+      qc.invalidateQueries({ queryKey: qk.readingLists });
+      qc.invalidateQueries({ queryKey: ['discover'] });
+    },
+  });
+}
+
+export function useRescanSeries() {
+  const client = useClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => client.rescanSeries(id),
+    onSuccess: () => {
+      // The series is gone until the scan re-creates it; drop everything derived.
+      qc.invalidateQueries();
+    },
+  });
+}
+
 export function useSetActiveReadingList() {
   const client = useClient();
   const qc = useQueryClient();

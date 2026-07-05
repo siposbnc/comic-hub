@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Button, Input, Icon } from '@comichub/ui';
-import type { BookCard, BookHit } from '@comichub/api-client';
+import { Button, Badge, Input, Icon, IconButton } from '@comichub/ui';
+import type { BookCard, BookHit, ManualListEntry } from '@comichub/api-client';
 import { useClient } from '../lib/client.js';
 import { issueLabel } from '../lib/format.js';
 
@@ -36,19 +36,28 @@ function pickLabel(p: Pick): string {
  * surfaces series and titled issues; expanding a series lets you pick from its run (with a
  * Select-all). The selection accumulates across searches; issues already in the list show
  * as added and aren't selectable.
+ *
+ * When `onAddManual` is given (reading lists), a second "Add missing" tab jots want-list
+ * placeholders for issues not in the library — they hold a slot in the reading order and
+ * link themselves to a real file once it appears (per the design preview).
  */
 export function AddIssuesDialog({
   title,
+  subtitle,
   existingIds,
   onAdd,
+  onAddManual,
   onClose,
 }: {
   title: string;
+  subtitle?: string;
   existingIds: Set<string>;
   onAdd: (bookIds: string[]) => Promise<void>;
+  onAddManual?: (entries: ManualListEntry[]) => Promise<void>;
   onClose: () => void;
 }) {
   const client = useClient();
+  const [tab, setTab] = useState<'search' | 'missing'>('search');
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -58,6 +67,22 @@ export function AddIssuesDialog({
     libraryName?: string;
   } | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // "Add missing" jot form + accumulated want-list lines.
+  const [mSeries, setMSeries] = useState('');
+  const [mNumber, setMNumber] = useState('');
+  const [mTitle, setMTitle] = useState('');
+  const [jotted, setJotted] = useState<ManualListEntry[]>([]);
+  const canJot = mSeries.trim() !== '' || mTitle.trim() !== '';
+  const jotLine = () => {
+    if (!canJot) return;
+    setJotted((j) => [
+      ...j,
+      { seriesName: mSeries.trim(), number: mNumber.trim(), title: mTitle.trim() },
+    ]);
+    setMNumber('');
+    setMTitle('');
+  };
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(query.trim()), 200);
@@ -120,6 +145,17 @@ export function AddIssuesDialog({
     }
   };
 
+  const submitManual = async () => {
+    if (jotted.length === 0 || busy || !onAddManual) return;
+    setBusy(true);
+    try {
+      await onAddManual(jotted);
+      onClose();
+    } catch {
+      setBusy(false);
+    }
+  };
+
   return (
     <div
       role="presentation"
@@ -153,30 +189,105 @@ export function AddIssuesDialog({
           gap: 12,
         }}
       >
-        <h2
-          style={{
-            margin: 0,
-            fontFamily: 'var(--font-display)',
-            fontSize: 'var(--text-heading)',
-            fontWeight: 700,
-            color: 'var(--text-primary)',
-          }}
-        >
-          {title}
-        </h2>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h2
+              style={{
+                margin: 0,
+                fontFamily: 'var(--font-display)',
+                fontSize: 'var(--text-heading)',
+                fontWeight: 700,
+                color: 'var(--text-primary)',
+              }}
+            >
+              {title}
+            </h2>
+            {subtitle && (
+              <div
+                className="ch-mono"
+                style={{ fontSize: '0.66rem', color: 'var(--text-tertiary)', marginTop: 3 }}
+              >
+                {subtitle}
+              </div>
+            )}
+          </div>
+          <IconButton icon="x" label="Cancel" variant="ghost" size="sm" onClick={onClose} />
+        </div>
 
-        <Input
-          icon="search"
-          placeholder="Search series or issues…"
-          aria-label="Search the catalog"
-          value={query}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
-        />
+        {onAddManual && (
+          <div
+            style={{
+              display: 'flex',
+              gap: 22,
+              borderBottom: '1px solid var(--border-hairline)',
+            }}
+          >
+            {(
+              [
+                ['search', 'Search library'],
+                ['missing', 'Add missing'],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTab(id)}
+                style={{
+                  position: 'relative',
+                  padding: '0 4px 12px',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-body)',
+                  fontSize: '0.86rem',
+                  fontWeight: 600,
+                  color: tab === id ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                }}
+              >
+                {label}
+                <span
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    right: 0,
+                    bottom: -1,
+                    height: 2,
+                    borderRadius: 2,
+                    background: tab === id ? 'var(--accent)' : 'transparent',
+                  }}
+                />
+              </button>
+            ))}
+          </div>
+        )}
+
+        {tab === 'search' && (
+          <Input
+            icon="search"
+            placeholder="Search series or issues…"
+            aria-label="Search the catalog"
+            value={query}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
+          />
+        )}
 
         <div
           style={{ flex: 1, minHeight: 0, overflowY: 'auto', margin: '0 -4px', padding: '0 4px' }}
         >
-          {expanded ? (
+          {tab === 'missing' ? (
+            <ManualTab
+              mSeries={mSeries}
+              mNumber={mNumber}
+              mTitle={mTitle}
+              setMSeries={setMSeries}
+              setMNumber={setMNumber}
+              setMTitle={setMTitle}
+              canJot={canJot}
+              onJot={jotLine}
+              jotted={jotted}
+              onRemove={(i) => setJotted((arr) => arr.filter((_, k) => k !== i))}
+            />
+          ) : expanded ? (
             <ExpandedSeries
               name={expanded.name}
               libraryName={expanded.libraryName}
@@ -244,16 +355,33 @@ export function AddIssuesDialog({
             paddingTop: 12,
           }}
         >
-          <span style={{ fontSize: 'var(--text-small)', color: 'var(--text-secondary)' }}>
-            {selected.size} selected
-          </span>
+          {tab === 'missing' ? (
+            <Badge tone="neutral" mono>
+              {jotted.length} placeholder{jotted.length === 1 ? '' : 's'}
+            </Badge>
+          ) : (
+            <span style={{ fontSize: 'var(--text-small)', color: 'var(--text-secondary)' }}>
+              {selected.size} selected
+            </span>
+          )}
           <div style={{ display: 'flex', gap: 10 }}>
             <Button variant="ghost" onClick={onClose} disabled={busy}>
               Cancel
             </Button>
-            <Button variant="primary" onClick={submit} disabled={selected.size === 0 || busy}>
-              {busy ? 'Adding…' : `Add ${selected.size || ''}`.trim()}
-            </Button>
+            {tab === 'missing' ? (
+              <Button
+                variant="primary"
+                icon="plus"
+                onClick={submitManual}
+                disabled={jotted.length === 0 || busy}
+              >
+                {busy ? 'Adding…' : 'Add to list'}
+              </Button>
+            ) : (
+              <Button variant="primary" onClick={submit} disabled={selected.size === 0 || busy}>
+                {busy ? 'Adding…' : `Add ${selected.size || ''}`.trim()}
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -379,7 +507,13 @@ function IssueRow({
   );
 }
 
-function Cover({ client, bookId }: { client: ReturnType<typeof useClient>; bookId?: string }) {
+export function Cover({
+  client,
+  bookId,
+}: {
+  client: ReturnType<typeof useClient>;
+  bookId?: string;
+}) {
   return (
     <span
       style={{
@@ -409,7 +543,193 @@ function Cover({ client, bookId }: { client: ReturnType<typeof useClient>; bookI
   );
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+/** The "Add missing" tab: jot a want-list placeholder for an issue not owned yet. */
+function ManualTab({
+  mSeries,
+  mNumber,
+  mTitle,
+  setMSeries,
+  setMNumber,
+  setMTitle,
+  canJot,
+  onJot,
+  jotted,
+  onRemove,
+}: {
+  mSeries: string;
+  mNumber: string;
+  mTitle: string;
+  setMSeries: (v: string) => void;
+  setMNumber: (v: string) => void;
+  setMTitle: (v: string) => void;
+  canJot: boolean;
+  onJot: () => void;
+  jotted: ManualListEntry[];
+  onRemove: (index: number) => void;
+}) {
+  const field = (
+    label: string,
+    value: string,
+    set: (v: string) => void,
+    placeholder: string,
+    flex: number,
+  ) => (
+    <label style={{ flex, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span className="ch-label" style={{ color: 'var(--text-tertiary)' }}>
+        {label}
+      </span>
+      <Input
+        value={value}
+        placeholder={placeholder}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => set(e.target.value)}
+        onKeyDown={(e: React.KeyboardEvent) => {
+          if (e.key === 'Enter') onJot();
+        }}
+      />
+    </label>
+  );
+
+  return (
+    <div style={{ padding: '4px 2px' }}>
+      <p
+        style={{
+          margin: '0 0 16px',
+          fontSize: '0.82rem',
+          color: 'var(--text-secondary)',
+          lineHeight: 1.5,
+        }}
+      >
+        Jot an issue you don’t own yet — it holds a slot in the reading order and links itself to a
+        real file once you add it. A series name or a title is enough.
+      </p>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+        {field('Series', mSeries, setMSeries, 'e.g. Wonder Woman', 1.4)}
+        {field('Number', mNumber, setMNumber, '#001', 0.6)}
+        {field('Title', mTitle, setMTitle, 'optional', 1.4)}
+        <Button variant="secondary" icon="plus" onClick={onJot} disabled={!canJot}>
+          Add
+        </Button>
+      </div>
+      <div
+        className="ch-mono"
+        style={{ fontSize: '0.62rem', color: 'var(--text-tertiary)', marginTop: 8 }}
+      >
+        At least a series name or a title.
+      </div>
+
+      {jotted.length > 0 && (
+        <div style={{ marginTop: 22 }}>
+          <div
+            className="ch-mono"
+            style={{
+              fontSize: '0.62rem',
+              fontWeight: 600,
+              letterSpacing: '0.16em',
+              textTransform: 'uppercase',
+              color: 'var(--paper-600)',
+              marginBottom: 10,
+            }}
+          >
+            Want-list · {jotted.length}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {jotted.map((j, i) => (
+              <div
+                key={i}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '9px 12px',
+                  background: 'var(--surface-card)',
+                  border: '1px solid var(--border-hairline)',
+                  borderRadius: 6,
+                }}
+              >
+                <span
+                  style={{
+                    flex: 'none',
+                    width: 30,
+                    height: 45,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: '1px dashed var(--border-strong)',
+                    borderRadius: 3,
+                  }}
+                >
+                  <Icon name="book-open" size={13} color="var(--paper-600)" />
+                </span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span
+                    style={{
+                      display: 'block',
+                      fontSize: '0.86rem',
+                      fontWeight: 600,
+                      color: 'var(--paper-100)',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {[j.seriesName || j.title, j.number].filter(Boolean).join(' ')}
+                  </span>
+                  {j.title && j.seriesName && (
+                    <span
+                      className="ch-mono"
+                      style={{
+                        display: 'block',
+                        fontSize: '0.64rem',
+                        color: 'var(--text-tertiary)',
+                        marginTop: 2,
+                      }}
+                    >
+                      {j.title}
+                    </span>
+                  )}
+                </span>
+                <MissingPill />
+                <IconButton
+                  icon="x"
+                  label="Remove placeholder"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onRemove(i)}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The quiet warning pill marking a placeholder ("missing") entry. */
+export function MissingPill() {
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 5,
+        height: 19,
+        padding: '0 8px',
+        borderRadius: 'var(--radius-pill)',
+        background: 'color-mix(in oklab, var(--warning) 16%, transparent)',
+        color: 'var(--warning)',
+        fontFamily: 'var(--font-mono)',
+        fontSize: '0.58rem',
+        letterSpacing: '0.06em',
+        textTransform: 'uppercase',
+      }}
+    >
+      <Icon name="alert-triangle" size={11} color="var(--warning)" /> Missing
+    </span>
+  );
+}
+
+export function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div
       className="ch-mono"
@@ -426,7 +746,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Hint({ children }: { children: React.ReactNode }) {
+export function Hint({ children }: { children: React.ReactNode }) {
   return (
     <div
       style={{
@@ -440,7 +760,7 @@ function Hint({ children }: { children: React.ReactNode }) {
   );
 }
 
-const rowStyle: React.CSSProperties = {
+export const rowStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 10,
@@ -453,21 +773,21 @@ const rowStyle: React.CSSProperties = {
   color: 'var(--text-primary)',
 };
 
-const rowMain: React.CSSProperties = {
+export const rowMain: React.CSSProperties = {
   flex: 1,
   minWidth: 0,
   display: 'flex',
   flexDirection: 'column',
 };
 
-const rowTitle: React.CSSProperties = {
+export const rowTitle: React.CSSProperties = {
   fontSize: 'var(--text-small)',
   whiteSpace: 'nowrap',
   overflow: 'hidden',
   textOverflow: 'ellipsis',
 };
 
-const rowSub: React.CSSProperties = {
+export const rowSub: React.CSSProperties = {
   fontSize: 'var(--text-label)',
   color: 'var(--text-tertiary)',
   whiteSpace: 'nowrap',
