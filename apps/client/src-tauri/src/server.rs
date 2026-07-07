@@ -49,10 +49,21 @@ pub fn start_server(
     let _ = fs::remove_file(&handshake); // stale handshake from a previous run
 
     let bin = resolve_server_bin()?;
-    let child = Command::new(&bin)
-        .arg("--mode=embedded")
+    let mut cmd = Command::new(&bin);
+    cmd.arg("--mode=embedded")
         .arg(format!("--data-dir={}", data_dir.display()))
-        .arg(format!("--handshake-file={}", handshake.display()))
+        .arg(format!("--handshake-file={}", handshake.display()));
+
+    // The server is a console-subsystem binary; without this flag Windows allocates a
+    // console window for it, flashing a terminal full of log output on every launch.
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    let child = cmd
         .spawn()
         .map_err(|e| format!("spawn server ({}): {e}", bin.display()))?;
 
