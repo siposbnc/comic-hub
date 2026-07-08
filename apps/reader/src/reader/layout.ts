@@ -8,7 +8,7 @@ function isWide(page: PageMeta | undefined): boolean {
   if (!page) return false;
   if (page.double) return true;
   // Fallback heuristic when the manifest omits the flag: landscape pages stand alone.
-  return page.w > 0 && page.h > 0 && page.w / page.h > 1.2;
+  return page.w > 0 && page.h > 0 && page.w / page.h > 1.15;
 }
 
 /**

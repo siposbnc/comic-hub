@@ -70,6 +70,10 @@ type BookRepository interface {
 	// can recognize a moved/renamed file (same bytes, new path) instead of orphaning it.
 	ByContentHash(ctx context.Context, libraryID, hash string) ([]Book, error)
 	ReplacePages(ctx context.Context, bookID string, pages []Page) error
+	// SetPageDimensions backfills width/height for the given pages, leaving pages not
+	// listed (and every other page field) untouched. Used by the reader to fill
+	// dimensions missing from an older scan.
+	SetPageDimensions(ctx context.Context, bookID string, dims []PageDimension) error
 	// ListPages returns a book's pages in index order (the reader's manifest source).
 	ListPages(ctx context.Context, bookID string) ([]Page, error)
 	ListBySeries(ctx context.Context, seriesID string) ([]Book, error)

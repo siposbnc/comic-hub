@@ -93,3 +93,55 @@ func TestCatalogRoundTrip(t *testing.T) {
 		t.Fatalf("continue reading returned %+v", cont)
 	}
 }
+
+// TestSetPageDimensions backfills dimensions onto a page that was scanned without them,
+// and verifies untouched pages (and other fields of the touched page) are preserved.
+func TestSetPageDimensions(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+	libID := seedLibrary(t, store)
+
+	s := domain.Series{ID: ulid.New(), LibraryID: libID, Name: "Batman", SortName: "Batman", CreatedAt: 1, UpdatedAt: 1}
+	if _, err := store.Series().Upsert(ctx, s); err != nil {
+		t.Fatalf("series upsert: %v", err)
+	}
+	b := domain.Book{
+		ID: ulid.New(), SeriesID: s.ID, LibraryID: libID,
+		FilePath: `C:\DC\Batman\Batman 001.cbz`, FileFormat: "cbz", PageCount: 2,
+		AddedAt: 1, UpdatedAt: 1,
+	}
+	if _, err := store.Books().Upsert(ctx, b); err != nil {
+		t.Fatalf("book upsert: %v", err)
+	}
+	pages := []domain.Page{
+		{BookID: b.ID, Index: 0, FileName: "000.jpg", Width: 988, Height: 1500, PageType: "FrontCover"},
+		{BookID: b.ID, Index: 1, FileName: "001.jpg", IsDouble: true}, // dims absent -> NULL
+	}
+	if err := store.Books().ReplacePages(ctx, b.ID, pages); err != nil {
+		t.Fatalf("replace pages: %v", err)
+	}
+
+	// Backfill only the second page.
+	if err := store.Books().SetPageDimensions(ctx, b.ID, []domain.PageDimension{{Index: 1, Width: 2000, Height: 1500}}); err != nil {
+		t.Fatalf("set page dimensions: %v", err)
+	}
+
+	got, err := store.Books().ListPages(ctx, b.ID)
+	if err != nil {
+		t.Fatalf("list pages: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d pages, want 2", len(got))
+	}
+	// Page 0 untouched.
+	if got[0].Width != 988 || got[0].Height != 1500 || got[0].PageType != "FrontCover" {
+		t.Fatalf("page 0 changed: %+v", got[0])
+	}
+	// Page 1 dims filled, other fields intact.
+	if got[1].Width != 2000 || got[1].Height != 1500 {
+		t.Fatalf("page 1 dims = %dx%d, want 2000x1500", got[1].Width, got[1].Height)
+	}
+	if got[1].FileName != "001.jpg" || !got[1].IsDouble {
+		t.Fatalf("page 1 non-dim fields clobbered: %+v", got[1])
+	}
+}

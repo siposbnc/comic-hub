@@ -115,6 +115,14 @@ type Page struct {
 	IsDouble bool
 }
 
+// PageDimension pairs a page index with its decoded pixel size. The reader uses it to
+// backfill dimensions absent from an older scan.
+type PageDimension struct {
+	Index  int
+	Width  int
+	Height int
+}
+
 // Progress is a user's reading state for a single book.
 type Progress struct {
 	UserID     string

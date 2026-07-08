@@ -159,6 +159,29 @@ func (r *bookRepo) ReplacePages(ctx context.Context, bookID string, pages []doma
 	return tx.Commit()
 }
 
+// SetPageDimensions updates width/height for specific pages without touching the rest of
+// each row (unlike ReplacePages, which swaps the whole set). Runs in one transaction.
+func (r *bookRepo) SetPageDimensions(ctx context.Context, bookID string, dims []domain.PageDimension) error {
+	if len(dims) == 0 {
+		return nil
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	for _, d := range dims {
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE page SET width = ?, height = ? WHERE book_id = ? AND idx = ?`,
+			nullInt(int64(d.Width)), nullInt(int64(d.Height)), bookID, d.Index,
+		); err != nil {
+			return fmt.Errorf("update page %d dimensions: %w", d.Index, err)
+		}
+	}
+	return tx.Commit()
+}
+
 func (r *bookRepo) ListPages(ctx context.Context, bookID string) ([]domain.Page, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT book_id, idx, file_name, width, height, size, page_type, is_double

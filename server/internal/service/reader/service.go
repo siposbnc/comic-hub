@@ -89,6 +89,9 @@ func (s *Service) Manifest(ctx context.Context, bookID string) (Manifest, error)
 	if err != nil {
 		return Manifest{}, err
 	}
+	if !b.IsCorrupt {
+		pages = s.backfillDimensions(ctx, b, pages)
+	}
 
 	readingDir := string(domain.LTR)
 	if ser, err := s.repo.Series().Get(ctx, b.SeriesID); err == nil && ser.ReadingDir != "" {
@@ -100,6 +103,54 @@ func (s *Service) Manifest(ctx context.Context, bookID string) (Manifest, error)
 		m.Pages = append(m.Pages, PageEntry{Idx: p.Index, W: p.Width, H: p.Height, Type: p.PageType, Double: p.IsDouble})
 	}
 	return m, nil
+}
+
+// backfillDimensions fills pixel dimensions for any page missing them — a book scanned
+// before dimensions were recorded, or a format that has since gained a decoder. It opens
+// the archive once, decodes only the zero-dim pages' headers, persists what it learns, and
+// returns pages with the filled values. Best-effort: a page that still won't decode stays
+// at zero (exactly as the scan left it) and is retried on the next open; a persistence
+// failure is ignored since the returned manifest already carries the dimensions.
+func (s *Service) backfillDimensions(ctx context.Context, b domain.Book, pages []domain.Page) []domain.Page {
+	needs := false
+	for _, p := range pages {
+		if p.Width == 0 || p.Height == 0 {
+			needs = true
+			break
+		}
+	}
+	if !needs {
+		return pages
+	}
+
+	src, err := s.registry.Open(b.FilePath)
+	if err != nil {
+		return pages
+	}
+	defer src.Close()
+
+	var updates []domain.PageDimension
+	for i := range pages {
+		p := &pages[i]
+		if p.Width != 0 && p.Height != 0 {
+			continue
+		}
+		rc, _, err := src.Page(p.Index)
+		if err != nil {
+			continue
+		}
+		w, h, err := s.proc.Dimensions(rc)
+		rc.Close()
+		if err != nil || w == 0 || h == 0 {
+			continue
+		}
+		p.Width, p.Height = w, h
+		updates = append(updates, domain.PageDimension{Index: p.Index, Width: w, Height: h})
+	}
+	if len(updates) > 0 {
+		_ = s.repo.Books().SetPageDimensions(ctx, b.ID, updates)
+	}
+	return pages
 }
 
 // Page renders page idx of a book. With the zero PageOptions it streams the original
