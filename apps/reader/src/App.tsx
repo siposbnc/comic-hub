@@ -14,9 +14,12 @@ export function App() {
   const retry = useReaderStore((s) => s.retry);
   const openFile = useReaderStore((s) => s.openFile);
   const dispose = useReaderStore((s) => s.dispose);
+  const syncFullscreen = useReaderStore((s) => s.syncFullscreen);
 
   useEffect(() => {
     void init();
+    // Reflect a fullscreen launch restored by the window-state plugin in the toolbar icon.
+    syncFullscreen();
     return () => dispose();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

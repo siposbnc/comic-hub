@@ -1,12 +1,30 @@
 import { useEffect } from 'react';
 import { useReaderStore } from './store.js';
-import { toggleFullscreen, exitFullscreen, isFullscreen } from './fullscreen.js';
+import { closeWindow } from './fullscreen.js';
 
 /** Keys that pause auto-scroll while held (resumed on release). */
 const AUTOSCROLL_PAUSE_KEYS = new Set([' ', 'ArrowDown', 'ArrowUp', 'PageDown', 'PageUp']);
 
-/** Keys that accept the end-of-issue "next" offer (advance to the next issue). */
-const CONTINUE_KEYS = new Set([' ', 'Enter', 'ArrowRight', 'ArrowLeft', 'ArrowDown', 'PageDown']);
+/** Reading-order intent of a navigation key, honoring RTL and Shift; null for other keys. */
+function navDirection(e: KeyboardEvent, rtl: boolean): 'next' | 'prev' | null {
+  switch (e.key) {
+    case 'ArrowRight':
+      return rtl ? 'prev' : 'next';
+    case 'ArrowLeft':
+      return rtl ? 'next' : 'prev';
+    case ' ':
+      return e.shiftKey ? 'prev' : 'next';
+    case 'Enter':
+    case 'ArrowDown':
+    case 'PageDown':
+      return 'next';
+    case 'ArrowUp':
+    case 'PageUp':
+      return 'prev';
+    default:
+      return null;
+  }
+}
 
 /**
  * Global keyboard navigation (docs/06-reader.md §3.4). Physical arrows map to reading order
@@ -22,12 +40,23 @@ export function useKeyboard(): void {
       const s = useReaderStore.getState();
       const rtl = s.settings.direction === 'rtl';
 
-      // At the end of an issue with a next one offered, common "advance" keys load it (so the
-      // reader can continue without reaching for the mouse).
-      if (s.finished && s.nextBook && CONTINUE_KEYS.has(e.key)) {
-        e.preventDefault();
-        s.loadNext();
-        return;
+      // At the end of an issue with a next one offered, a forward gesture loads it (so the
+      // reader continues without reaching for the mouse) while a back gesture retreats into
+      // the current issue — which clears `finished` and cancels the auto-advance countdown.
+      // So "go back a page" during the countdown does exactly that, never loads next.
+      if (s.finished && s.nextBook) {
+        const dir = navDirection(e, rtl);
+        if (dir === 'prev') {
+          e.preventDefault();
+          s.prev();
+          return;
+        }
+        if (dir === 'next') {
+          e.preventDefault();
+          s.loadNext();
+          return;
+        }
+        // Non-navigation keys (Home/End/f/…) fall through to normal handling below.
       }
 
       // While auto-scrolling, navigation keys momentarily pause the scroll (held, not toggled)
@@ -70,7 +99,7 @@ export function useKeyboard(): void {
         case 'f':
         case 'F':
           e.preventDefault();
-          void toggleFullscreen();
+          s.toggleFullscreen();
           break;
         case 'd':
         case 'D':
@@ -113,10 +142,17 @@ export function useKeyboard(): void {
           s.resetZoom();
           break;
         case 'Escape':
-          if (isFullscreen()) {
-            void exitFullscreen();
+          // Escape peels off the topmost layer: an open panel, then a zoom, then the
+          // reader itself — so a plain Escape while reading closes the window.
+          e.preventDefault();
+          if (s.settingsOpen) {
+            s.setSettingsOpen(false);
+          } else if (s.bookmarksOpen) {
+            s.setBookmarksOpen(false);
           } else if (s.zoom > 1) {
             s.resetZoom();
+          } else {
+            void closeWindow();
           }
           break;
         default:

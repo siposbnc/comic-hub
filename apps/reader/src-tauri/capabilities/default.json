@@ -3,5 +3,11 @@
   "identifier": "default",
   "description": "Default capability for the reader window.",
   "windows": ["main"],
-  "permissions": ["core:default", "deep-link:default"]
+  "permissions": [
+    "core:default",
+    "core:window:allow-close",
+    "core:window:allow-set-fullscreen",
+    "core:window:allow-is-fullscreen",
+    "deep-link:default"
+  ]
 }

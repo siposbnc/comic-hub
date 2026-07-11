@@ -8,6 +8,7 @@ import {
 } from '@comichub/reader-core';
 import { PageCache } from './PageCache.js';
 import { ThumbCache } from './ThumbCache.js';
+import { isFullscreen, setFullscreen } from './fullscreen.js';
 import { buildSpreads, spreadIndexOf, type Spread } from './layout.js';
 import {
   DEFAULT_SETTINGS,
@@ -74,6 +75,9 @@ export interface ReaderState {
 
   chromeVisible: boolean;
   settingsOpen: boolean;
+  /** Whether the OS window is fullscreen. The window-state plugin persists this across
+   *  launches; it is mirrored here so the toolbar/keyboard can reflect and toggle it. */
+  fullscreen: boolean;
 
   /** Continuous auto-scroll running (transient; forced off outside continuous mode). */
   autoScroll: boolean;
@@ -137,6 +141,12 @@ export interface ReaderState {
   hideChrome: () => void;
   toggleChrome: () => void;
   setSettingsOpen: (open: boolean) => void;
+
+  /** Toggle OS-window fullscreen (persisted across launches by the window-state plugin). */
+  toggleFullscreen: () => void;
+  /** Read the window's actual fullscreen state into the store (e.g. after the window-state
+   *  plugin restored a fullscreen launch), so the toolbar icon matches reality. */
+  syncFullscreen: () => void;
 
   /** Toggle continuous auto-scroll (switches to continuous layout if needed). */
   toggleAutoScroll: () => void;
@@ -395,6 +405,7 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
     panY: 0,
     chromeVisible: true,
     settingsOpen: false,
+    fullscreen: false,
     autoScroll: false,
     autoScrollPaused: false,
     bookmarks: [],
@@ -606,6 +617,16 @@ export const useReaderStore = create<ReaderState>()((set, get) => {
     toggleChrome: () => set((s) => ({ chromeVisible: !s.chromeVisible })),
 
     setSettingsOpen: (open) => set({ settingsOpen: open }),
+
+    toggleFullscreen: () => {
+      const next = !get().fullscreen;
+      set({ fullscreen: next }); // optimistic; the window call is fire-and-forget
+      void setFullscreen(next);
+    },
+
+    syncFullscreen: () => {
+      void isFullscreen().then((on) => set({ fullscreen: on }));
+    },
 
     toggleAutoScroll: () => {
       const on = !get().autoScroll;

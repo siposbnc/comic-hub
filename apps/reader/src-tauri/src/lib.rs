@@ -99,6 +99,9 @@ pub fn run() {
     }
 
     builder
+        // Remember window size/position/maximized/fullscreen across launches (default flags
+        // include fullscreen), so the reader reopens exactly how it was closed.
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_deep_link::init())
         .setup(|_app| {
             // Register the scheme at runtime so it also works in dev / unpackaged runs.

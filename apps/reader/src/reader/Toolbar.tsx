@@ -1,8 +1,6 @@
-import { useEffect, useState } from 'react';
 import { Icon } from '@comichub/ui';
 import { useReaderStore } from './store.js';
 import { IconButton } from '../ui/IconButton.js';
-import { toggleFullscreen, isFullscreen } from './fullscreen.js';
 import type { FitMode } from './types.js';
 
 const FIT_LABEL: Record<FitMode, string> = {
@@ -12,16 +10,6 @@ const FIT_LABEL: Record<FitMode, string> = {
   original: 'Original size',
   smart: 'Smart fit',
 };
-
-function useFullscreenState(): boolean {
-  const [full, setFull] = useState(isFullscreen);
-  useEffect(() => {
-    const onChange = () => setFull(isFullscreen());
-    document.addEventListener('fullscreenchange', onChange);
-    return () => document.removeEventListener('fullscreenchange', onChange);
-  }, []);
-  return full;
-}
 
 export function Toolbar() {
   const title = useReaderStore((s) => s.title);
@@ -46,8 +34,8 @@ export function Toolbar() {
   const zoomBy = useReaderStore((s) => s.zoomBy);
   const resetZoom = useReaderStore((s) => s.resetZoom);
   const openSettings = useReaderStore((s) => s.setSettingsOpen);
-
-  const full = useFullscreenState();
+  const fullscreen = useReaderStore((s) => s.fullscreen);
+  const toggleFullscreen = useReaderStore((s) => s.toggleFullscreen);
 
   return (
     <header className="toolbar" role="toolbar" aria-label="Reader controls">
@@ -134,11 +122,11 @@ export function Toolbar() {
         </button>
         <IconButton icon="zoom-in" label="Zoom in" hint="+" onClick={() => zoomBy(1)} />
         <IconButton
-          icon={full ? 'fullscreen-exit' : 'maximize'}
-          label={full ? 'Exit fullscreen' : 'Fullscreen'}
+          icon={fullscreen ? 'fullscreen-exit' : 'maximize'}
+          label={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
           hint="F"
-          active={full}
-          onClick={() => void toggleFullscreen()}
+          active={fullscreen}
+          onClick={toggleFullscreen}
         />
       </div>
     </header>
