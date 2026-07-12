@@ -32,6 +32,10 @@ func TestMyStatsEndpoint(t *testing.T) {
 			Label string `json:"m"`
 			Count int    `json:"n"`
 		} `json:"months"`
+		Days []struct {
+			Label string `json:"d"`
+			Count int    `json:"n"`
+		} `json:"days"`
 		Finished []struct {
 			BookID     string `json:"bookId"`
 			SeriesName string `json:"seriesName"`
@@ -48,6 +52,9 @@ func TestMyStatsEndpoint(t *testing.T) {
 	}
 	if len(got.Months) != 12 || got.Months[11].Count != 1 {
 		t.Fatalf("months = %+v, want 12 buckets with 1 in the newest", got.Months)
+	}
+	if len(got.Days) != 30 || got.Days[29].Count != 1 {
+		t.Fatalf("days = %+v, want 30 buckets with 1 in the newest (read today)", got.Days)
 	}
 	if len(got.Finished) != 1 || got.Finished[0].BookID != books[0] || got.Finished[0].SeriesName != "Saga" {
 		t.Fatalf("finished = %+v, want the read book with its series name", got.Finished)

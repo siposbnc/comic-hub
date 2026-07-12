@@ -17,11 +17,18 @@ const (
 	topLimit      = 8
 	finishedLimit = 8
 	monthsWindow  = 12
+	daysWindow    = 30
 )
 
 // MonthCount is one bar of the issues-per-month chart, oldest first.
 type MonthCount struct {
 	Label string // short month name, e.g. "Jul"
+	Count int
+}
+
+// DayCount is one bar of the issues-per-day chart, oldest first.
+type DayCount struct {
+	Label string // short date, e.g. "Jul 2"
 	Count int
 }
 
@@ -33,6 +40,7 @@ type Summary struct {
 	Streak     int // consecutive reading days ending today/yesterday
 	BestStreak int // longest run this year
 	Months     []MonthCount
+	Days       []DayCount
 	Genres     []domain.NameCount
 	Publishers []domain.NameCount
 	Finished   []domain.FinishedBook
@@ -53,6 +61,7 @@ func (s *Service) Summary(ctx context.Context, userID string) (Summary, error) {
 	now := s.now()
 	out := Summary{
 		Months:     make([]MonthCount, 0, monthsWindow),
+		Days:       make([]DayCount, 0, daysWindow),
 		Genres:     []domain.NameCount{},
 		Publishers: []domain.NameCount{},
 		Finished:   []domain.FinishedBook{},
@@ -72,9 +81,13 @@ func (s *Service) Summary(ctx context.Context, userID string) (Summary, error) {
 	}
 	buckets := map[string]int{}
 	yearStart := time.Date(now.Year(), 1, 1, 0, 0, 0, 0, now.Location())
+	// Day buckets share the same finished set — the 30-day window is well inside the
+	// 12-month one. Keyed by calendar day in server-local time.
+	dayBuckets := map[string]int{}
 	for _, ms := range finished {
 		t := time.UnixMilli(ms).In(now.Location())
 		buckets[t.Format("2006-01")]++
+		dayBuckets[t.Format("2006-01-02")]++
 		if !t.Before(yearStart) {
 			out.ThisYear++
 		}
@@ -82,6 +95,14 @@ func (s *Service) Summary(ctx context.Context, userID string) (Summary, error) {
 	for i := 0; i < monthsWindow; i++ {
 		m := windowStart.AddDate(0, i, 0)
 		out.Months = append(out.Months, MonthCount{Label: m.Format("Jan"), Count: buckets[m.Format("2006-01")]})
+	}
+
+	// Day buckets: today and the (daysWindow-1) days before it, oldest first.
+	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).
+		AddDate(0, 0, -(daysWindow - 1))
+	for i := 0; i < daysWindow; i++ {
+		d := dayStart.AddDate(0, 0, i)
+		out.Days = append(out.Days, DayCount{Label: d.Format("Jan 2"), Count: dayBuckets[d.Format("2006-01-02")]})
 	}
 
 	// Streaks over the set of reading days. The catalog keeps each book's latest

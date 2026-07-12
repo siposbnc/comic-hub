@@ -91,6 +91,12 @@ export function Stats() {
         </Panel>
       </div>
 
+      <div style={{ marginTop: 18 }}>
+        <Panel title="Issues read per day" note="Last 30 days">
+          <DayBars days={s.days} />
+        </Panel>
+      </div>
+
       {s.finished.length > 0 && <RecentlyFinished stats={s} />}
     </div>
   );
@@ -146,7 +152,15 @@ function StatCard({
   );
 }
 
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+function Panel({
+  title,
+  note,
+  children,
+}: {
+  title: string;
+  note?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div
       style={{
@@ -156,7 +170,17 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
         border: '1px solid var(--border-hairline)',
       }}
     >
-      <Eyebrow>{title}</Eyebrow>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          gap: 12,
+        }}
+      >
+        <Eyebrow>{title}</Eyebrow>
+        {note && <Eyebrow style={{ letterSpacing: '0.08em' }}>{note}</Eyebrow>}
+      </div>
       {children}
     </div>
   );
@@ -229,6 +253,66 @@ function MonthBars({ months }: { months: ReadingStats['months'] }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function DayBars({ days }: { days: ReadingStats['days'] }) {
+  const maxN = Math.max(1, ...days.map((d) => d.n));
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 132 }}>
+        {days.map((d, i) => {
+          const peak = d.n === maxN && d.n > 0;
+          return (
+            <div
+              key={i}
+              title={`${d.d} · ${d.n} ${d.n === 1 ? 'issue' : 'issues'}`}
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'flex-end',
+                justifyContent: 'center',
+                height: '100%',
+              }}
+            >
+              <div
+                style={{
+                  width: '100%',
+                  height: `${(d.n / maxN) * 100}%`,
+                  minHeight: d.n > 0 ? 4 : 2,
+                  borderRadius: '3px 3px 0 0',
+                  background:
+                    d.n === 0
+                      ? 'var(--surface-card)'
+                      : peak
+                        ? 'var(--accent)'
+                        : 'color-mix(in oklab, var(--accent) 32%, var(--surface-card))',
+                }}
+              />
+            </div>
+          );
+        })}
+      </div>
+      {/* sparse date axis — a tick every 5 days plus the most recent */}
+      <div style={{ display: 'flex', gap: 3, marginTop: 7 }}>
+        {days.map((d, i) => (
+          <span
+            key={i}
+            className="ch-mono"
+            style={{
+              flex: 1,
+              textAlign: 'center',
+              fontSize: '0.58rem',
+              letterSpacing: '0.02em',
+              color: 'var(--text-tertiary)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {i % 5 === 0 || i === days.length - 1 ? d.d : ''}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

@@ -130,6 +130,18 @@ func TestSummary(t *testing.T) {
 	if sum.Months[11].Label != now.Format("Jan") {
 		t.Fatalf("last bucket label = %q, want %q", sum.Months[11].Label, now.Format("Jan"))
 	}
+	// Day buckets: 30 entries ending today. b1 finished today lands in the last bucket;
+	// b2 finished ~30 days ago (lastMonth) falls just outside the window.
+	if len(sum.Days) != 30 || sum.Days[29].Count != 1 || sum.Days[29].Label != now.Format("Jan 2") {
+		t.Fatalf("days last bucket = %+v, want 1 today (%q)", sum.Days[len(sum.Days)-1:], now.Format("Jan 2"))
+	}
+	dayTotal := 0
+	for _, d := range sum.Days {
+		dayTotal += d.Count
+	}
+	if dayTotal != 1 {
+		t.Fatalf("day total = %d, want 1 (only today's finish is inside 30 days)", dayTotal)
+	}
 	// Reading days: today (b1) + yesterday (b3) → current streak 2.
 	if sum.Streak != 2 {
 		t.Fatalf("streak = %d, want 2", sum.Streak)

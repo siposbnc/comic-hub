@@ -16,6 +16,11 @@ type statsMonthDTO struct {
 	Count int    `json:"n"`
 }
 
+type statsDayDTO struct {
+	Label string `json:"d"`
+	Count int    `json:"n"`
+}
+
 type statsNameCountDTO struct {
 	Name  string `json:"name"`
 	Count int    `json:"n"`
@@ -37,6 +42,7 @@ type statsDTO struct {
 	Streak     int                 `json:"streak"`
 	BestStreak int                 `json:"bestStreak"`
 	Months     []statsMonthDTO     `json:"months"`
+	Days       []statsDayDTO       `json:"days"`
 	Genres     []statsNameCountDTO `json:"genres"`
 	Publishers []statsNameCountDTO `json:"publishers"`
 	Finished   []statsFinishedDTO  `json:"finished"`
@@ -47,12 +53,16 @@ func toStatsDTO(s stats.Summary) statsDTO {
 		BooksRead: s.BooksRead, PagesRead: s.PagesRead, ThisYear: s.ThisYear,
 		Streak: s.Streak, BestStreak: s.BestStreak,
 		Months:     make([]statsMonthDTO, 0, len(s.Months)),
+		Days:       make([]statsDayDTO, 0, len(s.Days)),
 		Genres:     nameCounts(s.Genres),
 		Publishers: nameCounts(s.Publishers),
 		Finished:   make([]statsFinishedDTO, 0, len(s.Finished)),
 	}
 	for _, m := range s.Months {
 		dto.Months = append(dto.Months, statsMonthDTO{Label: m.Label, Count: m.Count})
+	}
+	for _, d := range s.Days {
+		dto.Days = append(dto.Days, statsDayDTO{Label: d.Label, Count: d.Count})
 	}
 	for _, f := range s.Finished {
 		dto.Finished = append(dto.Finished, statsFinishedDTO{

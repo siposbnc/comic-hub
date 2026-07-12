@@ -190,6 +190,13 @@ export interface StatsMonth {
   n: number;
 }
 
+/** One bar of the stats dashboard's issues-per-day chart (last 30 days, oldest first). */
+export interface StatsDay {
+  /** Short date label, e.g. "Jul 2". */
+  d: string;
+  n: number;
+}
+
 /** A ranked aggregate row (top genres / publishers). */
 export interface StatsNameCount {
   name: string;
@@ -215,6 +222,7 @@ export interface ReadingStats {
   streak: number;
   bestStreak: number;
   months: StatsMonth[];
+  days: StatsDay[];
   genres: StatsNameCount[];
   publishers: StatsNameCount[];
   finished: StatsFinished[];
