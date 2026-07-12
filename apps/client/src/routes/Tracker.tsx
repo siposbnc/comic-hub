@@ -1,10 +1,14 @@
 import { useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import type { TrackerTrack, TrackerIssue } from '@comichub/api-client';
+import type { TrackerTrack, TrackerIssue, BookCard } from '@comichub/api-client';
 import { Icon, Button, IconButton, Input, Select, Switch, Badge, EmptyState } from '@comichub/ui';
 import { useClient } from '../lib/client.js';
-import { useLibraries } from '../lib/queries.js';
 import {
+  useLibraries,
+  useCollections,
+  useReadingLists,
+  useSmartLists,
   useTracker,
   useCreateTrack,
   useRenameTrack,
@@ -112,8 +116,46 @@ function trackStats(t: TrackerTrack): TrackStats {
 
 // ── Screen ─────────────────────────────────────────────────────────────────────────────
 
-type Scope = 'all' | 'standalone' | string; // 'lib:<id>'
+// Scope encodes the active filter source: 'all' | 'standalone' | 'lib:<id>' | 'col:<id>' |
+// 'rl:<id>' | 'sm:<id>'. Collection / reading-list / smart-list scopes are book-level, so a
+// series is in scope when any of its books belongs to that grouping.
+type Scope = 'all' | 'standalone' | string;
 type Status = 'all' | 'progress' | 'incomplete' | 'gaps';
+
+const GROUPING_PREFIXES = ['col:', 'rl:', 'sm:'];
+const isGrouping = (scope: Scope) => GROUPING_PREFIXES.some((p) => scope.startsWith(p));
+
+/**
+ * For a collection / reading-list / smart-list scope, the set of series ids whose books fall
+ * in that grouping. Returns null when the scope isn't a grouping, or while it's still loading
+ * (so the grid shows the library rows rather than flashing "no matches").
+ */
+function useScopeSeriesIds(scope: Scope): Set<string> | null {
+  const client = useClient();
+  const kind: 'col' | 'rl' | 'sm' | null = scope.startsWith('col:')
+    ? 'col'
+    : scope.startsWith('rl:')
+      ? 'rl'
+      : scope.startsWith('sm:')
+        ? 'sm'
+        : null;
+  const id = kind ? scope.slice(scope.indexOf(':') + 1) : '';
+  const q = useQuery({
+    queryKey: ['trackerScope', kind, id],
+    enabled: kind !== null,
+    queryFn: async (): Promise<BookCard[]> => {
+      if (kind === 'col') return (await client.collection(id)).books;
+      if (kind === 'rl') return (await client.readingList(id)).books;
+      return (await client.smartListResults(id)).books;
+    },
+  });
+  return useMemo(() => {
+    if (kind === null || !q.data) return null;
+    const set = new Set<string>();
+    q.data.forEach((b) => b.seriesId && set.add(b.seriesId));
+    return set;
+  }, [kind, q.data]);
+}
 
 function TrackerScreen({ tracks }: { tracks: TrackerTrack[] }) {
   const [q, setQ] = useState('');
@@ -124,6 +166,10 @@ function TrackerScreen({ tracks }: { tracks: TrackerTrack[] }) {
   const [addOpen, setAddOpen] = useState(false);
 
   const libraries = useLibraries();
+  const collections = useCollections();
+  const readingLists = useReadingLists();
+  const smartLists = useSmartLists();
+  const scopeSeriesIds = useScopeSeriesIds(scope);
 
   const visible = useMemo(
     () =>
@@ -131,6 +177,10 @@ function TrackerScreen({ tracks }: { tracks: TrackerTrack[] }) {
         if (q && !t.name.toLowerCase().includes(q.toLowerCase())) return false;
         if (scope === 'standalone' && t.link !== 'manual') return false;
         if (scope.startsWith('lib:') && t.libraryId !== scope.slice(4)) return false;
+        if (isGrouping(scope)) {
+          if (!t.seriesId) return false; // standalone tracks aren't in a collection/list
+          if (scopeSeriesIds && !scopeSeriesIds.has(t.seriesId)) return false;
+        }
         const st = trackStats(t);
         if (hideRead && st.total > 0 && st.read === st.total) return false;
         if (status === 'progress' && st.reading === 0) return false;
@@ -138,7 +188,7 @@ function TrackerScreen({ tracks }: { tracks: TrackerTrack[] }) {
         if (status === 'gaps' && st.gaps === 0) return false;
         return true;
       }),
-    [tracks, q, scope, hideRead, status],
+    [tracks, q, scope, hideRead, status, scopeSeriesIds],
   );
 
   const sum = useMemo(
@@ -160,12 +210,18 @@ function TrackerScreen({ tracks }: { tracks: TrackerTrack[] }) {
   const pct = sum.issues ? Math.round((sum.read / sum.issues) * 100) : 0;
   const isFiltered = visible.length !== tracks.length;
 
-  const scopeLabel =
-    scope === 'all'
-      ? 'All'
-      : scope === 'standalone'
-        ? 'Standalone'
-        : (libraries.data?.find((l) => l.id === scope.slice(4))?.name ?? 'Library');
+  const scopeLabel = useMemo(() => {
+    if (scope === 'all') return 'All';
+    if (scope === 'standalone') return 'Standalone';
+    const id = scope.slice(scope.indexOf(':') + 1);
+    const name = (arr?: { id: string; name: string }[], fallback = 'Scope') =>
+      arr?.find((x) => x.id === id)?.name ?? fallback;
+    if (scope.startsWith('lib:')) return name(libraries.data, 'Library');
+    if (scope.startsWith('col:')) return name(collections.data, 'Collection');
+    if (scope.startsWith('rl:')) return name(readingLists.data, 'List');
+    if (scope.startsWith('sm:')) return name(smartLists.data, 'Smart list');
+    return 'All';
+  }, [scope, libraries.data, collections.data, readingLists.data, smartLists.data]);
 
   const clearFilters = () => {
     setQ('');
@@ -248,6 +304,9 @@ function TrackerScreen({ tracks }: { tracks: TrackerTrack[] }) {
               scope={scope}
               setScope={setScope}
               libraries={libraries.data ?? []}
+              collections={collections.data ?? []}
+              readingLists={readingLists.data ?? []}
+              smartLists={smartLists.data ?? []}
               hideRead={hideRead}
               setHideRead={setHideRead}
               status={status}
@@ -349,12 +408,17 @@ function Divider() {
 
 // ── Toolbar ────────────────────────────────────────────────────────────────────────────
 
+type NamedRef = { id: string; name: string };
+
 function Toolbar({
   q,
   setQ,
   scope,
   setScope,
   libraries,
+  collections,
+  readingLists,
+  smartLists,
   hideRead,
   setHideRead,
   status,
@@ -367,7 +431,10 @@ function Toolbar({
   setQ: (v: string) => void;
   scope: Scope;
   setScope: (v: Scope) => void;
-  libraries: { id: string; name: string }[];
+  libraries: NamedRef[];
+  collections: NamedRef[];
+  readingLists: NamedRef[];
+  smartLists: NamedRef[];
   hideRead: boolean;
   setHideRead: (v: boolean) => void;
   status: Status;
@@ -376,6 +443,12 @@ function Toolbar({
   setDensity: (v: Density) => void;
   onAdd: () => void;
 }) {
+  const scopeGroups: { label: string; prefix: string; items: NamedRef[] }[] = [
+    { label: 'Libraries', prefix: 'lib', items: libraries },
+    { label: 'Collections', prefix: 'col', items: collections },
+    { label: 'Reading lists', prefix: 'rl', items: readingLists },
+    { label: 'Smart lists', prefix: 'sm', items: smartLists },
+  ];
   const chips: [Status, string][] = [
     ['all', 'All'],
     ['progress', 'In progress'],
@@ -411,11 +484,18 @@ function Toolbar({
       <Select size="sm" value={scope} onChange={(e) => setScope(e.target.value)} aria-label="Scope">
         <option value="all">All series</option>
         <option value="standalone">Standalone only</option>
-        {libraries.map((l) => (
-          <option key={l.id} value={`lib:${l.id}`}>
-            {l.name}
-          </option>
-        ))}
+        {scopeGroups
+          .filter((g) => g.items.length > 0)
+          .flatMap((g) => [
+            <option key={g.prefix} disabled>
+              {`— ${g.label} —`}
+            </option>,
+            ...g.items.map((it) => (
+              <option key={`${g.prefix}:${it.id}`} value={`${g.prefix}:${it.id}`}>
+                {it.name}
+              </option>
+            )),
+          ])}
       </Select>
       <Switch
         checked={hideRead}
