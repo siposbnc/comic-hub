@@ -382,7 +382,7 @@ function Toolbar({
     ['incomplete', 'Incomplete'],
     ['gaps', 'Has gaps'],
   ];
-  const legend: { label: string; sw: CSSProperties; dot?: boolean }[] = [
+  const legend: { label: string; sw: CSSProperties }[] = [
     { label: 'Read', sw: { background: 'var(--accent)' } },
     {
       label: 'Reading',
@@ -391,7 +391,6 @@ function Toolbar({
     {
       label: 'Unread',
       sw: { background: 'var(--surface-card)', border: '1px solid var(--border-hairline)' },
-      dot: true,
     },
     { label: 'Missing', sw: { border: '1px dashed var(--border-hairline)', opacity: 0.8 } },
   ];
@@ -412,15 +411,11 @@ function Toolbar({
       <Select size="sm" value={scope} onChange={(e) => setScope(e.target.value)} aria-label="Scope">
         <option value="all">All series</option>
         <option value="standalone">Standalone only</option>
-        {libraries.length > 0 && (
-          <optgroup label="Libraries">
-            {libraries.map((l) => (
-              <option key={l.id} value={`lib:${l.id}`}>
-                {l.name}
-              </option>
-            ))}
-          </optgroup>
-        )}
+        {libraries.map((l) => (
+          <option key={l.id} value={`lib:${l.id}`}>
+            {l.name}
+          </option>
+        ))}
       </Select>
       <Switch
         checked={hideRead}
@@ -513,24 +508,9 @@ function Toolbar({
                 borderRadius: 2,
                 flex: 'none',
                 display: 'inline-block',
-                position: 'relative',
                 ...k.sw,
               }}
-            >
-              {k.dot && (
-                <span
-                  style={{
-                    position: 'absolute',
-                    top: 1,
-                    right: 1,
-                    width: 4,
-                    height: 4,
-                    borderRadius: '50%',
-                    background: 'var(--unread)',
-                  }}
-                />
-              )}
-            </span>
+            />
             <span
               className="ch-mono"
               style={{
@@ -551,9 +531,10 @@ function Toolbar({
 
 // ── Grid ───────────────────────────────────────────────────────────────────────────────
 
+// Only identifiers + geometry are captured on hover; the popover derives the live issue
+// stack from the current `tracks` each render, so optimistic toggles show instantly.
 interface HoverState {
-  track: TrackerTrack;
-  stack: TrackerIssue[];
+  trackId: string;
   baseNum: number;
   rect: DOMRect;
 }
@@ -633,6 +614,12 @@ function TrackerGrid({
     };
     toggle.mutate({ bookId: issue.bookId, issueId: issue.id, read: issue.state !== 'read' });
   };
+
+  // Derive the hovered cell's stack from live data so optimistic toggles update the popover.
+  const hoverTrack = hover ? tracks.find((t) => t.id === hover.trackId) : undefined;
+  const hoverStack = hoverTrack
+    ? hoverTrack.issues.filter((i) => Math.floor(i.sort) === hover?.baseNum)
+    : [];
 
   return (
     <div
@@ -728,9 +715,12 @@ function TrackerGrid({
           ))}
         </div>
       </div>
-      {hover && (
+      {hoverTrack && hoverStack.length > 0 && hover && (
         <CellPopover
-          hover={hover}
+          track={hoverTrack}
+          stack={hoverStack}
+          baseNum={hover.baseNum}
+          rect={hover.rect}
           container={containerRef.current}
           onToggle={onToggle}
           onHold={holdPopover}
@@ -979,7 +969,7 @@ function IssueCell({
       }}
       onMouseEnter={(e) => {
         setHover(true);
-        onHover({ track, stack, baseNum, rect: e.currentTarget.getBoundingClientRect() });
+        onHover({ trackId: track.id, baseNum, rect: e.currentTarget.getBoundingClientRect() });
       }}
       onMouseLeave={() => {
         setHover(false);
@@ -1016,19 +1006,6 @@ function IssueCell({
       >
         {baseNum}
       </span>
-      {st === 'owned' && (
-        <span
-          style={{
-            position: 'absolute',
-            top: 2,
-            right: 2,
-            width: 5,
-            height: 5,
-            borderRadius: '50%',
-            background: 'var(--unread)',
-          }}
-        />
-      )}
       {points.length > 0 && (
         <span
           style={{
@@ -1050,19 +1027,24 @@ function IssueCell({
 // ── Cell popover ───────────────────────────────────────────────────────────────────────
 
 function CellPopover({
-  hover,
+  track,
+  stack,
+  baseNum,
+  rect,
   container,
   onToggle,
   onHold,
 }: {
-  hover: HoverState;
+  track: TrackerTrack;
+  stack: TrackerIssue[];
+  baseNum: number;
+  rect: DOMRect;
   container: HTMLDivElement | null;
   onToggle: (track: TrackerTrack, issue: TrackerIssue, shift: boolean) => void;
   onHold: (hold: boolean) => void;
 }) {
   const client = useClient();
   const navigate = useNavigate();
-  const { track, stack, baseNum, rect } = hover;
   const main = stack.find((i) => Number.isInteger(i.sort));
   const issue = main ?? stack[0];
   if (!issue) return null;

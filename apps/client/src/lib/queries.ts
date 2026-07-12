@@ -5,7 +5,7 @@ import {
   useMutation,
   useQueryClient,
 } from '@tanstack/react-query';
-import type { ReadStatus, SmartRules } from '@comichub/api-client';
+import type { ReadStatus, SmartRules, TrackerTrack } from '@comichub/api-client';
 import { useClient } from './client.js';
 
 /**
@@ -456,13 +456,31 @@ export function useDeleteSmartList() {
 
 // ── Tracker (per-user reading matrix) ────────────────────────────────────────────────
 
-/** Surfaces a tracker mutation touches: the matrix itself plus every read-state view. */
-function invalidateTracker(qc: ReturnType<typeof useQueryClient>) {
-  qc.invalidateQueries({ queryKey: qk.tracker });
+/** Cross-views a read-state change touches — refreshed after the optimistic tracker update
+ *  settles. The tracker cache itself is updated optimistically (not refetched) so toggling a
+ *  cell feels instant; the heavy `/tracker` projection isn't re-fetched on every click. */
+function invalidateReadState(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ['seriesDetail'] });
   qc.invalidateQueries({ queryKey: ['series'] });
   qc.invalidateQueries({ queryKey: ['discover'] });
   qc.invalidateQueries({ queryKey: qk.continueReading });
+}
+
+/** Optimistically flip matching cells in the tracker cache; returns a rollback snapshot. */
+function optimisticMark(
+  qc: ReturnType<typeof useQueryClient>,
+  matches: (i: { bookId?: string; id?: string }) => boolean,
+  read: boolean,
+) {
+  const prev = qc.getQueryData<TrackerTrack[]>(qk.tracker);
+  const next: 'read' | 'unread' = read ? 'read' : 'unread';
+  qc.setQueryData<TrackerTrack[]>(qk.tracker, (old) =>
+    old?.map((t) => ({
+      ...t,
+      issues: t.issues.map((i) => (matches(i) ? { ...i, state: next } : i)),
+    })),
+  );
+  return prev;
 }
 
 export function useTracker() {
@@ -528,7 +546,19 @@ export function useToggleTrackerIssue() {
       if (v.bookId) await client.markBook(v.bookId, v.read ? 'read' : 'unread');
       else if (v.issueId) await client.markTrackIssue(v.issueId, v.read);
     },
-    onSuccess: () => invalidateTracker(qc),
+    onMutate: async (v) => {
+      await qc.cancelQueries({ queryKey: qk.tracker });
+      const prev = optimisticMark(
+        qc,
+        (i) => (!!v.bookId && i.bookId === v.bookId) || (!!v.issueId && i.id === v.issueId),
+        v.read,
+      );
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(qk.tracker, ctx.prev);
+    },
+    onSettled: () => invalidateReadState(qc),
   });
 }
 
@@ -544,7 +574,21 @@ export function useRangeMarkTracker() {
         ...v.issueIds.map((id) => client.markTrackIssue(id, v.read)),
       ]);
     },
-    onSuccess: () => invalidateTracker(qc),
+    onMutate: async (v) => {
+      await qc.cancelQueries({ queryKey: qk.tracker });
+      const books = new Set(v.bookIds);
+      const issues = new Set(v.issueIds);
+      const prev = optimisticMark(
+        qc,
+        (i) => (!!i.bookId && books.has(i.bookId)) || (!!i.id && issues.has(i.id)),
+        v.read,
+      );
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(qk.tracker, ctx.prev);
+    },
+    onSettled: () => invalidateReadState(qc),
   });
 }
 
