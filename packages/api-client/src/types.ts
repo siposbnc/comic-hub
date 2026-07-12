@@ -513,6 +513,40 @@ export interface ReadingListDetail {
   books: BookCard[];
 }
 
+/** A standalone (manual) track on the Tracker — a series the user follows that is in no
+ * library. Library series aren't tracks; they're projected live into the tracker view. */
+export interface Track {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** One cell of the Tracker matrix. A library issue carries `bookId` (toggle read via
+ * `markBook`); an overlay issue carries `id` (toggle via `markTrackIssue`) and no book —
+ * its read state is independent of owning a file. */
+export interface TrackerIssue {
+  id?: string;
+  number: string;
+  sort: number;
+  bookId?: string;
+  state: 'read' | 'reading' | 'unread';
+  page?: number;
+  pages?: number;
+  source: 'library' | 'manual';
+}
+
+/** One row of the Tracker: a library series (`link: 'library'`, `seriesId` set) or a
+ * standalone track (`link: 'manual'`). */
+export interface TrackerTrack {
+  id: string;
+  seriesId?: string;
+  libraryId?: string;
+  name: string;
+  link: 'library' | 'manual';
+  issues: TrackerIssue[];
+}
+
 /** One page in a book manifest. */
 export interface ManifestPage {
   idx: number;

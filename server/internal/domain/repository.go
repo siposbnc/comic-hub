@@ -18,6 +18,7 @@ type Repository interface {
 	Search() SearchRepository
 	Collections() CollectionRepository
 	ReadingLists() ReadingListRepository
+	Tracks() TrackRepository
 	Tags() TagRepository
 	SmartLists() SmartListRepository
 	ReaderPrefs() ReaderPrefRepository

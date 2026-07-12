@@ -208,6 +208,18 @@ func NewRouter(d Deps) http.Handler {
 				// {ref} is an item id or a linked book id (older clients pass book ids).
 				r.Delete("/{id}/items/{bookId}", handleRemoveReadingListItem(d.Organize))
 			})
+
+			// Tracker: the per-user reading matrix (library series projected live + the
+			// user's standalone tracks and overlay issues).
+			r.Route("/tracker", func(r chi.Router) {
+				r.Get("/", handleGetTracker(d.Organize))
+				r.Post("/tracks", handleCreateTrack(d.Organize))
+				r.Patch("/tracks/{id}", handleRenameTrack(d.Organize))
+				r.Delete("/tracks/{id}", handleDeleteTrack(d.Organize))
+				r.Post("/issues", handleAddTrackIssues(d.Organize))
+				r.Post("/issues/{id}/mark", handleMarkTrackIssue(d.Organize))
+				r.Delete("/issues/{id}", handleRemoveTrackIssue(d.Organize))
+			})
 		})
 
 		// Who's reading right now (Milestone E) — snapshot for initial render; live

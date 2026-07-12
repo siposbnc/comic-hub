@@ -19,6 +19,7 @@ type Store struct {
 	search       *searchRepo
 	collections  *collectionRepo
 	readingLists *readingListRepo
+	tracks       *trackRepo
 	tags         *tagRepo
 	smartLists   *smartListRepo
 	readerPrefs  *readerPrefRepo
@@ -42,6 +43,7 @@ func NewStore(db *DB) *Store {
 		search:       &searchRepo{db: db},
 		collections:  &collectionRepo{db: db},
 		readingLists: &readingListRepo{db: db},
+		tracks:       &trackRepo{db: db},
 		tags:         &tagRepo{db: db},
 		smartLists:   &smartListRepo{db: db},
 		readerPrefs:  &readerPrefRepo{db: db},
@@ -62,6 +64,7 @@ func (s *Store) Metadata() domain.MetadataRepository        { return s.metadata 
 func (s *Store) Search() domain.SearchRepository            { return s.search }
 func (s *Store) Collections() domain.CollectionRepository   { return s.collections }
 func (s *Store) ReadingLists() domain.ReadingListRepository { return s.readingLists }
+func (s *Store) Tracks() domain.TrackRepository             { return s.tracks }
 func (s *Store) Tags() domain.TagRepository                 { return s.tags }
 func (s *Store) SmartLists() domain.SmartListRepository     { return s.smartLists }
 func (s *Store) ReaderPrefs() domain.ReaderPrefRepository   { return s.readerPrefs }

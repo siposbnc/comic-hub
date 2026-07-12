@@ -40,6 +40,8 @@ import type {
   SmartListResults,
   SmartRules,
   Tag,
+  Track,
+  TrackerTrack,
   CreateUserInput,
   UpdateUserInput,
   UserAccount,
@@ -631,6 +633,53 @@ export class ComicHubClient {
       'DELETE',
       `/api/v1/me/reading-lists/${encodeURIComponent(id)}/items/${encodeURIComponent(ref)}`,
     );
+  }
+
+  // ── Tracker (per-user reading matrix) ────────────────────────────────────────────
+
+  /** The full tracker: every library series (live) merged with the user's standalone
+   *  tracks and overlay issues, each row's issues in reading order. */
+  async tracker(): Promise<TrackerTrack[]> {
+    const res = await this.request<{ tracks: TrackerTrack[] }>('GET', '/api/v1/me/tracker');
+    return res.tracks;
+  }
+
+  /** Create a standalone track — a series to follow that is in no library. */
+  createTrack(name: string): Promise<Track> {
+    return this.request<Track>('POST', '/api/v1/me/tracker/tracks', { body: { name } });
+  }
+
+  renameTrack(id: string, name: string): Promise<Track> {
+    return this.request<Track>('PATCH', `/api/v1/me/tracker/tracks/${encodeURIComponent(id)}`, {
+      body: { name },
+    });
+  }
+
+  async deleteTrack(id: string): Promise<void> {
+    await this.request<unknown>('DELETE', `/api/v1/me/tracker/tracks/${encodeURIComponent(id)}`);
+  }
+
+  /** Add overlay (gap) issues to a standalone track or a library series — exactly one
+   *  target. Numbers are issue labels ('24', '23.1'); ranges are expanded by the caller. */
+  async addTrackIssues(input: {
+    trackId?: string;
+    seriesId?: string;
+    numbers: string[];
+  }): Promise<void> {
+    await this.request<unknown>('POST', '/api/v1/me/tracker/issues', { body: input });
+  }
+
+  /** Toggle an overlay issue's read flag (library issues use `markBook` instead). */
+  async markTrackIssue(id: string, read: boolean): Promise<void> {
+    await this.request<unknown>(
+      'POST',
+      `/api/v1/me/tracker/issues/${encodeURIComponent(id)}/mark`,
+      { body: { read } },
+    );
+  }
+
+  async removeTrackIssue(id: string): Promise<void> {
+    await this.request<unknown>('DELETE', `/api/v1/me/tracker/issues/${encodeURIComponent(id)}`);
   }
 
   // ── Tags ───────────────────────────────────────────────────────────────────────

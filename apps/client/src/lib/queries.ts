@@ -28,6 +28,7 @@ export const qk = {
   tags: ['tags'] as const,
   smartLists: ['smartLists'] as const,
   smartList: (id: string) => ['smartList', id] as const,
+  tracker: ['tracker'] as const,
   presence: ['presence'] as const,
 };
 
@@ -450,6 +451,100 @@ export function useDeleteSmartList() {
   return useMutation({
     mutationFn: (id: string) => client.deleteSmartList(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.smartLists }),
+  });
+}
+
+// ── Tracker (per-user reading matrix) ────────────────────────────────────────────────
+
+/** Surfaces a tracker mutation touches: the matrix itself plus every read-state view. */
+function invalidateTracker(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: qk.tracker });
+  qc.invalidateQueries({ queryKey: ['seriesDetail'] });
+  qc.invalidateQueries({ queryKey: ['series'] });
+  qc.invalidateQueries({ queryKey: ['discover'] });
+  qc.invalidateQueries({ queryKey: qk.continueReading });
+}
+
+export function useTracker() {
+  const client = useClient();
+  return useQuery({ queryKey: qk.tracker, queryFn: () => client.tracker() });
+}
+
+export function useCreateTrack() {
+  const client = useClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => client.createTrack(name),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.tracker }),
+  });
+}
+
+export function useRenameTrack() {
+  const client = useClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) => client.renameTrack(id, name),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.tracker }),
+  });
+}
+
+export function useDeleteTrack() {
+  const client = useClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => client.deleteTrack(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.tracker }),
+  });
+}
+
+export function useAddTrackIssues() {
+  const client = useClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { trackId?: string; seriesId?: string; numbers: string[] }) =>
+      client.addTrackIssues(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.tracker }),
+  });
+}
+
+export function useRemoveTrackIssue() {
+  const client = useClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => client.removeTrackIssue(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.tracker }),
+  });
+}
+
+/**
+ * Toggle one tracker cell. A library issue (bookId) routes through the progress API; an
+ * overlay issue (issueId) flips its own read flag. Either way every read-state view refreshes.
+ */
+export function useToggleTrackerIssue() {
+  const client = useClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (v: { bookId?: string; issueId?: string; read: boolean }) => {
+      if (v.bookId) await client.markBook(v.bookId, v.read ? 'read' : 'unread');
+      else if (v.issueId) await client.markTrackIssue(v.issueId, v.read);
+    },
+    onSuccess: () => invalidateTracker(qc),
+  });
+}
+
+/** Mark a run of cells at once (shift-click): library issues via markBook, overlay via mark. */
+export function useRangeMarkTracker() {
+  const client = useClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (v: { bookIds: string[]; issueIds: string[]; read: boolean }) => {
+      const status = v.read ? 'read' : 'unread';
+      await Promise.all([
+        ...v.bookIds.map((id) => client.markBook(id, status)),
+        ...v.issueIds.map((id) => client.markTrackIssue(id, v.read)),
+      ]);
+    },
+    onSuccess: () => invalidateTracker(qc),
   });
 }
 
