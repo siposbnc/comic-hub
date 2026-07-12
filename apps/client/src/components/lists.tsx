@@ -1,120 +1,343 @@
-import { useEffect, useState } from 'react';
-import { Button, Input, Icon, IconButton, EmptyState } from '@comichub/ui';
+import { useEffect } from 'react';
+import { Button, Icon, IconButton, EmptyState } from '@comichub/ui';
 import type { BookCard } from '@comichub/api-client';
-import { Page, LoadingState, ErrorState } from './Page.js';
+import { LoadingState, ErrorState } from './Page.js';
 import { CoverGrid } from './CoverGrid.js';
 import { BookCover } from './cards.js';
 import { useSeriesNames } from '../lib/queries.js';
+import { relativeTime } from '../lib/format.js';
 
-/** A row in a lists index: name on the left, item count + chevron on the right. */
-export interface IndexItem {
+/**
+ * A card in the longbox-style list index (collections, reading lists, smart lists): a fanned
+ * cover collage, name, issue count + read %, a progress bar, and "updated" time. Optional
+ * `topLeft`/`topRight` pills overlay the covers (e.g. reading-list "In queue" / "N missing").
+ */
+export interface ListCardModel {
   id: string;
   name: string;
   bookCount: number;
+  readPct: number;
+  covers: string[];
+  updatedAt: number;
+  topLeft?: React.ReactNode;
+  topRight?: React.ReactNode;
 }
 
-/** Generic index screen for collections / reading lists: create bar + clickable rows. */
-export function ListIndexScreen({
-  eyebrow,
-  title,
-  items,
-  isLoading,
-  isError,
-  errorMessage,
-  onRetry,
+/** Read %, and up to four cover urls, derived from a set of books. Shared by every index. */
+export function cardCoversAndPct(
+  books: BookCard[],
+  coverUrl: (bookId: string) => string,
+): { readPct: number; covers: string[] } {
+  const read = books.filter((b) => b.progress?.status === 'read').length;
+  const readPct = books.length ? Math.round((read / books.length) * 100) : 0;
+  return { readPct, covers: books.slice(0, 4).map((b) => coverUrl(b.id)) };
+}
+
+/** The responsive card grid every list index shares. `createTile` closes the grid. */
+export function ListCardGrid({
+  cards,
   onOpen,
-  onCreate,
-  creating,
-  createPlaceholder,
-  emptyText,
+  createTile,
 }: {
-  eyebrow: string;
-  title: string;
-  items: IndexItem[] | undefined;
-  isLoading: boolean;
-  isError: boolean;
-  errorMessage: string;
-  onRetry: () => void;
+  cards: ListCardModel[];
   onOpen: (id: string) => void;
-  onCreate: (name: string) => void;
-  creating: boolean;
-  createPlaceholder: string;
-  emptyText: string;
+  createTile?: React.ReactNode;
 }) {
-  const [name, setName] = useState('');
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const n = name.trim();
-    if (!n || creating) return;
-    onCreate(n);
-    setName('');
-  };
-
   return (
-    <Page eyebrow={eyebrow} title={title}>
-      <form onSubmit={submit} style={{ display: 'flex', gap: 10, maxWidth: 520, marginBottom: 24 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <Input
-            icon="plus"
-            placeholder={createPlaceholder}
-            value={name}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value)}
-          />
-        </div>
-        <Button type="submit" variant="secondary" disabled={!name.trim() || creating}>
-          {creating ? 'Creating…' : 'Create'}
-        </Button>
-      </form>
-
-      {isLoading ? (
-        <LoadingState />
-      ) : isError ? (
-        <ErrorState message={errorMessage} onRetry={onRetry} />
-      ) : !items || items.length === 0 ? (
-        <EmptyState title="Nothing here yet">{emptyText}</EmptyState>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 720 }}>
-          {items.map((it) => (
-            <ListRow key={it.id} item={it} onOpen={() => onOpen(it.id)} />
-          ))}
-        </div>
-      )}
-    </Page>
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(258px, 1fr))',
+        gap: 20,
+      }}
+    >
+      {cards.map((c) => (
+        <LongboxCard key={c.id} card={c} onOpen={() => onOpen(c.id)} />
+      ))}
+      {createTile}
+    </div>
   );
 }
 
-/** A clickable index row: name, item count, chevron. Shared by every lists index. */
-export function ListRow({ item, onOpen }: { item: IndexItem; onOpen: () => void }) {
-  const [hover, setHover] = useState(false);
+function LongboxCard({ card, onOpen }: { card: ListCardModel; onOpen: () => void }) {
   return (
     <button
       type="button"
       onClick={onOpen}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
       style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        width: '100%',
-        padding: '14px 16px',
+        display: 'block',
         textAlign: 'left',
+        padding: 0,
         cursor: 'pointer',
-        background: hover ? 'var(--surface-card)' : 'var(--surface-raised)',
+        background: 'var(--surface-raised)',
         border: '1px solid var(--border-hairline)',
-        borderRadius: 'var(--radius-md)',
-        color: 'var(--text-primary)',
+        borderRadius: 'var(--radius-lg)',
+        overflow: 'hidden',
+        transition: 'border-color 120ms',
+      }}
+      onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--border-strong)')}
+      onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border-hairline)')}
+    >
+      <div style={{ position: 'relative' }}>
+        <CoverFan covers={card.covers} />
+        {card.topLeft && (
+          <div style={{ position: 'absolute', top: 10, left: 10 }}>{card.topLeft}</div>
+        )}
+        {card.topRight && (
+          <div style={{ position: 'absolute', top: 10, right: 10 }}>{card.topRight}</div>
+        )}
+      </div>
+      <div style={{ padding: '14px 16px 16px' }}>
+        <div
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontWeight: 700,
+            fontSize: '1.02rem',
+            letterSpacing: '-0.01em',
+            color: 'var(--paper-100)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {card.name}
+        </div>
+        <div
+          className="ch-mono"
+          style={{
+            fontSize: '0.66rem',
+            color: 'var(--text-tertiary)',
+            marginTop: 6,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          <span>
+            {card.bookCount} issue{card.bookCount === 1 ? '' : 's'}
+          </span>
+          <span
+            style={{ width: 3, height: 3, borderRadius: '50%', background: 'var(--paper-600)' }}
+          />
+          <span>{card.readPct}% read</span>
+        </div>
+        <div className="ch-progress" style={{ borderRadius: 999, height: 5, marginTop: 12 }}>
+          <span style={{ width: `${card.readPct}%`, borderRadius: 999 }} />
+        </div>
+        <div
+          className="ch-mono"
+          style={{ fontSize: '0.6rem', color: 'var(--paper-600)', marginTop: 10 }}
+        >
+          Updated {relativeTime(card.updatedAt)}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+/** A pill overlaid on a card's cover fan (reading-list "In queue" / "N missing"). */
+export function CardPill({
+  tone,
+  icon,
+  children,
+}: {
+  tone: 'accent' | 'warning';
+  icon: React.ComponentProps<typeof Icon>['name'];
+  children: React.ReactNode;
+}) {
+  const accent = tone === 'accent';
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 5,
+        height: 22,
+        padding: '0 9px',
+        borderRadius: 'var(--radius-pill)',
+        background: accent ? 'var(--accent)' : 'color-mix(in oklab, var(--warning) 92%, #000)',
+        color: accent ? 'var(--text-on-accent)' : 'var(--ink-900)',
+        fontFamily: 'var(--font-mono)',
+        fontSize: '0.58rem',
+        letterSpacing: '0.05em',
+        textTransform: 'uppercase',
+        boxShadow: '0 2px 8px rgba(0,0,0,.4)',
       }}
     >
-      <span style={{ flex: 1, minWidth: 0, fontWeight: 600 }}>{item.name}</span>
+      <Icon name={icon} size={11} color={accent ? 'var(--text-on-accent)' : 'var(--ink-900)'} />
+      {children}
+    </span>
+  );
+}
+
+/** Up to four covers fanned like pulls from a longbox (per the design preview). */
+export function CoverFan({ covers }: { covers: string[] }) {
+  const arr = covers.slice(0, 4);
+  const mid = (arr.length - 1) / 2;
+  return (
+    <div
+      style={{
+        position: 'relative',
+        height: 158,
+        background: 'linear-gradient(180deg, var(--ink-900), var(--ink-800))',
+        overflow: 'hidden',
+      }}
+    >
+      {arr.length === 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Icon name="book-open" size={22} color="var(--paper-600)" />
+        </div>
+      )}
+      {arr.map((c, i) => {
+        const off = i - mid;
+        return (
+          <img
+            key={i}
+            src={c}
+            alt=""
+            style={{
+              position: 'absolute',
+              left: '50%',
+              top: 20,
+              width: 86,
+              height: 129,
+              objectFit: 'cover',
+              transform: `translateX(calc(-50% + ${off * 40}px)) rotate(${off * 6}deg)`,
+              transformOrigin: 'bottom center',
+              boxShadow: '0 8px 22px rgba(0,0,0,.55)',
+              outline: '1px solid rgba(0,0,0,.45)',
+              zIndex: i,
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+/** The dashed "create" tile that closes a list card grid. */
+export function CreateTile({
+  label,
+  hint,
+  onClick,
+}: {
+  label: string;
+  hint: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+        minHeight: 260,
+        cursor: 'pointer',
+        background: 'transparent',
+        border: '1px dashed var(--border-strong)',
+        borderRadius: 'var(--radius-lg)',
+        color: 'var(--text-tertiary)',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = 'var(--accent)';
+        e.currentTarget.style.color = 'var(--accent)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = 'var(--border-strong)';
+        e.currentTarget.style.color = 'var(--text-tertiary)';
+      }}
+    >
       <span
-        className="ch-mono"
-        style={{ fontSize: 'var(--text-small)', color: 'var(--text-tertiary)' }}
+        style={{
+          width: 44,
+          height: 44,
+          borderRadius: '50%',
+          border: '1px solid currentColor',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
       >
-        {item.bookCount} {item.bookCount === 1 ? 'issue' : 'issues'}
+        <Icon name="plus" size={20} color="currentColor" />
       </span>
-      <Icon name="chevron-right" size={16} color="var(--text-tertiary)" />
+      <span style={{ fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.9rem' }}>
+        {label}
+      </span>
+      <span className="ch-mono" style={{ fontSize: '0.62rem', color: 'var(--paper-600)' }}>
+        {hint}
+      </span>
     </button>
+  );
+}
+
+/** The shared index header: accent eyebrow, display title, a subtitle, and a right-side slot
+ *  for the create control (a name field, or a smart-list builder toggle). */
+export function ListIndexHeader({
+  eyebrow,
+  title,
+  subtitle,
+  right,
+}: {
+  eyebrow: string;
+  title: string;
+  subtitle: string;
+  right?: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'flex-end',
+        gap: 24,
+        flexWrap: 'wrap',
+        marginBottom: 24,
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 280 }}>
+        <div
+          className="ch-mono"
+          style={{
+            fontSize: '0.66rem',
+            fontWeight: 600,
+            letterSpacing: '0.16em',
+            textTransform: 'uppercase',
+            color: 'var(--accent)',
+          }}
+        >
+          {eyebrow}
+        </div>
+        <h1
+          style={{
+            margin: '8px 0 0',
+            fontFamily: 'var(--font-display)',
+            fontWeight: 800,
+            fontSize: 'var(--text-display-l)',
+            letterSpacing: '-0.01em',
+            color: 'var(--text-primary)',
+          }}
+        >
+          {title}
+        </h1>
+        <p className="ch-label" style={{ margin: '8px 0 0', color: 'var(--text-tertiary)' }}>
+          {subtitle}
+        </p>
+      </div>
+      {right && (
+        <div style={{ flex: 'none', display: 'flex', gap: 8, alignItems: 'center' }}>{right}</div>
+      )}
+    </div>
   );
 }
 
