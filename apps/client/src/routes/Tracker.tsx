@@ -68,9 +68,10 @@ const CELL_STYLES: Record<CellState, CSSProperties> = {
   read: { background: 'var(--accent)', color: 'var(--text-on-accent)' },
   'manual-read': { background: 'var(--accent)', color: 'var(--text-on-accent)' },
   reading: {
-    background: 'var(--accent-soft)',
+    background: 'color-mix(in oklab, var(--accent) 20%, var(--surface-card))',
     color: 'var(--accent)',
-    boxShadow: 'inset 0 -2px 0 var(--accent)',
+    boxShadow: 'inset 0 -3px 0 var(--accent)',
+    fontWeight: 700,
   },
   owned: {
     background: 'var(--surface-card)',
@@ -182,9 +183,12 @@ function TrackerScreen({ tracks }: { tracks: TrackerTrack[] }) {
           if (scopeSeriesIds && !scopeSeriesIds.has(t.seriesId)) return false;
         }
         const st = trackStats(t);
-        if (hideRead && st.total > 0 && st.read === st.total) return false;
-        if (status === 'progress' && st.reading === 0) return false;
-        if (status === 'incomplete' && st.total > 0 && st.read === st.total) return false;
+        const complete = st.total > 0 && st.read === st.total;
+        if (hideRead && complete) return false;
+        // "In progress" = a series you've started but not finished (some issues read, or one
+        // mid-read) — not just one with an actively mid-read issue.
+        if (status === 'progress' && (!(st.read > 0 || st.reading > 0) || complete)) return false;
+        if (status === 'incomplete' && complete) return false;
         if (status === 'gaps' && st.gaps === 0) return false;
         return true;
       }),
@@ -459,7 +463,10 @@ function Toolbar({
     { label: 'Read', sw: { background: 'var(--accent)' } },
     {
       label: 'Reading',
-      sw: { background: 'var(--accent-soft)', boxShadow: 'inset 0 -2px 0 var(--accent)' },
+      sw: {
+        background: 'color-mix(in oklab, var(--accent) 20%, var(--surface-card))',
+        boxShadow: 'inset 0 -3px 0 var(--accent)',
+      },
     },
     {
       label: 'Unread',
@@ -611,13 +618,12 @@ function Toolbar({
 
 // ── Grid ───────────────────────────────────────────────────────────────────────────────
 
-// Only identifiers + geometry are captured on hover; the popover derives the live issue
-// stack from the current `tracks` each render, so optimistic toggles show instantly.
-interface HoverState {
-  trackId: string;
-  baseNum: number;
-  rect: DOMRect;
-}
+// Only identifiers + geometry are captured on hover; the popover derives live data from the
+// current `tracks` each render, so optimistic toggles show instantly. A cell hover opens the
+// issue popover; a row-header hover opens the series popover.
+type HoverState =
+  | { type: 'cell'; trackId: string; baseNum: number; rect: DOMRect }
+  | { type: 'header'; trackId: string; rect: DOMRect };
 
 function TrackerGrid({
   tracks,
@@ -695,11 +701,12 @@ function TrackerGrid({
     toggle.mutate({ bookId: issue.bookId, issueId: issue.id, read: issue.state !== 'read' });
   };
 
-  // Derive the hovered cell's stack from live data so optimistic toggles update the popover.
+  // Derive the hovered row/cell from live data so optimistic toggles update the popover.
   const hoverTrack = hover ? tracks.find((t) => t.id === hover.trackId) : undefined;
-  const hoverStack = hoverTrack
-    ? hoverTrack.issues.filter((i) => Math.floor(i.sort) === hover?.baseNum)
-    : [];
+  const hoverStack =
+    hover?.type === 'cell' && hoverTrack
+      ? hoverTrack.issues.filter((i) => Math.floor(i.sort) === hover.baseNum)
+      : [];
 
   return (
     <div
@@ -795,7 +802,7 @@ function TrackerGrid({
           ))}
         </div>
       </div>
-      {hoverTrack && hoverStack.length > 0 && hover && (
+      {hover?.type === 'cell' && hoverTrack && hoverStack.length > 0 && (
         <CellPopover
           track={hoverTrack}
           stack={hoverStack}
@@ -803,6 +810,14 @@ function TrackerGrid({
           rect={hover.rect}
           container={containerRef.current}
           onToggle={onToggle}
+          onHold={holdPopover}
+        />
+      )}
+      {hover?.type === 'header' && hoverTrack && (
+        <SeriesPopover
+          track={hoverTrack}
+          rect={hover.rect}
+          container={containerRef.current}
           onHold={holdPopover}
         />
       )}
@@ -887,6 +902,14 @@ function TrackRow({
         <button
           type="button"
           onClick={openHeader}
+          onMouseEnter={(e) =>
+            onHover({
+              type: 'header',
+              trackId: t.id,
+              rect: e.currentTarget.getBoundingClientRect(),
+            })
+          }
+          onMouseLeave={() => onHover(null)}
           style={{
             flex: 1,
             minWidth: 0,
@@ -1072,7 +1095,12 @@ function IssueCell({
       }}
       onMouseEnter={(e) => {
         setHover(true);
-        onHover({ trackId: track.id, baseNum, rect: e.currentTarget.getBoundingClientRect() });
+        onHover({
+          type: 'cell',
+          trackId: track.id,
+          baseNum,
+          rect: e.currentTarget.getBoundingClientRect(),
+        });
       }}
       onMouseLeave={() => {
         setHover(false);
@@ -1327,6 +1355,148 @@ function CellPopover({
             }}
           >
             Issue details <Icon name="chevron-right" size={11} color="var(--text-tertiary)" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Series popover (row-header hover) ──────────────────────────────────────────────────
+
+function SeriesPopover({
+  track,
+  rect,
+  container,
+  onHold,
+}: {
+  track: TrackerTrack;
+  rect: DOMRect;
+  container: HTMLDivElement | null;
+  onHold: (hold: boolean) => void;
+}) {
+  const client = useClient();
+  const navigate = useNavigate();
+  const st = trackStats(track);
+  const firstOwned = track.issues.find((i) => i.bookId);
+
+  const cRect = container?.getBoundingClientRect() ?? { left: 0, top: 0, width: 1000, height: 600 };
+  const left = Math.min(Math.max(rect.left - cRect.left, 8), cRect.width - 288);
+  const below = rect.bottom - cRect.top < cRect.height - 180;
+  const top = below ? rect.bottom - cRect.top + 8 : rect.top - cRect.top - 8;
+
+  return (
+    <div
+      onMouseEnter={() => onHold(true)}
+      onMouseLeave={() => onHold(false)}
+      style={{
+        position: 'absolute',
+        left,
+        top,
+        transform: below ? 'none' : 'translateY(-100%)',
+        width: 280,
+        zIndex: 60,
+        background: 'var(--surface-raised)',
+        border: '1px solid var(--border-strong)',
+        borderRadius: 'var(--radius-lg)',
+        boxShadow: 'var(--shadow-popover)',
+        padding: 12,
+      }}
+    >
+      <div style={{ display: 'flex', gap: 11 }}>
+        {firstOwned?.bookId && (
+          <div className="ch-reg" style={{ flex: 'none' }}>
+            <img
+              src={client.coverUrl(firstOwned.bookId, 160)}
+              alt=""
+              style={{ width: 46, height: 69, objectFit: 'cover', display: 'block' }}
+            />
+          </div>
+        )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span
+              style={{
+                fontFamily: 'var(--font-body)',
+                fontWeight: 600,
+                fontSize: '0.86rem',
+                color: 'var(--paper-100)',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {track.name}
+            </span>
+            {track.special && (
+              <span
+                className="ch-mono"
+                style={{
+                  flex: 'none',
+                  fontSize: '0.52rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
+                  color: 'var(--accent)',
+                  background: 'var(--accent-soft)',
+                  padding: '1px 5px',
+                  borderRadius: 3,
+                }}
+              >
+                {track.special}
+              </span>
+            )}
+          </div>
+          <div
+            className="ch-mono"
+            style={{ fontSize: '0.64rem', color: 'var(--text-tertiary)', marginTop: 4 }}
+          >
+            {track.link === 'library' ? 'In your library' : 'Standalone track'} · {st.total} issue
+            {st.total === 1 ? '' : 's'}
+          </div>
+          <div
+            className="ch-mono"
+            style={{ fontSize: '0.64rem', color: 'var(--text-secondary)', marginTop: 6 }}
+          >
+            <span style={{ color: 'var(--accent)' }}>{st.read} read</span> · {st.total - st.read} to
+            go
+            {st.gaps > 0 ? ` · ${st.gaps} missing` : ''}
+          </div>
+          <div className="ch-progress" style={{ borderRadius: 999, height: 5, marginTop: 8 }}>
+            <span style={{ width: `${st.pct}%`, borderRadius: 999 }} />
+          </div>
+        </div>
+      </div>
+      {track.seriesId && (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            marginTop: 10,
+            paddingTop: 9,
+            borderTop: '1px solid var(--border-hairline)',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() =>
+              navigate({ to: '/series/$id', params: { id: track.seriesId as string } })
+            }
+            className="ch-mono"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              fontSize: '0.64rem',
+              fontWeight: 600,
+              color: 'var(--accent)',
+              border: 'none',
+              background: 'transparent',
+              cursor: 'pointer',
+              padding: 0,
+            }}
+          >
+            Open series <Icon name="chevron-right" size={12} color="var(--accent)" />
           </button>
         </div>
       )}
