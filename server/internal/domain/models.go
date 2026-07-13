@@ -33,6 +33,38 @@ const (
 	StatusRead       ReadStatus = "read"
 )
 
+// BookKind classifies a book within its series: a normal numbered issue, a special edition
+// (annual/one-shot/tpb/gn/special), or non-issue art (a variant or cover) that issue lists
+// and the Tracker should not treat as an issue. Derived at scan time from ComicInfo
+// <Format>, the parsed issue-number label, and filename heuristics.
+type BookKind string
+
+const (
+	KindIssue   BookKind = "issue"
+	KindAnnual  BookKind = "annual"
+	KindSpecial BookKind = "special"
+	KindOneShot BookKind = "one-shot"
+	KindTPB     BookKind = "tpb"
+	KindGN      BookKind = "gn"
+	KindVariant BookKind = "variant"
+	KindCover   BookKind = "cover"
+)
+
+// IsExtra reports whether the book is non-issue art (a variant or cover) that trackers and
+// issue lists should exclude from the numbered run.
+func (k BookKind) IsExtra() bool { return k == KindVariant || k == KindCover }
+
+// IsSpecial reports whether the book is a special edition rather than a regular numbered
+// issue (annual, one-shot, tpb, gn, or a generic special).
+func (k BookKind) IsSpecial() bool {
+	switch k {
+	case KindAnnual, KindSpecial, KindOneShot, KindTPB, KindGN:
+		return true
+	default:
+		return false
+	}
+}
+
 // Library is a named set of root folders ComicHub scans.
 type Library struct {
 	ID        string
@@ -91,6 +123,7 @@ type Book struct {
 	Title         string
 	Number        string
 	SortNumber    float64
+	Kind          BookKind // issue | annual | special | one-shot | tpb | gn | variant | cover
 	Volume        int
 	ReleaseDate   int64
 	AgeRating     string

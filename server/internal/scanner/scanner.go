@@ -342,6 +342,13 @@ func (s *Scanner) buildBook(
 		book.ID = ulid.New()
 		book.AddedAt = now
 	}
+	// Classify from the resolved number + filename + sidecar Format, so a rescan always
+	// reflects the current facts (independent of metadata state).
+	ciFormat := ""
+	if haveCI {
+		ciFormat = ci.Format
+	}
+	book.Kind = classifyKind(book.Number, path, ciFormat)
 	return book
 }
 

@@ -74,45 +74,69 @@ func (s *Service) Tracker(ctx context.Context, userID string) ([]TrackerTrack, e
 			if err != nil {
 				return nil, err
 			}
-			issues := make([]TrackerIssue, 0, len(books))
+			main := make([]TrackerIssue, 0, len(books))
 			seen := map[float64]bool{}
+			specials := map[domain.BookKind][]domain.Book{}
 			for _, b := range books {
 				if !access.Allowed(ceiling, b.AgeRating) {
 					continue
 				}
+				if b.Kind.IsExtra() {
+					continue // variants/covers aren't issues — keep them out of the matrix
+				}
+				if b.Kind.IsSpecial() {
+					specials[b.Kind] = append(specials[b.Kind], b)
+					continue
+				}
 				sortKey := issueSort(b.SortNumber, b.Number)
 				seen[sortKey] = true
-				issues = append(issues, TrackerIssue{
-					Number: displayNumber(b.Number, sortKey),
-					Sort:   sortKey,
-					BookID: b.ID,
-					State:  s.bookState(ctx, userID, b.ID),
-					Pages:  b.PageCount,
-					Source: "library",
-					Page:   s.bookPage(ctx, userID, b.ID),
-				})
+				main = append(main, s.libraryIssue(ctx, userID, b, sortKey, displayNumber(b.Number, sortKey)))
 			}
-			// Merge the user's overlay (gap) issues for this series, skipping numbers a real
+			// Merge the user's overlay (gap) issues into the main run, skipping numbers a real
 			// book already occupies.
 			for _, it := range bySeries[ser.ID] {
 				if seen[it.Sort] {
 					continue
 				}
 				seen[it.Sort] = true
-				issues = append(issues, overlayIssue(it))
+				main = append(main, overlayIssue(it))
 			}
-			if len(issues) == 0 {
-				continue // fully restricted / empty — nothing to show
+			if len(main) > 0 {
+				sortIssues(main)
+				tracks = append(tracks, TrackerTrack{
+					ID:        "series:" + ser.ID,
+					SeriesID:  ser.ID,
+					LibraryID: lib.ID,
+					Name:      ser.Name,
+					Link:      "library",
+					Issues:    main,
+				})
 			}
-			sortIssues(issues)
-			tracks = append(tracks, TrackerTrack{
-				ID:        "series:" + ser.ID,
-				SeriesID:  ser.ID,
-				LibraryID: lib.ID,
-				Name:      ser.Name,
-				Link:      "library",
-				Issues:    issues,
-			})
+			// Each special edition (annual, one-shot, …) becomes its own sub-row, re-numbered
+			// locally from 1 — exactly as a collector's wall-chart splits them out.
+			for _, kind := range specialKindOrder {
+				group := specials[kind]
+				if len(group) == 0 {
+					continue
+				}
+				sort.SliceStable(group, func(i, j int) bool { return group[i].SortNumber < group[j].SortNumber })
+				issues := make([]TrackerIssue, 0, len(group))
+				for i, b := range group {
+					local := parseSort(b.Number)
+					if local == 0 {
+						local = float64(i + 1)
+					}
+					issues = append(issues, s.libraryIssue(ctx, userID, b, local, trimFloat(local)))
+				}
+				tracks = append(tracks, TrackerTrack{
+					ID:        "series:" + ser.ID + ":" + string(kind),
+					SeriesID:  ser.ID,
+					LibraryID: lib.ID,
+					Name:      ser.Name + " — " + specialLabel(kind),
+					Link:      "library",
+					Issues:    issues,
+				})
+			}
 		}
 	}
 
@@ -141,6 +165,42 @@ func (s *Service) Tracker(ctx context.Context, userID string) ([]TrackerTrack, e
 		return strings.ToLower(tracks[i].Name) < strings.ToLower(tracks[j].Name)
 	})
 	return tracks, nil
+}
+
+// specialKindOrder is the order special sub-rows appear under their parent series.
+var specialKindOrder = []domain.BookKind{
+	domain.KindAnnual, domain.KindOneShot, domain.KindSpecial, domain.KindTPB, domain.KindGN,
+}
+
+// specialLabel is the human sub-row suffix for a special kind ("{Series} — Annual").
+func specialLabel(kind domain.BookKind) string {
+	switch kind {
+	case domain.KindAnnual:
+		return "Annual"
+	case domain.KindOneShot:
+		return "One-Shot"
+	case domain.KindSpecial:
+		return "Special"
+	case domain.KindTPB:
+		return "TPB"
+	case domain.KindGN:
+		return "GN"
+	default:
+		return string(kind)
+	}
+}
+
+// libraryIssue builds a tracker cell for a library book at the given sort key / display label.
+func (s *Service) libraryIssue(ctx context.Context, userID string, b domain.Book, sortKey float64, number string) TrackerIssue {
+	return TrackerIssue{
+		Number: number,
+		Sort:   sortKey,
+		BookID: b.ID,
+		State:  s.bookState(ctx, userID, b.ID),
+		Pages:  b.PageCount,
+		Source: "library",
+		Page:   s.bookPage(ctx, userID, b.ID),
+	}
 }
 
 // bookState maps a user's progress on a book to a tracker cell state.

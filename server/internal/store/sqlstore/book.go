@@ -16,16 +16,20 @@ type bookRepo struct{ db *DB }
 const bookColumns = `id, series_id, library_id, file_path, file_format, file_size,
 	file_mtime, content_hash, page_count, title, number, sort_number, volume,
 	release_date, age_rating, language, summary, cover_page, metadata_state,
-	is_corrupt, added_at, updated_at`
+	is_corrupt, added_at, updated_at, kind`
 
 func (r *bookRepo) Upsert(ctx context.Context, b domain.Book) (domain.Book, error) {
 	state := b.MetadataState
 	if state == "" {
 		state = domain.MetaNone
 	}
+	kind := b.Kind
+	if kind == "" {
+		kind = domain.KindIssue
+	}
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO book (`+bookColumns+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			series_id      = excluded.series_id,
 			file_path      = excluded.file_path,
@@ -45,18 +49,20 @@ func (r *bookRepo) Upsert(ctx context.Context, b domain.Book) (domain.Book, erro
 			cover_page     = excluded.cover_page,
 			metadata_state = excluded.metadata_state,
 			is_corrupt     = excluded.is_corrupt,
-			updated_at     = excluded.updated_at`,
+			updated_at     = excluded.updated_at,
+			kind           = excluded.kind`,
 		b.ID, b.SeriesID, b.LibraryID, b.FilePath, b.FileFormat, b.FileSize,
 		b.FileMTime, nullString(b.ContentHash), b.PageCount, nullString(b.Title),
 		nullString(b.Number), nullFloat(b.SortNumber), nullInt(int64(b.Volume)),
 		nullInt(b.ReleaseDate), nullString(b.AgeRating), nullString(b.Language),
 		nullString(b.Summary), b.CoverPage, string(state), boolToInt(b.IsCorrupt),
-		b.AddedAt, b.UpdatedAt,
+		b.AddedAt, b.UpdatedAt, string(kind),
 	)
 	if err != nil {
 		return domain.Book{}, err
 	}
 	b.MetadataState = state
+	b.Kind = kind
 	return b, nil
 }
 
@@ -254,12 +260,13 @@ func scanBook(row rowScanner) (domain.Book, error) {
 		language sql.NullString
 		summary  sql.NullString
 		corrupt  int
+		kind     string
 	)
 	if err := row.Scan(
 		&b.ID, &b.SeriesID, &b.LibraryID, &b.FilePath, &b.FileFormat, &b.FileSize,
 		&b.FileMTime, &hash, &b.PageCount, &title, &number, &sortNum, &volume,
 		&release, &ageRate, &language, &summary, &b.CoverPage, &b.MetadataState,
-		&corrupt, &b.AddedAt, &b.UpdatedAt,
+		&corrupt, &b.AddedAt, &b.UpdatedAt, &kind,
 	); err != nil {
 		return domain.Book{}, err
 	}
@@ -273,5 +280,6 @@ func scanBook(row rowScanner) (domain.Book, error) {
 	b.Language = str(language)
 	b.Summary = str(summary)
 	b.IsCorrupt = corrupt != 0
+	b.Kind = domain.BookKind(kind)
 	return b, nil
 }

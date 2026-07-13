@@ -22,6 +22,7 @@ type ComicInfo struct {
 	Publisher   string
 	AgeRating   string
 	Language    string
+	Format      string // ComicInfo <Format> (e.g. "Annual", "TPB", "Variant"); "" when absent
 	Volume      int
 	ReleaseDate int64                   // epoch ms; 0 when no year
 	ReadingDir  domain.ReadingDirection // "" when unspecified
@@ -43,6 +44,7 @@ type comicInfoXML struct {
 	Publisher   string         `xml:"Publisher"`
 	AgeRating   string         `xml:"AgeRating"`
 	LanguageISO string         `xml:"LanguageISO"`
+	Format      string         `xml:"Format"`
 	Volume      string         `xml:"Volume"`
 	Year        string         `xml:"Year"`
 	Month       string         `xml:"Month"`
@@ -73,6 +75,7 @@ func ParseComicInfo(r io.Reader) (ComicInfo, error) {
 		Publisher: strings.TrimSpace(x.Publisher),
 		AgeRating: strings.TrimSpace(x.AgeRating),
 		Language:  strings.TrimSpace(x.LanguageISO),
+		Format:    strings.TrimSpace(x.Format),
 		Volume:    atoiSafe(x.Volume),
 	}
 
