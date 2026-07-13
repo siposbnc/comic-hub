@@ -543,6 +543,9 @@ export interface TrackerTrack {
   seriesId?: string;
   libraryId?: string;
   name: string;
+  /** Special-edition label ("Annual", "One-Shot", …) for a series' special sub-row; absent
+   *  on a normal series row or a standalone track. */
+  special?: string;
   link: 'library' | 'manual';
   issues: TrackerIssue[];
 }

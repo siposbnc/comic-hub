@@ -900,6 +900,8 @@ function TrackRow({
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span
               style={{
+                flex: 1,
+                minWidth: 0,
                 fontFamily: 'var(--font-body)',
                 fontWeight: 600,
                 fontSize: density === 's' ? '0.7rem' : '0.78rem',
@@ -911,7 +913,28 @@ function TrackRow({
             >
               {t.name}
             </span>
-            {complete && <Icon name="check" size={12} color="var(--accent)" />}
+            {t.special && (
+              <span
+                className="ch-mono"
+                style={{
+                  flex: 'none',
+                  fontSize: '0.54rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
+                  color: 'var(--accent)',
+                  background: 'var(--accent-soft)',
+                  padding: '1px 5px',
+                  borderRadius: 3,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {t.special}
+              </span>
+            )}
+            {complete && (
+              <Icon name="check" size={12} color="var(--accent)" style={{ flex: 'none' }} />
+            )}
           </div>
           {density !== 's' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>

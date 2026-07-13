@@ -34,6 +34,7 @@ type TrackerTrack struct {
 	SeriesID  string
 	LibraryID string // owning library (empty for a standalone track)
 	Name      string
+	Special   string // special-edition label ("Annual", "One-Shot", …); empty for a normal row
 	Link      string // "library" | "manual"
 	Issues    []TrackerIssue
 }
@@ -132,7 +133,8 @@ func (s *Service) Tracker(ctx context.Context, userID string) ([]TrackerTrack, e
 					ID:        "series:" + ser.ID + ":" + string(kind),
 					SeriesID:  ser.ID,
 					LibraryID: lib.ID,
-					Name:      ser.Name + " — " + specialLabel(kind),
+					Name:      ser.Name,
+					Special:   specialLabel(kind),
 					Link:      "library",
 					Issues:    issues,
 				})
@@ -162,7 +164,12 @@ func (s *Service) Tracker(ctx context.Context, userID string) ([]TrackerTrack, e
 	}
 
 	sort.SliceStable(tracks, func(i, j int) bool {
-		return strings.ToLower(tracks[i].Name) < strings.ToLower(tracks[j].Name)
+		ai, aj := strings.ToLower(tracks[i].Name), strings.ToLower(tracks[j].Name)
+		if ai != aj {
+			return ai < aj
+		}
+		// Same series name: the main row sorts before its special sub-rows.
+		return tracks[i].Special == "" && tracks[j].Special != ""
 	})
 	return tracks, nil
 }

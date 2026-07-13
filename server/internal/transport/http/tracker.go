@@ -29,6 +29,7 @@ type trackerTrackDTO struct {
 	SeriesID  string            `json:"seriesId,omitempty"`
 	LibraryID string            `json:"libraryId,omitempty"`
 	Name      string            `json:"name"`
+	Special   string            `json:"special,omitempty"`
 	Link      string            `json:"link"`
 	Issues    []trackerIssueDTO `json:"issues"`
 }
@@ -86,6 +87,7 @@ func handleGetTracker(svc *organize.Service) http.HandlerFunc {
 				SeriesID:  t.SeriesID,
 				LibraryID: t.LibraryID,
 				Name:      t.Name,
+				Special:   t.Special,
 				Link:      t.Link,
 				Issues:    issues,
 			})
