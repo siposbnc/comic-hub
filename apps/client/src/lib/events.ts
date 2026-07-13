@@ -74,11 +74,13 @@ export function useServerEvents(): void {
       qc.invalidateQueries({ queryKey: ['discover'] });
       qc.invalidateQueries({ queryKey: ['book'] });
       qc.invalidateQueries({ queryKey: ['seriesDetail'] });
-      // Reading lists / collections / smart lists surface per-issue read state too, so a
-      // progress write elsewhere (e.g. the standalone reader) must refresh them as well.
+      // Reading lists / collections / smart lists / the tracker surface per-issue read state
+      // too, so a progress write elsewhere (e.g. the standalone reader leaving an issue
+      // half-read) must refresh them as well.
       qc.invalidateQueries({ queryKey: ['readingList'] });
       qc.invalidateQueries({ queryKey: ['collection'] });
       qc.invalidateQueries({ queryKey: ['smartList'] });
+      qc.invalidateQueries({ queryKey: qk.tracker });
     };
 
     const onLibrary = () => {
