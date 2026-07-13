@@ -231,7 +231,8 @@ func (s *Service) SeriesDetail(ctx context.Context, seriesID, userID string) (Se
 	if err != nil {
 		return SeriesDetail{}, err
 	}
-	books = s.visible(ctx, books) // hide issues above the acting user's content ceiling
+	books = s.visible(ctx, books)  // hide issues above the acting user's content ceiling
+	books = excludeExtras(books)   // variant/cover art isn't an issue
 
 	detail := SeriesDetail{
 		ID:            ser.ID,
@@ -398,6 +399,20 @@ func (s *Service) visible(ctx context.Context, books []domain.Book) []domain.Boo
 	return out
 }
 
+// excludeExtras drops variant/cover art — it isn't a readable issue, so issue lists and
+// counts leave it out (the Tracker does the same). Specials (annuals, one-shots) are kept:
+// they're real content.
+func excludeExtras(books []domain.Book) []domain.Book {
+	out := make([]domain.Book, 0, len(books))
+	for _, b := range books {
+		if b.Kind.IsExtra() {
+			continue
+		}
+		out = append(out, b)
+	}
+	return out
+}
+
 // yearOf extracts the year from an epoch-ms timestamp (0 when unset).
 func yearOf(ms int64) int {
 	if ms <= 0 {
@@ -476,7 +491,7 @@ func (s *Service) RecentBooks(ctx context.Context, libraryID, userID string, lim
 		return nil, err
 	}
 	cards := make([]BookCard, 0, len(books))
-	for _, b := range s.visible(ctx, books) {
+	for _, b := range excludeExtras(s.visible(ctx, books)) {
 		cards = append(cards, s.bookCard(ctx, b, userID))
 	}
 	return cards, nil

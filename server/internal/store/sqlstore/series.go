@@ -171,12 +171,12 @@ func (r *seriesRepo) ListByLibrary(ctx context.Context, libraryID string) ([]dom
 func (r *seriesRepo) Summaries(ctx context.Context, libraryID, userID string) ([]domain.SeriesSummary, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT `+prefixedSeriesColumns("s")+`,
-			(SELECT COUNT(*) FROM book b WHERE b.series_id = s.id) AS book_count,
+			(SELECT COUNT(*) FROM book b WHERE b.series_id = s.id AND b.kind NOT IN ('variant','cover')) AS book_count,
 			(SELECT COUNT(*) FROM book b
 				JOIN read_progress p ON p.book_id = b.id AND p.user_id = ?
-				WHERE b.series_id = s.id AND p.status = 'read') AS read_count,
+				WHERE b.series_id = s.id AND b.kind NOT IN ('variant','cover') AND p.status = 'read') AS read_count,
 			COALESCE(s.cover_book_id,
-				(SELECT b.id FROM book b WHERE b.series_id = s.id
+				(SELECT b.id FROM book b WHERE b.series_id = s.id AND b.kind NOT IN ('variant','cover')
 					ORDER BY b.sort_number, b.number LIMIT 1)) AS cover_book_id
 		FROM series s
 		WHERE s.library_id = ?
