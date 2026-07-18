@@ -22,22 +22,33 @@ interface Size {
   h: number;
 }
 
-function baseScale(fit: FitMode, spread: Size, area: Size): number {
-  if (spread.w <= 0 || spread.h <= 0 || area.w <= 0 || area.h <= 0) return 1;
-  const sw = area.w / spread.w;
-  const sh = area.h / spread.h;
+/**
+ * Display height (CSS px) for a spread laid out at real size. Pages are laid out at their
+ * true on-screen dimensions — not a virtual size scaled with a compositor transform — so
+ * the browser rasterizes from the full-resolution source and stays sharp at any fit/zoom.
+ */
+function fitHeight(
+  fit: FitMode,
+  sumAspect: number,
+  naturalH: number,
+  gap: number,
+  area: Size,
+): number {
+  if (sumAspect <= 0 || area.w <= 0 || area.h <= 0) return naturalH;
+  const hw = (area.w - gap) / sumAspect; // height at which the spread exactly fills the width
+  const hh = area.h;
   switch (fit) {
     case 'width':
-      return sw;
+      return hw;
     case 'height':
-      return sh;
+      return hh;
     case 'original':
-      return 1;
+      return naturalH;
     case 'smart':
-      return Math.min(sw, sh);
+      return Math.min(hw, hh);
     case 'screen':
     default:
-      return Math.min(sw, sh, 1);
+      return Math.min(hw, hh, naturalH);
   }
 }
 
@@ -120,18 +131,15 @@ export function PageView() {
   const ordered = direction === 'rtl' ? [...spreadPages].reverse() : spreadPages;
 
   // Spread natural size from the manifest (drives fit math; stable across decode).
-  let spreadW = 0;
-  let spreadH = 1;
-  const renderHeight = 1000; // virtual layout height; scaled to fit below
+  let sumAspect = 0;
+  let naturalH = 0;
   for (const idx of spreadPages) {
     const meta = manifest?.pages.find((p) => p.idx === idx);
-    const aspect = meta && meta.h > 0 ? meta.w / meta.h : 0.66;
-    spreadW += renderHeight * aspect;
-    spreadH = renderHeight;
+    sumAspect += meta && meta.h > 0 ? meta.w / meta.h : 0.66;
+    naturalH = Math.max(naturalH, meta && meta.h > 0 ? meta.h : 1500);
   }
-  if (spreadPages.length > 1) spreadW += PAGE_GAP;
-
-  const scale = baseScale(fit, { w: spreadW, h: spreadH }, area) * zoom;
+  const gap = spreadPages.length > 1 ? PAGE_GAP : 0;
+  const displayHeight = fitHeight(fit, sumAspect, naturalH, gap, area) * zoom;
   const isZoomed = zoom > MIN_ZOOM;
 
   // Pointer interaction: drag to pan when zoomed, otherwise click zones to turn.
@@ -237,11 +245,11 @@ export function PageView() {
         className="page-stage"
         style={{
           gap: PAGE_GAP,
-          transform: `translate3d(${panX}px, ${panY}px, 0) scale(${scale})`,
+          transform: `translate3d(${panX}px, ${panY}px, 0)`,
         }}
       >
         {ordered.map((idx) => (
-          <PageImage key={idx} idx={idx} height={renderHeight} />
+          <PageImage key={idx} idx={idx} height={displayHeight} />
         ))}
       </div>
     </div>
