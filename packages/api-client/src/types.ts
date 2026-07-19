@@ -254,12 +254,36 @@ export interface SeriesCard {
   metadataState?: MetadataState;
 }
 
+/** How a book relates to its series' numbered run (derived at scan time; see BookKind on
+ * the server). Specials (annual/special/one-shot/tpb/gn) sort after the numbered issues. */
+export type BookKind =
+  | 'issue'
+  | 'annual'
+  | 'special'
+  | 'one-shot'
+  | 'tpb'
+  | 'gn'
+  | 'variant'
+  | 'cover';
+
+/** Whether a kind is a special edition rather than a regular numbered issue. */
+export function isSpecialKind(kind?: BookKind): boolean {
+  return (
+    kind === 'annual' ||
+    kind === 'special' ||
+    kind === 'one-shot' ||
+    kind === 'tpb' ||
+    kind === 'gn'
+  );
+}
+
 /** A book in a list/rail/grid. */
 export interface BookCard {
   id: string;
   seriesId: string;
   number?: string;
   title?: string;
+  kind?: BookKind;
   pageCount: number;
   format: string;
   isCorrupt?: boolean;

@@ -41,6 +41,7 @@ type BookCard struct {
 	SeriesID  string        `json:"seriesId"`
 	Number    string        `json:"number,omitempty"`
 	Title     string        `json:"title,omitempty"`
+	Kind      string        `json:"kind,omitempty"`
 	PageCount int           `json:"pageCount"`
 	Format    string        `json:"format"`
 	IsCorrupt bool          `json:"isCorrupt,omitempty"`
@@ -648,6 +649,7 @@ func (s *Service) bookCard(ctx context.Context, b domain.Book, userID string) Bo
 		SeriesID:  b.SeriesID,
 		Number:    b.Number,
 		Title:     b.Title,
+		Kind:      string(b.Kind),
 		PageCount: b.PageCount,
 		Format:    b.FileFormat,
 		IsCorrupt: b.IsCorrupt,

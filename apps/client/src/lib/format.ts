@@ -18,8 +18,8 @@ export function progressFraction(progress?: ProgressSummary): number {
   return Math.max(0, Math.min(1, progress.percent / 100));
 }
 
-/** Issue number in the print voice: "#012" when numeric ("#023.1" for point issues),
- * otherwise the raw label. */
+/** Issue number in the print voice: "#012" when numeric ("#023.1" for point issues).
+ * Labeled specials ("Annual 2", "Futures End 1") keep their label — no "#" prefix. */
 export function issueLabel(number?: string): string | undefined {
   if (number == null || number === '') return undefined;
   const raw = number.startsWith('#') ? number.slice(1) : number; // tolerate hand-typed "#001"
@@ -29,7 +29,7 @@ export function issueLabel(number?: string): string | undefined {
     const [int = '', frac] = String(n).split('.');
     return `#${int.padStart(3, '0')}${frac ? `.${frac}` : ''}`;
   }
-  return `#${raw}`;
+  return raw;
 }
 
 /** A human title for a book card (issue title, else "Series #NNN", else just the number). */

@@ -10,6 +10,7 @@ import {
   Icon,
   Tag,
 } from '@comichub/ui';
+import { isSpecialKind } from '@comichub/api-client';
 import type { BookCard, SeriesDetail, GroupingCard, MetadataState } from '@comichub/api-client';
 import { useClient } from '../lib/client.js';
 import { useSeriesDetail, useRescanSeries } from '../lib/queries.js';
@@ -55,6 +56,15 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
   const addToast = useUiStore((s) => s.addToast);
   const rescan = useRescanSeries();
   const [tab, setTab] = useState('issues');
+  // Empty tabs (Specials/Volumes/Story Arcs) are hidden entirely; if the data shifts under
+  // a selected tab (e.g. a re-match empties it), fall back to Issues instead of a blank body.
+  const tabExists =
+    tab === 'issues' ||
+    tab === 'details' ||
+    (tab === 'specials' && detail.books.some((b) => isSpecialKind(b.kind))) ||
+    (tab === 'volumes' && (detail.volumes?.length ?? 0) > 0) ||
+    (tab === 'arcs' && (detail.storyArcs?.length ?? 0) > 0);
+  const activeTab = tabExists ? tab : 'issues';
   const [matching, setMatching] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmingRescan, setConfirmingRescan] = useState(false);
@@ -78,8 +88,16 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
     }
   };
 
+  // Specials (annuals, one-shots, event tie-ins, …) live on their own tab, out of the
+  // numbered run. Resume still prefers the run: a half-read annual shouldn't hijack the CTA
+  // over the next unread issue, but it wins over nothing.
+  const issues = detail.books.filter((b) => !isSpecialKind(b.kind));
+  const specials = detail.books.filter((b) => isSpecialKind(b.kind));
+
   const resumeBook =
-    detail.books.find((b) => b.progress?.status === 'in_progress') ??
+    issues.find((b) => b.progress?.status === 'in_progress') ??
+    specials.find((b) => b.progress?.status === 'in_progress') ??
+    issues.find((b) => b.progress?.status !== 'read') ??
     detail.books.find((b) => b.progress?.status !== 'read') ??
     detail.books[0];
   const isResuming = resumeBook?.progress?.status === 'in_progress';
@@ -287,88 +305,71 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
         style={{ padding: 'var(--pad-screen)', maxWidth: 'var(--content-max)', margin: '0 auto' }}
       >
         <Tabs
-          value={tab}
+          value={activeTab}
           onChange={setTab}
           tabs={[
-            { value: 'issues', label: 'Issues', count: detail.bookCount },
-            { value: 'volumes', label: 'Volumes', count: detail.volumes?.length ?? 0 },
-            { value: 'arcs', label: 'Story Arcs', count: detail.storyArcs?.length ?? 0 },
+            { value: 'issues', label: 'Issues', count: issues.length },
+            ...(specials.length > 0
+              ? [{ value: 'specials', label: 'Specials', count: specials.length }]
+              : []),
+            ...(detail.volumes?.length
+              ? [{ value: 'volumes', label: 'Volumes', count: detail.volumes.length }]
+              : []),
+            ...(detail.storyArcs?.length
+              ? [{ value: 'arcs', label: 'Story Arcs', count: detail.storyArcs.length }]
+              : []),
             { value: 'details', label: 'Details' },
           ]}
           style={{ marginBottom: 22 }}
         />
 
-        {tab === 'issues' ? (
-          detail.books.length === 0 ? (
+        {activeTab === 'issues' ? (
+          issues.length === 0 ? (
             <EmptyState title="No issues yet">This series has no scanned issues.</EmptyState>
           ) : (
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(132px, 1fr))',
-                gap: 16,
-              }}
-            >
-              {detail.books.map((book) => (
-                <IssueCover key={book.id} book={book} seriesName={detail.name} />
-              ))}
-            </div>
+            <IssueGrid books={issues} seriesName={detail.name} />
           )
-        ) : tab === 'volumes' ? (
-          detail.volumes && detail.volumes.length > 0 ? (
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-                gap: 18,
-              }}
-            >
-              {detail.volumes.map((v) => (
-                <GroupingCardButton
-                  key={v.id}
-                  cover={detail.books[0] ? client.coverUrl(detail.books[0].id, 200) : undefined}
-                  name={v.name}
-                  meta={[v.year || undefined, `${v.issueCount} issues`].filter(Boolean).join(' · ')}
-                  description={v.description}
-                  onClick={() =>
-                    navigate({
-                      to: '/series/$id/volumes/$volume',
-                      params: { id: detail.id, volume: v.id },
-                    })
-                  }
-                />
-              ))}
-            </div>
-          ) : (
-            <MatchToPopulate
-              kind="volumes"
-              state={detail.metadataState}
-              onMatch={() => setMatching(true)}
-            />
-          )
-        ) : tab === 'arcs' ? (
-          detail.storyArcs && detail.storyArcs.length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {detail.storyArcs.map((a) => (
-                <ArcRow
-                  key={a.id}
-                  arc={a}
-                  onClick={() =>
-                    navigate({
-                      to: '/series/$id/story-arcs/$arcId',
-                      params: { id: detail.id, arcId: a.id },
-                    })
-                  }
-                />
-              ))}
-            </div>
-          ) : (
-            <MatchToPopulate
-              kind="story arcs"
-              state={detail.metadataState}
-              onMatch={() => setMatching(true)}
-            />
-          )
+        ) : activeTab === 'specials' ? (
+          <IssueGrid books={specials} seriesName={detail.name} />
+        ) : activeTab === 'volumes' ? (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+              gap: 18,
+            }}
+          >
+            {(detail.volumes ?? []).map((v) => (
+              <GroupingCardButton
+                key={v.id}
+                cover={detail.books[0] ? client.coverUrl(detail.books[0].id, 200) : undefined}
+                name={v.name}
+                meta={[v.year || undefined, `${v.issueCount} issues`].filter(Boolean).join(' · ')}
+                description={v.description}
+                onClick={() =>
+                  navigate({
+                    to: '/series/$id/volumes/$volume',
+                    params: { id: detail.id, volume: v.id },
+                  })
+                }
+              />
+            ))}
+          </div>
+        ) : activeTab === 'arcs' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {(detail.storyArcs ?? []).map((a) => (
+              <ArcRow
+                key={a.id}
+                arc={a}
+                onClick={() =>
+                  navigate({
+                    to: '/series/$id/story-arcs/$arcId',
+                    params: { id: detail.id, arcId: a.id },
+                  })
+                }
+              />
+            ))}
+          </div>
         ) : (
           <div
             style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 40, maxWidth: 820 }}
@@ -574,6 +575,23 @@ function RescanConfirmDialog({
   );
 }
 
+/** The cover grid shared by the Issues and Specials tabs. */
+function IssueGrid({ books, seriesName }: { books: BookCard[]; seriesName: string }) {
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(132px, 1fr))',
+        gap: 16,
+      }}
+    >
+      {books.map((book) => (
+        <IssueCover key={book.id} book={book} seriesName={seriesName} />
+      ))}
+    </div>
+  );
+}
+
 /** One issue as a small CoverCard: clicking it opens the reader at its resume page; a
  *  Details button appears on hover to open the issue's detail page. */
 function IssueCover({ book, seriesName }: { book: BookCard; seriesName: string }) {
@@ -666,56 +684,6 @@ function MetaChip({ state, onMatch }: { state?: MetadataState; onMatch: () => vo
         Match metadata
       </Button>
     </span>
-  );
-}
-
-/** Empty state for the Volumes/Story Arcs tabs when the series isn't fully matched. */
-function MatchToPopulate({
-  kind,
-  state,
-  onMatch,
-}: {
-  kind: string;
-  state?: MetadataState;
-  onMatch: () => void;
-}) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        textAlign: 'center',
-        padding: '40px 24px',
-        border: '1px dashed var(--border-strong)',
-        borderRadius: 'var(--radius-lg)',
-      }}
-    >
-      <div
-        className="ch-halftone-duo"
-        style={{ width: 72, height: 72, borderRadius: '50%', marginBottom: 16, opacity: 0.5 }}
-      />
-      <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.05rem' }}>
-        No {kind} yet
-      </div>
-      <p
-        style={{
-          margin: '8px 0 16px',
-          maxWidth: 360,
-          fontSize: '0.85rem',
-          color: 'var(--text-secondary)',
-          lineHeight: 1.5,
-        }}
-      >
-        {state === 'none'
-          ? 'This series has no metadata-provider match.'
-          : 'This series is only partly matched.'}{' '}
-        Match it to Comic Vine to pull in {kind}.
-      </p>
-      <Button variant="secondary" icon="refresh" onClick={onMatch}>
-        Match metadata
-      </Button>
-    </div>
   );
 }
 
