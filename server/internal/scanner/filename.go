@@ -34,6 +34,10 @@ var (
 	// never is. Tried before the trailing rule so the subtitle's own trailing digits
 	// ("… - Cheetah 001") don't win.
 	reDecimalIssue = regexp.MustCompile(`^(.*\S)\s+#?(\d{1,5}\.\d+)(?:\s*[-–—]\s*|\s+)\S.*$`)
+	// Explicit dash/colon separator between a folder-name prefix and a subtitle. A bare
+	// space is NOT enough ("Batman Beyond" in a "Batman" folder must stay its own series
+	// name), so the subtitle rule only fires on deliberate "Series - Subtitle" naming.
+	reSubtitleSep = regexp.MustCompile(`^\s*[-–—:]\s*(\S.*)$`)
 )
 
 // ParseFilename derives series/number/volume/year from a file path. folder (the file's
@@ -89,9 +93,33 @@ func ParseFilename(filePath string) ParsedName {
 		series = cleanTitle(folder)
 	}
 
+	// A numbered file whose name is "<folder> - <subtitle> NNN" ("Earth 2 - Futures End 001"
+	// inside "Earth 2\") is a titled special of the folder's series, not its issue NNN. Fold
+	// the subtitle into the number the way "Annual" works ("Futures End 1"), so it can't
+	// collide with the real issue NNN and classifies as a special.
+	if number != "" {
+		if sub, ok := subtitleAfter(series, cleanTitle(folder)); ok {
+			series = cleanTitle(folder)
+			number = sub + " " + number
+		}
+	}
+
 	p.Series = series
 	p.Number = number
 	return p
+}
+
+// subtitleAfter returns the subtitle when series is the folder name followed by an explicit
+// separator and more text ("Earth 2 - Futures End" under "Earth 2" -> "Futures End").
+func subtitleAfter(series, folder string) (string, bool) {
+	if folder == "" || len(series) <= len(folder) || !strings.EqualFold(series[:len(folder)], folder) {
+		return "", false
+	}
+	m := reSubtitleSep.FindStringSubmatch(series[len(folder):])
+	if m == nil {
+		return "", false
+	}
+	return m[1], true
 }
 
 func collapse(s string) string {

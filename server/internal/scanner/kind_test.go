@@ -26,6 +26,10 @@ func TestClassifyKind(t *testing.T) {
 		// "cover" only when unnumbered, so real titles aren't misread.
 		{"", `X\Batman Covers.cbz`, "", domain.KindCover},
 		{"3", `X\Undercover 003.cbz`, "", domain.KindIssue},
+		// Issue #0 has SortNumber 0 but IS a resolvable number — never cover art.
+		{"0", `X\Worlds' Finest 000 (2012) (2 covers).cbz`, "", domain.KindIssue},
+		// Unknown number label (folder-subtitle one-shots, lettered issues) -> special.
+		{"Futures End 1", `X\Earth 2 - Futures End 001.cbz`, "", domain.KindSpecial},
 		// Plain issue.
 		{"12", `X\Saga 012.cbz`, "", domain.KindIssue},
 	}

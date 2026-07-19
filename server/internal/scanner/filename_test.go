@@ -22,6 +22,13 @@ func TestParseFilename(t *testing.T) {
 		{`X\WW\Wonder Woman 023.1 - Cheetah (2013).cbz`, ParsedName{Series: "Wonder Woman", Number: "23.1", Year: 2013}},
 		{`X\WW\Wonder Woman 023.1 - Cheetah 001 (2013).cbz`, ParsedName{Series: "Wonder Woman", Number: "23.1", Year: 2013}},
 		{`X\WW\023.1.cbz`, ParsedName{Series: "WW", Number: "23.1"}},
+		// Event one-shots named "<folder> - <subtitle> NNN": the subtitle becomes a number
+		// label (like Annual) so the file can't collide with the real issue NNN.
+		{`X\Earth 2\Earth 2 - Futures End 001 (2014).cbz`, ParsedName{Series: "Earth 2", Number: "Futures End 1", Year: 2014}},
+		{`X\Worlds' Finest\Worlds' Finest - Futures End 001 (2014).cbz`, ParsedName{Series: "Worlds' Finest", Number: "Futures End 1", Year: 2014}},
+		// A bare space is not a subtitle separator — a different series stored in the folder
+		// keeps its own name and plain number.
+		{`X\Batman\Batman Beyond 001.cbz`, ParsedName{Series: "Batman Beyond", Number: "1"}},
 	}
 	for _, c := range cases {
 		got := ParseFilename(c.path)

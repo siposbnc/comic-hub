@@ -31,8 +31,14 @@ func classifyKind(number, filePath, ciFormat string) domain.BookKind {
 	if reVariantFile.MatchString(base) {
 		return domain.KindVariant
 	}
-	if SortNumber(number) == 0 && reCoverFile.MatchString(base) {
+	if number == "" && reCoverFile.MatchString(base) {
 		return domain.KindCover
+	}
+	// A labeled number the explicit tables don't know ("Futures End 1", lettered issues):
+	// SortNumber already files it after the numbered run, so the kind must agree — a plain
+	// "issue" here would collide with the real issue of the same trailing number.
+	if number != "" && SortNumber(number) >= specialBase {
+		return domain.KindSpecial
 	}
 	return domain.KindIssue
 }
