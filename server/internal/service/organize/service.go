@@ -22,10 +22,16 @@ const positionGap = 1024.0
 // Service handles organization use cases.
 type Service struct {
 	repo domain.Repository
+	// trackNotify fires after a user's tracker overlay changes (issue marked read/unread),
+	// so their other devices can refresh — the counterpart of reading's progress notifier.
+	trackNotify func(userID string)
 }
 
 // New constructs the organize service over a repository.
 func New(repo domain.Repository) *Service { return &Service{repo: repo} }
+
+// OnTrackChange registers the tracker-overlay change notifier (may be nil).
+func (s *Service) OnTrackChange(fn func(userID string)) { s.trackNotify = fn }
 
 // CollectionInput is the validated request to create a collection.
 type CollectionInput struct {

@@ -152,6 +152,14 @@ func (h *Hub) BroadcastProgress(p domain.Progress) {
 		func(viewer domain.User) bool { return viewer.ID == p.UserID })
 }
 
+// BroadcastTracker signals that the user's tracker overlay changed (an overlay issue was
+// marked read/unread). It rides the progress topic — clients treat both as "read state
+// moved, refresh" — but carries no book progress payload.
+func (h *Hub) BroadcastTracker(userID string) {
+	h.broadcastWhere(TopicProgress, "tracker.updated", nil,
+		func(viewer domain.User) bool { return viewer.ID == userID })
+}
+
 // BroadcastBookmarks signals that one of the user's books' bookmarks changed
 // (added/edited/removed), so that user's other devices refresh the list.
 func (h *Hub) BroadcastBookmarks(userID, bookID string) {

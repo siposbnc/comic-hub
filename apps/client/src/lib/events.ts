@@ -45,6 +45,7 @@ export function useServerEvents(): void {
     let closed = false;
     let backoff = RECONNECT_MIN;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let hadConnection = false;
 
     const { upsertJob, clearFinishedJobs, addToast } = useUiStore.getState();
 
@@ -121,6 +122,13 @@ export function useServerEvents(): void {
         socket?.send(JSON.stringify({ type: 'subscribe', topics: TOPICS }));
         // Presence changed while we were disconnected — re-seed from the snapshot.
         qc.invalidateQueries({ queryKey: qk.presence });
+        // Events published while the socket was down (sleep/wake, server restart) are
+        // gone for good, so a *re*-connect resyncs every push-refreshed cache.
+        if (hadConnection) {
+          onProgress();
+          onLibrary();
+        }
+        hadConnection = true;
       };
 
       socket.onmessage = (ev) => {

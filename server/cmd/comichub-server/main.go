@@ -114,6 +114,7 @@ func run() error {
 		observePresence(userID, p)
 	})
 	readingSvc.OnBookmarkChange(hub.BroadcastBookmarks)
+	organizing.OnTrackChange(hub.BroadcastTracker)
 
 	// Shared format registry for scanning and reading.
 	registry := archive.DefaultRegistry()

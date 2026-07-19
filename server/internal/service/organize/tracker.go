@@ -384,5 +384,11 @@ func (s *Service) MarkTrackIssue(ctx context.Context, userID, id string, read bo
 	if read {
 		at = time.Now().UnixMilli()
 	}
-	return s.repo.Tracks().SetIssueRead(ctx, userID, id, read, at)
+	if err := s.repo.Tracks().SetIssueRead(ctx, userID, id, read, at); err != nil {
+		return err
+	}
+	if s.trackNotify != nil {
+		s.trackNotify(userID)
+	}
+	return nil
 }

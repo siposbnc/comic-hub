@@ -457,13 +457,15 @@ export function useDeleteSmartList() {
 // ── Tracker (per-user reading matrix) ────────────────────────────────────────────────
 
 /** Cross-views a read-state change touches — refreshed after the optimistic tracker update
- *  settles. The tracker cache itself is updated optimistically (not refetched) so toggling a
- *  cell feels instant; the heavy `/tracker` projection isn't re-fetched on every click. */
+ *  settles. The tracker projection is re-fetched here too: the optimistic update keeps the
+ *  click instant, but WS progress events are best-effort (the hub drops frames under burst,
+ *  e.g. a big range mark), so the settle refetch is what guarantees the row converges. */
 function invalidateReadState(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ['seriesDetail'] });
   qc.invalidateQueries({ queryKey: ['series'] });
   qc.invalidateQueries({ queryKey: ['discover'] });
   qc.invalidateQueries({ queryKey: qk.continueReading });
+  qc.invalidateQueries({ queryKey: qk.tracker });
 }
 
 /** Optimistically flip matching cells in the tracker cache; returns a rollback snapshot. */
@@ -600,11 +602,8 @@ export function useMarkBook() {
     mutationFn: ({ bookId, status }: { bookId: string; status: 'read' | 'unread' }) =>
       client.markBook(bookId, status),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['seriesDetail'] });
       qc.invalidateQueries({ queryKey: ['book'] });
-      qc.invalidateQueries({ queryKey: ['series'] });
-      qc.invalidateQueries({ queryKey: ['discover'] });
-      qc.invalidateQueries({ queryKey: qk.continueReading });
+      invalidateReadState(qc);
     },
   });
 }
