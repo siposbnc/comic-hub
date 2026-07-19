@@ -3,7 +3,15 @@
 // Concrete providers and the matching engine arrive in Phase 2.
 package providers
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+// ErrRateLimited marks a provider request rejected by the upstream rate limit (HTTP 429
+// or equivalent) after the client's own retries were exhausted. The matching service uses
+// it to leave a series resumable instead of failing opaquely.
+var ErrRateLimited = errors.New("provider rate limited")
 
 // SeriesCandidate is a possible series match from a provider.
 type SeriesCandidate struct {

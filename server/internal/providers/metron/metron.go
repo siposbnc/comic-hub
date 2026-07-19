@@ -8,6 +8,7 @@ package metron
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -28,6 +29,14 @@ const (
 	defaultMinInterval = 2 * time.Second
 	// issuePageCap bounds pagination so a huge series can't loop unbounded.
 	issuePageCap = 25
+	// rateLimitAttempts is how many times a request is tried in total when Metron answers
+	// 429 mid-run; each retry waits out the server's Retry-After first. Metron's window is
+	// a minute, so waiting is cheap compared to failing a whole match job.
+	rateLimitAttempts = 3
+	// defaultRetryAfter is used when a 429 carries no usable Retry-After header, and
+	// maxRetryAfter caps a server-supplied one so a bad header can't hang the job.
+	defaultRetryAfter = 62 * time.Second
+	maxRetryAfter     = 2 * time.Minute
 )
 
 // Client is a Metron metadata provider. The zero value is not usable; use New.
@@ -230,14 +239,37 @@ func (c *Client) getDetail(ctx context.Context, path string, out any) error {
 	return nil
 }
 
-// do performs a throttled, authenticated GET and returns the response body.
+// do performs a throttled, authenticated GET and returns the response body. A 429 waits
+// out the server's Retry-After and retries (up to rateLimitAttempts total tries), so a
+// momentary rate-limit trip pauses a match job instead of killing it.
 func (c *Client) do(ctx context.Context, fullURL string) ([]byte, error) {
+	for attempt := 1; ; attempt++ {
+		body, retryAfter, err := c.once(ctx, fullURL)
+		if err == nil {
+			return body, nil
+		}
+		if !errors.Is(err, providers.ErrRateLimited) || attempt >= rateLimitAttempts {
+			return nil, err
+		}
+		t := time.NewTimer(retryAfter)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return nil, ctx.Err()
+		case <-t.C:
+		}
+	}
+}
+
+// once is a single throttled request attempt. On 429 it returns ErrRateLimited plus the
+// wait the server asked for (bounded; defaulted when the header is absent or unusable).
+func (c *Client) once(ctx context.Context, fullURL string) ([]byte, time.Duration, error) {
 	if err := c.wait(ctx); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	req.Header.Set("User-Agent", c.ua)
 	req.Header.Set("Accept", "application/json")
@@ -245,17 +277,30 @@ func (c *Client) do(ctx context.Context, fullURL string) ([]byte, error) {
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusUnauthorized {
-		return nil, fmt.Errorf("metron: unauthorized (check METRON_USERNAME/METRON_PASSWORD)")
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("metron: http %d", resp.StatusCode)
+	switch {
+	case resp.StatusCode == http.StatusUnauthorized:
+		return nil, 0, fmt.Errorf("metron: unauthorized (check METRON_USERNAME/METRON_PASSWORD)")
+	case resp.StatusCode == http.StatusTooManyRequests:
+		return nil, retryAfter(resp.Header.Get("Retry-After")), fmt.Errorf("metron: http 429: %w", providers.ErrRateLimited)
+	case resp.StatusCode != http.StatusOK:
+		return nil, 0, fmt.Errorf("metron: http %d", resp.StatusCode)
 	}
 	const maxBody = 8 << 20 // 8 MiB guard
-	return io.ReadAll(io.LimitReader(resp.Body, maxBody))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
+	return body, 0, err
+}
+
+// retryAfter parses a Retry-After header (delta-seconds form), clamped to
+// [1s, maxRetryAfter], defaulting when absent or malformed.
+func retryAfter(header string) time.Duration {
+	secs, err := strconv.Atoi(strings.TrimSpace(header))
+	if err != nil || secs < 1 {
+		return defaultRetryAfter
+	}
+	return min(time.Duration(secs)*time.Second, maxRetryAfter)
 }
 
 // wait spaces requests by minWait, honoring context cancellation.

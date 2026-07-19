@@ -50,20 +50,25 @@ type BookCard struct {
 
 // SeriesDetail is a series header + its issues.
 type SeriesDetail struct {
-	ID            string         `json:"id"`
-	Name          string         `json:"name"`
-	Year          int            `json:"year,omitempty"`
-	Publisher     string         `json:"publisher,omitempty"`
-	Summary       string         `json:"summary,omitempty"`
-	ReadingDir    string         `json:"readingDir"`
-	BookCount     int            `json:"bookCount"`
-	ReadCount     int            `json:"readCount"`
-	MetadataState string         `json:"metadataState,omitempty"`
-	Genres        []string       `json:"genres,omitempty"`
-	Characters    []string       `json:"characters,omitempty"`
-	Volumes       []GroupingCard `json:"volumes,omitempty"`
-	StoryArcs     []GroupingCard `json:"storyArcs,omitempty"`
-	Books         []BookCard     `json:"books"`
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	Year          int    `json:"year,omitempty"`
+	Publisher     string `json:"publisher,omitempty"`
+	Summary       string `json:"summary,omitempty"`
+	ReadingDir    string `json:"readingDir"`
+	BookCount     int    `json:"bookCount"`
+	ReadCount     int    `json:"readCount"`
+	MetadataState string `json:"metadataState,omitempty"`
+	// MatchProvider/MatchProviderID surface the linked provider volume so the client can
+	// offer "continue matching" on a series whose match was interrupted (state incomplete
+	// but link present).
+	MatchProvider   string         `json:"matchProvider,omitempty"`
+	MatchProviderID string         `json:"matchProviderId,omitempty"`
+	Genres          []string       `json:"genres,omitempty"`
+	Characters      []string       `json:"characters,omitempty"`
+	Volumes         []GroupingCard `json:"volumes,omitempty"`
+	StoryArcs       []GroupingCard `json:"storyArcs,omitempty"`
+	Books           []BookCard     `json:"books"`
 }
 
 // GroupingCard summarizes a browsable grouping (a story arc or a volume) on the series page.
@@ -232,19 +237,21 @@ func (s *Service) SeriesDetail(ctx context.Context, seriesID, userID string) (Se
 	if err != nil {
 		return SeriesDetail{}, err
 	}
-	books = s.visible(ctx, books)  // hide issues above the acting user's content ceiling
-	books = excludeExtras(books)   // variant/cover art isn't an issue
+	books = s.visible(ctx, books) // hide issues above the acting user's content ceiling
+	books = excludeExtras(books)  // variant/cover art isn't an issue
 
 	detail := SeriesDetail{
-		ID:            ser.ID,
-		Name:          ser.Name,
-		Year:          ser.Year,
-		Publisher:     ser.Publisher,
-		Summary:       ser.Description,
-		ReadingDir:    string(ser.ReadingDir),
-		BookCount:     len(books),
-		MetadataState: string(ser.MetadataState),
-		Books:         make([]BookCard, 0, len(books)),
+		ID:              ser.ID,
+		Name:            ser.Name,
+		Year:            ser.Year,
+		Publisher:       ser.Publisher,
+		Summary:         ser.Description,
+		ReadingDir:      string(ser.ReadingDir),
+		BookCount:       len(books),
+		MetadataState:   string(ser.MetadataState),
+		MatchProvider:   ser.MatchProvider,
+		MatchProviderID: ser.MatchProviderID,
+		Books:           make([]BookCard, 0, len(books)),
 	}
 	for _, b := range books {
 		card := s.bookCard(ctx, b, userID)

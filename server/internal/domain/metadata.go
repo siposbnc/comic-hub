@@ -50,6 +50,9 @@ type MetadataRepository interface {
 	// ReplaceSeriesStoryArcs swaps a series' provider-sourced story arcs and their book
 	// links in one transaction (clears stale arcs on a re-match).
 	ReplaceSeriesStoryArcs(ctx context.Context, seriesID string, arcs []StoryArcInput) error
+	// SeriesStoryArcInputs reads a series' stored arcs back in input form (provider ids +
+	// member book ids), so a resumed match can carry forward the arcs of books it skips.
+	SeriesStoryArcInputs(ctx context.Context, seriesID string) ([]StoryArcInput, error)
 	// SeriesStoryArcs lists a series' arcs with issue counts, ordered by first issue.
 	SeriesStoryArcs(ctx context.Context, seriesID string) ([]StoryArc, error)
 	// StoryArc returns one arc (with issue count); ErrNotFound if absent.

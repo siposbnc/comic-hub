@@ -300,6 +300,10 @@ export interface SeriesDetail {
   bookCount: number;
   readCount: number;
   metadataState?: MetadataState;
+  /** Linked provider volume; present once a match started, even if it was interrupted —
+   * with `metadataState: 'incomplete'` this is the "continue matching" handle. */
+  matchProvider?: string;
+  matchProviderId?: string;
   genres?: string[];
   characters?: string[];
   volumes?: GroupingCard[];

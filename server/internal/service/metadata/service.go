@@ -195,9 +195,15 @@ func (s *Service) ApplyBook(ctx context.Context, bookID, providerName, issueProv
 }
 
 // MatchSeries links a series to a provider volume: it writes the series-level metadata
-// (publisher/year/description + the provider link, state=matched) and applies each provider
-// issue's metadata to the local book with the matching issue number. progress, if non-nil,
-// is called after each book (done, total).
+// (publisher/year/description + the provider link) and applies each provider issue's
+// metadata to the local book with the matching issue number. progress, if non-nil, is
+// called after each book (done, total).
+//
+// The run is resumable: books that already carry this provider's issue id (from an
+// earlier, interrupted run against the same volume) are skipped without a provider fetch,
+// and the series only flips to state=matched once every issue applied — so a mid-run
+// failure (rate limit, network) leaves an incomplete series that a re-run finishes by
+// paying only for the remaining issues.
 func (s *Service) MatchSeries(ctx context.Context, seriesID, providerName, volumeProviderID string, fields []string, progress func(done, total int)) error {
 	p, err := s.provider(providerName)
 	if err != nil {
@@ -211,17 +217,19 @@ func (s *Service) MatchSeries(ctx context.Context, seriesID, providerName, volum
 	if err != nil {
 		return err
 	}
-
-	// Series-level metadata (best-effort: a provider that can't supply it still matches issues).
 	sm, smErr := p.SeriesMeta(ctx, volumeProviderID)
 	if smErr != nil {
 		return smErr
 	}
+
+	// Write the series scalars + provider link up front but hold the state at incomplete:
+	// it flips to matched only after the loop finishes, so an interrupted run reads as
+	// "incomplete, linked" — exactly what the continue path needs.
 	if err := s.repo.Series().WriteMatch(ctx, seriesID, domain.SeriesMatch{
 		Publisher:   sm.Publisher,
 		Year:        sm.Year,
 		Description: sm.Description,
-		State:       domain.MetaMatched,
+		State:       domain.MetaIncomplete,
 		Provider:    p.Name(),
 		ProviderID:  volumeProviderID,
 	}); err != nil {
@@ -233,30 +241,86 @@ func (s *Service) MatchSeries(ctx context.Context, seriesID, providerName, volum
 		byNumber[normalizeNumber(iss.Number)] = iss
 	}
 
-	// Accumulate story-arc membership across the matched issues (de-duped by provider arc
-	// id, encounter order preserved) to rebuild the series' arcs after applying issues.
+	// Books whose recorded provider id already equals the issue we'd apply are done from a
+	// previous run — matching a different volume changes the ids, so this never skips a
+	// genuine re-link. (A same-volume re-match therefore refreshes only unapplied books;
+	// per-book ApplyBook remains the force-refresh path.)
+	applied := make(map[string]bool)
+	for _, b := range books {
+		if b.MetadataState != domain.MetaMatched && b.MetadataState != domain.MetaLocked {
+			continue
+		}
+		iss, ok := byNumber[normalizeNumber(b.Number)]
+		if !ok {
+			continue
+		}
+		ids, err := s.repo.Metadata().BookProviderIDs(ctx, b.ID)
+		if err != nil {
+			return err
+		}
+		if ids[p.Name()] == iss.ProviderID {
+			applied[b.ID] = true
+		}
+	}
+
+	// Accumulate story-arc membership (de-duped by provider arc id, order preserved),
+	// seeded with the stored arcs of the books being skipped so their membership survives
+	// the final rebuild.
 	arcByID := make(map[string]*domain.StoryArcInput)
 	var arcOrder []string
+	if len(applied) > 0 {
+		existing, err := s.repo.Metadata().SeriesStoryArcInputs(ctx, seriesID)
+		if err != nil {
+			return err
+		}
+		for _, a := range existing {
+			kept := make([]string, 0, len(a.BookIDs))
+			for _, id := range a.BookIDs {
+				if applied[id] {
+					kept = append(kept, id)
+				}
+			}
+			if len(kept) == 0 {
+				continue
+			}
+			a.BookIDs = kept
+			arcByID[a.ProviderID] = &a
+			arcOrder = append(arcOrder, a.ProviderID)
+		}
+	}
+	writeArcs := func(ctx context.Context) error {
+		arcs := make([]domain.StoryArcInput, 0, len(arcOrder))
+		for _, id := range arcOrder {
+			arcs = append(arcs, *arcByID[id])
+		}
+		return s.repo.Metadata().ReplaceSeriesStoryArcs(ctx, seriesID, arcs)
+	}
 
 	total := len(books)
+	fetched := 0
 	for i, b := range books {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if iss, ok := byNumber[normalizeNumber(b.Number)]; ok {
+		if iss, ok := byNumber[normalizeNumber(b.Number)]; ok && !applied[b.ID] {
 			im, err := p.Issue(ctx, iss.ProviderID)
+			if err == nil {
+				// Genres are a series-level concept for most providers (e.g. Metron exposes
+				// them on the series, not the issue) — fall back to the series' genres so
+				// the Details tab is populated.
+				if len(im.Genres) == 0 {
+					im.Genres = sm.Genres
+				}
+				err = s.applyIssueMeta(ctx, b.ID, p.Name(), iss.ProviderID, im, fields)
+			}
 			if err != nil {
-				return err
+				// Salvage what this run produced: the arcs accumulated so far (including the
+				// seed) are written even though the parent ctx may already be canceled, so
+				// the next run's seed sees them.
+				_ = writeArcs(context.WithoutCancel(ctx))
+				return fmt.Errorf("metadata: stopped at issue %s after applying %d of %d (%w); series stays linked — run the match again to continue", b.Number, fetched, total-len(applied), err)
 			}
-			// Genres are a series-level concept for most providers (e.g. Metron exposes them
-			// on the series, not the issue) — fall back to the series' genres so the Details
-			// tab is populated.
-			if len(im.Genres) == 0 {
-				im.Genres = sm.Genres
-			}
-			if err := s.applyIssueMeta(ctx, b.ID, p.Name(), iss.ProviderID, im, fields); err != nil {
-				return err
-			}
+			fetched++
 			for _, a := range im.StoryArcs {
 				ai := arcByID[a.ProviderID]
 				if ai == nil {
@@ -272,12 +336,12 @@ func (s *Service) MatchSeries(ctx context.Context, seriesID, providerName, volum
 		}
 	}
 
-	// Rebuild the series' story arcs (always — an empty slice clears stale arcs).
-	arcs := make([]domain.StoryArcInput, 0, len(arcOrder))
-	for _, id := range arcOrder {
-		arcs = append(arcs, *arcByID[id])
+	// Rebuild the series' story arcs (always — an empty slice clears stale arcs), then
+	// declare the match complete.
+	if err := writeArcs(ctx); err != nil {
+		return err
 	}
-	return s.repo.Metadata().ReplaceSeriesStoryArcs(ctx, seriesID, arcs)
+	return s.repo.Series().SetMetadataState(ctx, seriesID, domain.MetaMatched)
 }
 
 // HasProviders reports whether any metadata provider is configured (online matching is

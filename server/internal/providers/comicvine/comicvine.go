@@ -210,6 +210,12 @@ func (c *Client) get(ctx context.Context, path string, params url.Values, out an
 		return err
 	}
 	defer resp.Body.Close()
+	// Comic Vine signals rate limiting with 420 (velocity detection) or 429; its blocks
+	// last up to an hour, so retrying in-process is pointless — classify the error instead
+	// so the match service can leave the series resumable.
+	if resp.StatusCode == 420 || resp.StatusCode == http.StatusTooManyRequests {
+		return fmt.Errorf("comicvine: http %d: %w", resp.StatusCode, providers.ErrRateLimited)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("comicvine: http %d", resp.StatusCode)
 	}

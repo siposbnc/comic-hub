@@ -39,6 +39,47 @@ func (r *metadataRepo) ReplaceSeriesStoryArcs(ctx context.Context, seriesID stri
 	})
 }
 
+// SeriesStoryArcInputs reads the stored arcs back in write-input form (provider id, name,
+// description, member book ids) so a resumed match can seed its accumulator from them.
+func (r *metadataRepo) SeriesStoryArcInputs(ctx context.Context, seriesID string) ([]domain.StoryArcInput, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT sa.provider_id, sa.name, sa.description, sab.book_id
+		FROM story_arc sa
+		LEFT JOIN story_arc_book sab ON sab.arc_id = sa.id
+		WHERE sa.series_id = ?
+		ORDER BY `+minArcBookSort+`, sa.name`, seriesID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	byID := map[string]*domain.StoryArcInput{}
+	var order []string
+	for rows.Next() {
+		var pid, name, desc string
+		var bookID sql.NullString
+		if err := rows.Scan(&pid, &name, &desc, &bookID); err != nil {
+			return nil, err
+		}
+		a := byID[pid]
+		if a == nil {
+			a = &domain.StoryArcInput{ProviderID: pid, Name: name, Description: desc}
+			byID[pid] = a
+			order = append(order, pid)
+		}
+		if bookID.Valid {
+			a.BookIDs = append(a.BookIDs, bookID.String)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	out := make([]domain.StoryArcInput, 0, len(order))
+	for _, pid := range order {
+		out = append(out, *byID[pid])
+	}
+	return out, nil
+}
+
 const storyArcCountExpr = `(SELECT COUNT(*) FROM story_arc_book sab WHERE sab.arc_id = sa.id)`
 
 // minArcBookSort orders arcs by where they start in the run.

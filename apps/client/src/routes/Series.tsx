@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
+import { useMutation } from '@tanstack/react-query';
 import {
   Button,
   ProgressBar,
@@ -68,6 +69,29 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
   const [matching, setMatching] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmingRescan, setConfirmingRescan] = useState(false);
+
+  // An interrupted match (e.g. a provider rate limit) leaves the series incomplete but
+  // still linked to its provider volume; re-running the same match resumes it server-side,
+  // fetching only the issues that aren't applied yet.
+  const canContinueMatch = detail.metadataState === 'incomplete' && !!detail.matchProviderId;
+  const continueMatch = useMutation({
+    mutationFn: () =>
+      client.applySeriesMatch(detail.id, detail.matchProviderId!, {
+        provider: detail.matchProvider,
+      }),
+    onSuccess: () =>
+      addToast({
+        tone: 'info',
+        title: 'Continuing match',
+        message: `Fetching the remaining issues for ${detail.name}…`,
+      }),
+    onError: (e) =>
+      addToast({
+        tone: 'danger',
+        title: 'Could not continue the match',
+        message: e instanceof Error ? e.message : 'Unexpected error.',
+      }),
+  });
 
   const onRescan = async () => {
     setConfirmingRescan(false);
@@ -186,7 +210,15 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
               {detail.name}
             </h1>
             <div style={{ marginTop: 14 }}>
-              <MetaChip state={detail.metadataState} onMatch={() => setMatching(true)} />
+              <MetaChip
+                state={detail.metadataState}
+                onMatch={() => setMatching(true)}
+                onContinue={
+                  canContinueMatch && !continueMatch.isPending
+                    ? () => continueMatch.mutate()
+                    : undefined
+                }
+              />
             </div>
             {meta && (
               <p
@@ -635,8 +667,17 @@ function IssueCover({ book, seriesName }: { book: BookCard; seriesName: string }
   );
 }
 
-/** Series metadata-state chip: matched (accent) or incomplete/no-match (warning + Match). */
-function MetaChip({ state, onMatch }: { state?: MetadataState; onMatch: () => void }) {
+/** Series metadata-state chip: matched (accent) or incomplete/no-match (warning + Match).
+ *  When an interrupted match can be resumed, a Continue matching action leads. */
+function MetaChip({
+  state,
+  onMatch,
+  onContinue,
+}: {
+  state?: MetadataState;
+  onMatch: () => void;
+  onContinue?: () => void;
+}) {
   if (state === 'matched') {
     return (
       <span
@@ -680,7 +721,17 @@ function MetaChip({ state, onMatch }: { state?: MetadataState; onMatch: () => vo
         <Icon name="alert-triangle" size={13} color="var(--warning)" />{' '}
         {state === 'none' ? 'No match' : 'Incomplete'}
       </span>
-      <Button size="sm" variant="secondary" icon="refresh" onClick={onMatch}>
+      {onContinue && (
+        <Button size="sm" variant="secondary" icon="refresh" onClick={onContinue}>
+          Continue matching
+        </Button>
+      )}
+      <Button
+        size="sm"
+        variant={onContinue ? 'ghost' : 'secondary'}
+        icon="search"
+        onClick={onMatch}
+      >
         Match metadata
       </Button>
     </span>

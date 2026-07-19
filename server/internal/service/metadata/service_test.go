@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -182,6 +183,76 @@ func TestMatchSeries(t *testing.T) {
 	}
 	if again, _ := store.Metadata().SeriesStoryArcs(ctx, seriesID); len(again) != 1 {
 		t.Fatalf("re-match duplicated arcs: %+v", again)
+	}
+}
+
+// flakyProvider wraps fakeProvider with per-issue failure injection and call counting,
+// to exercise the resumable-match path.
+type flakyProvider struct {
+	fakeProvider
+	issueCalls map[string]int
+	failOn     map[string]error
+}
+
+func (f *flakyProvider) Issue(ctx context.Context, id string) (providers.IssueMeta, error) {
+	f.issueCalls[id]++
+	if err := f.failOn[id]; err != nil {
+		return providers.IssueMeta{}, err
+	}
+	return f.fakeProvider.Issue(ctx, id)
+}
+
+// A match interrupted by a rate limit leaves the series incomplete but linked, keeps the
+// already-applied books, and a re-run finishes without re-fetching them.
+func TestMatchSeriesResumesAfterRateLimit(t *testing.T) {
+	ctx := context.Background()
+	store := newStore(t)
+	seriesID, book1, book2 := seed(t, store)
+	prov := &flakyProvider{
+		issueCalls: map[string]int{},
+		failOn:     map[string]error{"iss-2": fmt.Errorf("http 429: %w", providers.ErrRateLimited)},
+	}
+	svc := New(store, prov)
+
+	err := svc.MatchSeries(ctx, seriesID, "", "vol-1", nil, nil)
+	if !errors.Is(err, providers.ErrRateLimited) {
+		t.Fatalf("interrupted match err = %v, want ErrRateLimited", err)
+	}
+
+	// Interrupted: series incomplete but linked; the first book applied and its arc kept.
+	ser, _ := store.Series().Get(ctx, seriesID)
+	if ser.MetadataState != domain.MetaIncomplete {
+		t.Fatalf("series state = %q, want incomplete", ser.MetadataState)
+	}
+	if ser.MatchProvider != "fake" || ser.MatchProviderID != "vol-1" {
+		t.Fatalf("series link = %q/%q, want fake/vol-1", ser.MatchProvider, ser.MatchProviderID)
+	}
+	if b1, _ := store.Books().Get(ctx, book1); b1.MetadataState != domain.MetaMatched {
+		t.Fatalf("book1 not applied before the failure: %+v", b1)
+	}
+	if arcs, _ := store.Metadata().SeriesStoryArcs(ctx, seriesID); len(arcs) != 1 || arcs[0].IssueCount != 1 {
+		t.Fatalf("salvaged arcs = %+v, want 1 arc with 1 issue", arcs)
+	}
+
+	// Continue: the re-run applies only the remaining book and completes the series.
+	prov.failOn = nil
+	if err := svc.MatchSeries(ctx, seriesID, "", "vol-1", nil, nil); err != nil {
+		t.Fatalf("resumed match: %v", err)
+	}
+	if prov.issueCalls["iss-1"] != 1 {
+		t.Fatalf("iss-1 fetched %d times, want 1 (resume must skip applied books)", prov.issueCalls["iss-1"])
+	}
+	ser, _ = store.Series().Get(ctx, seriesID)
+	if ser.MetadataState != domain.MetaMatched {
+		t.Fatalf("series state after resume = %q, want matched", ser.MetadataState)
+	}
+	if b2, _ := store.Books().Get(ctx, book2); b2.Title != "Year One Part One" {
+		t.Fatalf("book2 not applied on resume: %+v", b2)
+	}
+	// The shared arc regains both members: the skipped book's membership was carried over.
+	arcs, _ := store.Metadata().SeriesStoryArcs(ctx, seriesID)
+	if len(arcs) != 1 || arcs[0].IssueCount != 2 {
+		t.Fatalf("arcs after resume = %+v, want 1 arc with 2 issues", arcs)
 	}
 }
 

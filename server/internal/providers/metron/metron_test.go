@@ -2,6 +2,7 @@ package metron
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -72,6 +73,69 @@ func newTestClient(t *testing.T) (*Client, *string) {
 
 	c := New("user", "pass", WithBaseURL(ts.URL), WithHTTPClient(ts.Client()), WithMinInterval(0))
 	return c, &lastPath
+}
+
+// A 429 with a Retry-After is waited out and retried; exhausting the attempts surfaces
+// providers.ErrRateLimited so the match service can leave the series resumable.
+func TestRateLimitRetries(t *testing.T) {
+	var calls int
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls == 1 {
+			w.Header().Set("Retry-After", "1")
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(seriesDetailJSON))
+	}))
+	t.Cleanup(ts.Close)
+	c := New("user", "pass", WithBaseURL(ts.URL), WithHTTPClient(ts.Client()), WithMinInterval(0))
+
+	m, err := c.SeriesMeta(context.Background(), "42")
+	if err != nil {
+		t.Fatalf("SeriesMeta after one 429: %v", err)
+	}
+	if calls != 2 || m.Name != "Nova Tide" {
+		t.Fatalf("calls = %d, meta = %+v; want a single retry succeeding", calls, m)
+	}
+}
+
+func TestRateLimitExhaustedIsClassified(t *testing.T) {
+	var calls int
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.Header().Set("Retry-After", "1")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	t.Cleanup(ts.Close)
+	c := New("user", "pass", WithBaseURL(ts.URL), WithHTTPClient(ts.Client()), WithMinInterval(0))
+
+	_, err := c.SeriesMeta(context.Background(), "42")
+	if !errors.Is(err, providers.ErrRateLimited) {
+		t.Fatalf("err = %v, want ErrRateLimited", err)
+	}
+	if calls != rateLimitAttempts {
+		t.Fatalf("calls = %d, want %d attempts", calls, rateLimitAttempts)
+	}
+}
+
+func TestRetryAfterParsing(t *testing.T) {
+	cases := []struct {
+		in   string
+		want time.Duration
+	}{
+		{"30", 30 * time.Second},
+		{"", defaultRetryAfter},
+		{"garbage", defaultRetryAfter},
+		{"0", defaultRetryAfter},
+		{"99999", maxRetryAfter},
+	}
+	for _, c := range cases {
+		if got := retryAfter(c.in); got != c.want {
+			t.Errorf("retryAfter(%q) = %v, want %v", c.in, got, c.want)
+		}
+	}
 }
 
 func TestSearchSeries(t *testing.T) {
