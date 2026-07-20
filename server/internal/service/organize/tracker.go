@@ -3,6 +3,7 @@ package organize
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -77,7 +78,7 @@ func (s *Service) Tracker(ctx context.Context, userID string) ([]TrackerTrack, e
 			}
 			main := make([]TrackerIssue, 0, len(books))
 			seen := map[float64]bool{}
-			specials := map[domain.BookKind][]domain.Book{}
+			var specialBooks []domain.Book
 			for _, b := range books {
 				if !access.Allowed(ceiling, b.AgeRating) {
 					continue
@@ -86,7 +87,7 @@ func (s *Service) Tracker(ctx context.Context, userID string) ([]TrackerTrack, e
 					continue // variants/covers aren't issues — keep them out of the matrix
 				}
 				if b.Kind.IsSpecial() {
-					specials[b.Kind] = append(specials[b.Kind], b)
+					specialBooks = append(specialBooks, b)
 					continue
 				}
 				sortKey := issueSort(b.SortNumber, b.Number)
@@ -113,28 +114,25 @@ func (s *Service) Tracker(ctx context.Context, userID string) ([]TrackerTrack, e
 					Issues:    main,
 				})
 			}
-			// Each special edition (annual, one-shot, …) becomes its own sub-row, re-numbered
-			// locally from 1 — exactly as a collector's wall-chart splits them out.
-			for _, kind := range specialKindOrder {
-				group := specials[kind]
-				if len(group) == 0 {
-					continue
-				}
-				sort.SliceStable(group, func(i, j int) bool { return group[i].SortNumber < group[j].SortNumber })
-				issues := make([]TrackerIssue, 0, len(group))
-				for i, b := range group {
-					local := parseSort(b.Number)
+			// Each distinct special edition becomes its own sub-row, re-numbered locally from
+			// 1 — so "Wonder Woman — Futures End" and "Wonder Woman — Convergence" (both
+			// KindSpecial, both starting at #1) split into separate rows instead of stacking
+			// indistinguishably in one "Special" row.
+			for _, g := range groupSpecials(specialBooks) {
+				issues := make([]TrackerIssue, 0, len(g.books))
+				for i, b := range g.books {
+					local := localSpecialNumber(b.Number)
 					if local == 0 {
 						local = float64(i + 1)
 					}
 					issues = append(issues, s.libraryIssue(ctx, userID, b, local, trimFloat(local)))
 				}
 				tracks = append(tracks, TrackerTrack{
-					ID:        "series:" + ser.ID + ":" + string(kind),
+					ID:        "series:" + ser.ID + ":" + g.key,
 					SeriesID:  ser.ID,
 					LibraryID: lib.ID,
 					Name:      ser.Name,
-					Special:   specialLabel(kind),
+					Special:   g.name,
 					Link:      "library",
 					Issues:    issues,
 				})
@@ -179,7 +177,8 @@ var specialKindOrder = []domain.BookKind{
 	domain.KindAnnual, domain.KindOneShot, domain.KindSpecial, domain.KindTPB, domain.KindGN,
 }
 
-// specialLabel is the human sub-row suffix for a special kind ("{Series} — Annual").
+// specialLabel is the generic sub-row suffix for a special kind, used when the issue
+// number carries no edition name of its own ("{Series} — Annual").
 func specialLabel(kind domain.BookKind) string {
 	switch kind {
 	case domain.KindAnnual:
@@ -195,6 +194,82 @@ func specialLabel(kind domain.BookKind) string {
 	default:
 		return string(kind)
 	}
+}
+
+// specialGroup is one special-edition sub-row: the books sharing a kind + edition name.
+type specialGroup struct {
+	key   string // unique per (kind, name); disambiguates the row id
+	name  string // sub-row label ("Annual", "Futures End", "Convergence", …)
+	books []domain.Book
+}
+
+// groupSpecials buckets a series' special books by edition name (the label prefix of the
+// issue number — "Futures End 1" → "Futures End"), so distinct named specials that each
+// restart at #1 get their own row. Groups are ordered by kind then name; books within a
+// group by issue number.
+func groupSpecials(books []domain.Book) []specialGroup {
+	byKey := map[string]*specialGroup{}
+	var order []string
+	for _, b := range books {
+		name := specialName(b.Number, b.Kind)
+		key := string(b.Kind) + ":" + name
+		g := byKey[key]
+		if g == nil {
+			g = &specialGroup{key: key, name: name}
+			byKey[key] = g
+			order = append(order, key)
+		}
+		g.books = append(g.books, b)
+	}
+	sort.SliceStable(order, func(i, j int) bool {
+		gi, gj := byKey[order[i]], byKey[order[j]]
+		if ri, rj := kindRank(gi.books[0].Kind), kindRank(gj.books[0].Kind); ri != rj {
+			return ri < rj
+		}
+		return gi.name < gj.name
+	})
+	out := make([]specialGroup, 0, len(order))
+	for _, key := range order {
+		g := byKey[key]
+		sort.SliceStable(g.books, func(i, j int) bool { return g.books[i].SortNumber < g.books[j].SortNumber })
+		out = append(out, *g)
+	}
+	return out
+}
+
+// kindRank orders special kinds within a series, matching specialKindOrder.
+func kindRank(k domain.BookKind) int {
+	for i, kk := range specialKindOrder {
+		if kk == k {
+			return i
+		}
+	}
+	return len(specialKindOrder)
+}
+
+// reSpecialTrailingNum matches the trailing issue number of a special label ("Annual 2",
+// "Futures End 1"), including a bare all-number label so it strips to empty.
+var reSpecialTrailingNum = regexp.MustCompile(`(?:^|\s)\d+(?:\.\d+)?\s*$`)
+
+// specialName derives a special edition's row label from its issue number, dropping the
+// trailing issue number ("Futures End 1" → "Futures End", "Annual 2" → "Annual"). When the
+// number is just a bare figure with no name, it falls back to the kind's generic label.
+func specialName(number string, kind domain.BookKind) string {
+	n := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(number), "#"))
+	name := strings.TrimSpace(reSpecialTrailingNum.ReplaceAllString(n, ""))
+	if name == "" {
+		return specialLabel(kind)
+	}
+	return name
+}
+
+// localSpecialNumber is the issue number within a special edition ("Futures End 1" → 1,
+// "Annual 2" → 2), taken from the label's trailing figure so each edition renumbers from 1.
+func localSpecialNumber(number string) float64 {
+	n := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(number), "#"))
+	m := reSpecialTrailingNum.FindString(n)
+	f, _ := strconv.ParseFloat(strings.TrimSpace(m), 64)
+	return f
 }
 
 // libraryIssue builds a tracker cell for a library book at the given sort key / display label.
