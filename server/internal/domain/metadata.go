@@ -6,8 +6,13 @@ import "context"
 // provider-id map (provider name -> external id, so a future re-match reuses the link),
 // and the set of user-locked field names that an online match must never overwrite.
 type BookMeta struct {
-	Title        string
-	Number       string
+	Title  string
+	Number string
+	// SortNumber is the numeric sort key derived from Number; the caller supplies it
+	// (recomputed whenever Number changes) so lists stay in issue order.
+	SortNumber float64
+	// Kind re-derived from the final Number + file facts; empty keeps the stored kind.
+	Kind         BookKind
 	Volume       int
 	ReleaseDate  int64
 	AgeRating    string

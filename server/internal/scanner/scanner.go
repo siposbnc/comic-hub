@@ -348,7 +348,7 @@ func (s *Scanner) buildBook(
 	if haveCI {
 		ciFormat = ci.Format
 	}
-	book.Kind = classifyKind(book.Number, path, ciFormat)
+	book.Kind = ClassifyKind(book.Number, path, ciFormat)
 	return book
 }
 

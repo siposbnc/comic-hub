@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"time"
@@ -35,13 +36,15 @@ type ProgressView struct {
 	UpdatedAt int64   `json:"updatedAt"`
 }
 
-// BookCard is a book in a list/rail/grid.
+// BookCard is a book in a list/rail/grid. FileName (the file's base name, no directory)
+// is what tells apart books whose parsed numbers collide.
 type BookCard struct {
 	ID        string        `json:"id"`
 	SeriesID  string        `json:"seriesId"`
 	Number    string        `json:"number,omitempty"`
 	Title     string        `json:"title,omitempty"`
 	Kind      string        `json:"kind,omitempty"`
+	FileName  string        `json:"fileName,omitempty"`
 	PageCount int           `json:"pageCount"`
 	Format    string        `json:"format"`
 	IsCorrupt bool          `json:"isCorrupt,omitempty"`
@@ -657,6 +660,7 @@ func (s *Service) bookCard(ctx context.Context, b domain.Book, userID string) Bo
 		Number:    b.Number,
 		Title:     b.Title,
 		Kind:      string(b.Kind),
+		FileName:  filepath.Base(b.FilePath),
 		PageCount: b.PageCount,
 		Format:    b.FileFormat,
 		IsCorrupt: b.IsCorrupt,

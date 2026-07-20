@@ -97,6 +97,37 @@ func handleBookApply(svc *metadata.Service) http.HandlerFunc {
 	}
 }
 
+// patchBookRequest is the body of PATCH /books/{id} — manual per-book corrections.
+// Currently only the issue number is editable (the duplicate-number resolve flow); the
+// server locks the field so rescans and matches keep it.
+type patchBookRequest struct {
+	Number *string `json:"number"`
+}
+
+// handlePatchBook applies a manual correction to a book.
+func handlePatchBook(svc *metadata.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body patchBookRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeError(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+			return
+		}
+		if body.Number == nil || strings.TrimSpace(*body.Number) == "" {
+			writeError(w, http.StatusBadRequest, "bad_request", "number is required")
+			return
+		}
+		if err := svc.SetBookNumber(r.Context(), chi.URLParam(r, "id"), *body.Number); err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				writeError(w, http.StatusNotFound, "not_found", "not found")
+				return
+			}
+			writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 // writeMatchError maps service errors to HTTP statuses: missing entities 404, an
 // unconfigured provider 503, and upstream/provider failures 502.
 func writeMatchError(w http.ResponseWriter, err error) {

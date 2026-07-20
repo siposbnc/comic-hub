@@ -30,13 +30,17 @@ func (r *metadataRepo) WriteBookMeta(ctx context.Context, bookID string, m domai
 		return err
 	}
 
+	// An empty Kind keeps the stored value (COALESCE/NULLIF), so callers that don't
+	// re-derive it can't blank the column.
 	res, err := r.db.ExecContext(ctx, `
 		UPDATE book SET
-			title = ?, number = ?, volume = ?, release_date = ?, age_rating = ?,
+			title = ?, number = ?, sort_number = ?, kind = COALESCE(NULLIF(?, ''), kind),
+			volume = ?, release_date = ?, age_rating = ?,
 			language = ?, summary = ?, metadata_state = ?, provider_ids = ?,
 			locked_fields = ?, updated_at = ?
 		WHERE id = ?`,
-		nullString(m.Title), nullString(m.Number), nullInt(int64(m.Volume)), nullInt(m.ReleaseDate),
+		nullString(m.Title), nullString(m.Number), nullFloat(m.SortNumber), string(m.Kind),
+		nullInt(int64(m.Volume)), nullInt(m.ReleaseDate),
 		nullString(m.AgeRating), nullString(m.Language), nullString(m.Summary), string(state),
 		string(providerIDs), string(locked), time.Now().UnixMilli(), bookID,
 	)

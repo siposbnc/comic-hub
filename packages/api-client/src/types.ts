@@ -284,6 +284,8 @@ export interface BookCard {
   number?: string;
   title?: string;
   kind?: BookKind;
+  /** The file's base name — what tells apart books whose parsed numbers collide. */
+  fileName?: string;
   pageCount: number;
   format: string;
   isCorrupt?: boolean;

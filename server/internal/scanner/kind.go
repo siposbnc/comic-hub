@@ -17,10 +17,10 @@ var (
 	reCoverFile = regexp.MustCompile(`(?i)\bcovers?\b`)
 )
 
-// classifyKind decides a book's kind, in priority order: an explicit ComicInfo <Format>,
+// ClassifyKind decides a book's kind, in priority order: an explicit ComicInfo <Format>,
 // then the parsed issue-number label ("Annual 2", "One-Shot", …), then filename heuristics
 // for variant/cover art. Defaults to a normal issue.
-func classifyKind(number, filePath, ciFormat string) domain.BookKind {
+func ClassifyKind(number, filePath, ciFormat string) domain.BookKind {
 	if k := kindFromFormat(ciFormat); k != "" {
 		return k
 	}

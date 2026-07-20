@@ -139,6 +139,7 @@ func NewRouter(d Deps) http.Handler {
 				r.Post("/{id}/prefetch", handlePrefetch(d.Reader))
 			})
 			r.Post("/{id}/match/apply", handleBookApply(d.Metadata))
+			r.Patch("/{id}", handlePatchBook(d.Metadata))
 			r.Post("/{id}/tags", handleAssignTags(d.Organize))
 			r.Delete("/{id}/tags/{tagId}", handleUnassignTag(d.Organize))
 		})

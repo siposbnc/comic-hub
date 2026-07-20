@@ -328,6 +328,49 @@ func seriesLibrary(t *testing.T, store *sqlstore.Store, seriesID string) string 
 	return ser.LibraryID
 }
 
+// SetBookNumber (the duplicate-number resolve flow) rewrites the number, locks it, and
+// re-derives kind + sort so a labeled number becomes a special past the numbered run.
+func TestSetBookNumberLocksAndReclassifies(t *testing.T) {
+	ctx := context.Background()
+	store := newStore(t)
+	_, book1, _ := seed(t, store)
+	svc := New(store, fakeProvider{})
+
+	if err := svc.SetBookNumber(ctx, book1, "Futures End 1"); err != nil {
+		t.Fatalf("SetBookNumber: %v", err)
+	}
+	b1, _ := store.Books().Get(ctx, book1)
+	if b1.Number != "Futures End 1" || b1.Kind != domain.KindSpecial {
+		t.Fatalf("book = number %q kind %q, want Futures End 1/special", b1.Number, b1.Kind)
+	}
+	if b1.SortNumber < 1_000_000 {
+		t.Fatalf("sort number = %v, want past the numbered run", b1.SortNumber)
+	}
+	if b1.MetadataState != domain.MetaLocked {
+		t.Fatalf("state = %q, want locked", b1.MetadataState)
+	}
+
+	// A later provider apply must keep the hand-set number (field is locked) while still
+	// filling the rest.
+	if err := svc.ApplyBook(ctx, book1, "", "iss-1", nil); err != nil {
+		t.Fatalf("ApplyBook after lock: %v", err)
+	}
+	b1, _ = store.Books().Get(ctx, book1)
+	if b1.Number != "Futures End 1" {
+		t.Fatalf("locked number overwritten by match: %q", b1.Number)
+	}
+	if b1.Title != "The Lies Part One" {
+		t.Fatalf("unlocked title not applied: %q", b1.Title)
+	}
+	if b1.Kind != domain.KindSpecial {
+		t.Fatalf("kind after re-apply = %q, want special (derived from locked number)", b1.Kind)
+	}
+
+	if err := svc.SetBookNumber(ctx, book1, "  "); err == nil {
+		t.Fatal("blank number accepted")
+	}
+}
+
 func TestApplyBookRespectsLock(t *testing.T) {
 	ctx := context.Background()
 	store := newStore(t)

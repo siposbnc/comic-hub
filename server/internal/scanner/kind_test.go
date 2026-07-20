@@ -34,8 +34,8 @@ func TestClassifyKind(t *testing.T) {
 		{"12", `X\Saga 012.cbz`, "", domain.KindIssue},
 	}
 	for _, c := range cases {
-		if got := classifyKind(c.number, c.path, c.format); got != c.want {
-			t.Errorf("classifyKind(%q, %q, %q) = %q, want %q", c.number, c.path, c.format, got, c.want)
+		if got := ClassifyKind(c.number, c.path, c.format); got != c.want {
+			t.Errorf("ClassifyKind(%q, %q, %q) = %q, want %q", c.number, c.path, c.format, got, c.want)
 		}
 	}
 }

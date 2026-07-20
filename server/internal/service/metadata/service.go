@@ -12,6 +12,7 @@ import (
 
 	"github.com/siposbnc/comic-hub/server/internal/domain"
 	"github.com/siposbnc/comic-hub/server/internal/providers"
+	"github.com/siposbnc/comic-hub/server/internal/scanner"
 )
 
 // Writable field names used by the /apply API and the locked-fields set.
@@ -344,6 +345,53 @@ func (s *Service) MatchSeries(ctx context.Context, seriesID, providerName, volum
 	return s.repo.Series().SetMetadataState(ctx, seriesID, domain.MetaMatched)
 }
 
+// SetBookNumber hand-corrects a book's issue number (the duplicate-number resolve flow).
+// The field is locked so rescans and later matches keep the correction, and the sort key
+// and kind are re-derived — a labeled number ("Futures End 1") thereby becomes a special
+// and leaves the numbered run.
+func (s *Service) SetBookNumber(ctx context.Context, bookID, number string) error {
+	number = strings.TrimSpace(number)
+	if number == "" {
+		return fmt.Errorf("metadata: number is required")
+	}
+	book, err := s.repo.Books().Get(ctx, bookID)
+	if err != nil {
+		return err
+	}
+	locked, err := s.repo.Metadata().LockedBookFields(ctx, bookID)
+	if err != nil {
+		return err
+	}
+	providerIDs, err := s.repo.Metadata().BookProviderIDs(ctx, bookID)
+	if err != nil {
+		return err
+	}
+	if !toSet(locked)[FieldNumber] {
+		locked = append(locked, FieldNumber)
+	}
+	meta := domain.BookMeta{
+		Title:        book.Title,
+		Number:       number,
+		SortNumber:   scanner.SortNumber(number),
+		Kind:         scanner.ClassifyKind(number, book.FilePath, ""),
+		Volume:       book.Volume,
+		ReleaseDate:  book.ReleaseDate,
+		AgeRating:    book.AgeRating,
+		Language:     book.Language,
+		Summary:      book.Summary,
+		State:        domain.MetaLocked,
+		ProviderIDs:  providerIDs,
+		LockedFields: locked,
+	}
+	if err := s.repo.Metadata().WriteBookMeta(ctx, bookID, meta); err != nil {
+		return err
+	}
+	if s.afterApply != nil {
+		s.afterApply(ctx, bookID)
+	}
+	return nil
+}
+
 // HasProviders reports whether any metadata provider is configured (online matching is
 // possible). The scan pipeline checks this before enqueuing an auto-match.
 func (s *Service) HasProviders() bool {
@@ -461,6 +509,9 @@ func (s *Service) applyIssueMeta(ctx context.Context, bookID, providerName, issu
 		meta.Summary = im.Summary
 	}
 	meta.ProviderIDs[providerName] = issueProviderID
+	// The number may have changed: keep the sort key and kind in step with it.
+	meta.SortNumber = scanner.SortNumber(meta.Number)
+	meta.Kind = scanner.ClassifyKind(meta.Number, book.FilePath, "")
 
 	if err := s.repo.Metadata().WriteBookMeta(ctx, bookID, meta); err != nil {
 		return err

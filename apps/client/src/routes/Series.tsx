@@ -19,6 +19,10 @@ import { useReadLaunch } from '../lib/launch.js';
 import { useUiStore } from '../store/ui.js';
 import { LoadingState, ErrorState } from '../components/Page.js';
 import { MatchDialog } from '../components/MatchDialog.js';
+import {
+  ResolveDuplicatesDialog,
+  type DuplicateGroup,
+} from '../components/ResolveDuplicatesDialog.js';
 import { issueLabel, resumePage, toCoverStatus, progressFraction } from '../lib/format.js';
 
 const route = getRouteApi('/series/$id');
@@ -69,6 +73,7 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
   const [matching, setMatching] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmingRescan, setConfirmingRescan] = useState(false);
+  const [resolving, setResolving] = useState(false);
 
   // An interrupted match (e.g. a provider rate limit) leaves the series incomplete but
   // still linked to its provider volume; re-running the same match resumes it server-side,
@@ -117,6 +122,10 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
   // over the next unread issue, but it wins over nothing.
   const issues = detail.books.filter((b) => !isSpecialKind(b.kind));
   const specials = detail.books.filter((b) => isSpecialKind(b.kind));
+
+  // Regular issues sharing a number are almost always a mis-parsed special/tie-in (noisy
+  // folder names defeat the filename heuristics) — surface them with a resolve flow.
+  const duplicateGroups = findDuplicateNumbers(issues);
 
   const resumeBook =
     issues.find((b) => b.progress?.status === 'in_progress') ??
@@ -336,6 +345,36 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
       <div
         style={{ padding: 'var(--pad-screen)', maxWidth: 'var(--content-max)', margin: '0 auto' }}
       >
+        {duplicateGroups.length > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: '12px 16px',
+              marginBottom: 20,
+              background: 'color-mix(in oklab, var(--warning) 12%, transparent)',
+              border: '1px solid color-mix(in oklab, var(--warning) 35%, transparent)',
+              borderRadius: 'var(--radius-md)',
+            }}
+          >
+            <Icon name="alert-triangle" size={18} color="var(--warning)" />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-primary)' }}>
+                Duplicate issue numbers
+              </div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 2 }}>
+                {duplicateGroups.length === 1
+                  ? `${issueLabel(duplicateGroups[0]!.number)} appears on ${duplicateGroups[0]!.books.length} files`
+                  : `${duplicateGroups.length} issue numbers appear on more than one file`}{' '}
+                — usually a special or tie-in parsed as a regular issue.
+              </div>
+            </div>
+            <Button size="sm" variant="secondary" onClick={() => setResolving(true)}>
+              Resolve
+            </Button>
+          </div>
+        )}
         <Tabs
           value={activeTab}
           onChange={setTab}
@@ -491,8 +530,33 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
           onConfirm={onRescan}
         />
       )}
+      {resolving && (
+        <ResolveDuplicatesDialog
+          seriesId={detail.id}
+          groups={duplicateGroups}
+          onClose={() => setResolving(false)}
+        />
+      )}
     </div>
   );
+}
+
+/** Groups regular issues that share a normalized number ("001" == "1"); a group with more
+ *  than one book is a duplicate worth resolving. */
+function findDuplicateNumbers(issues: BookCard[]): DuplicateGroup[] {
+  const byNumber = new Map<string, BookCard[]>();
+  for (const b of issues) {
+    const raw = b.number?.trim();
+    if (!raw) continue;
+    const n = Number(raw);
+    const key = Number.isFinite(n) ? String(n) : raw.toLowerCase();
+    const group = byNumber.get(key);
+    if (group) group.push(b);
+    else byNumber.set(key, [b]);
+  }
+  return [...byNumber.entries()]
+    .filter(([, books]) => books.length > 1)
+    .map(([key, books]) => ({ number: books[0]!.number ?? key, books }));
 }
 
 /**

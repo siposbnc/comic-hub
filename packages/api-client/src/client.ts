@@ -481,6 +481,14 @@ export class ComicHubClient {
     return res.jobId;
   }
 
+  /** Hand-corrects a book's issue number (duplicate-number resolve). The server locks the
+   * field so rescans/matches keep it, and re-derives kind + sort order from it. */
+  async setBookNumber(bookId: string, number: string): Promise<void> {
+    await this.request<unknown>('PATCH', `/api/v1/books/${encodeURIComponent(bookId)}`, {
+      body: { number },
+    });
+  }
+
   /** Applies a chosen provider issue's metadata to a single book (synchronous). */
   async applyBookMatch(
     bookId: string,
