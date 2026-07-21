@@ -63,6 +63,9 @@ type SeriesRepository interface {
 // BookRepository persists books and their pages.
 type BookRepository interface {
 	Upsert(ctx context.Context, b Book) (Book, error)
+	// SetIgnored toggles a book's ignored flag (hide/restore) without touching any other
+	// column — orthogonal to metadata, so it never changes metadata_state.
+	SetIgnored(ctx context.Context, id string, ignored bool) error
 	Get(ctx context.Context, id string) (Book, error)
 	// GetByPath resolves a book by its absolute file path, so the scanner can
 	// change-detect and reuse ids across rescans (ErrNotFound if absent).

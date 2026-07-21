@@ -132,8 +132,11 @@ type Book struct {
 	CoverPage     int
 	MetadataState MetadataState
 	IsCorrupt     bool
-	AddedAt       int64
-	UpdatedAt     int64
+	// Ignored hides a mis-scanned or junk file from every catalog view without deleting it
+	// on disk; it survives rescans and is reversible from Library Health.
+	Ignored   bool
+	AddedAt   int64
+	UpdatedAt int64
 }
 
 // Page is one image within a book.

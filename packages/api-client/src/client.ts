@@ -4,6 +4,7 @@ import type {
   Bookmark,
   BookCard,
   BookDetail,
+  BookKind,
   BookManifest,
   Collection,
   CollectionDetail,
@@ -481,12 +482,20 @@ export class ComicHubClient {
     return res.jobId;
   }
 
-  /** Hand-corrects a book's issue number (duplicate-number resolve). The server locks the
-   * field so rescans/matches keep it, and re-derives kind + sort order from it. */
-  async setBookNumber(bookId: string, number: string): Promise<void> {
+  /** Manual per-book correction. Any provided field is applied and (for number/title/kind)
+   * locked so rescans and provider matches keep it; `ignored` hides/restores the file. */
+  async editBook(
+    bookId: string,
+    patch: { number?: string; title?: string; kind?: BookKind; ignored?: boolean },
+  ): Promise<void> {
     await this.request<unknown>('PATCH', `/api/v1/books/${encodeURIComponent(bookId)}`, {
-      body: { number },
+      body: patch,
     });
+  }
+
+  /** Hand-corrects a book's issue number (duplicate-number resolve) — see editBook. */
+  async setBookNumber(bookId: string, number: string): Promise<void> {
+    await this.editBook(bookId, { number });
   }
 
   /** Applies a chosen provider issue's metadata to a single book (synchronous). */

@@ -256,6 +256,76 @@ func TestMatchSeriesResumesAfterRateLimit(t *testing.T) {
 	}
 }
 
+// EditBook can mark a book as extra art (cover): kind is set, locked, and survives a later
+// provider match that would otherwise re-derive kind from the issue number.
+func TestEditBookMarkAsCoverSticksThroughMatch(t *testing.T) {
+	ctx := context.Background()
+	store := newStore(t)
+	_, book1, _ := seed(t, store)
+	svc := New(store, fakeProvider{})
+
+	cover := domain.KindCover
+	if err := svc.EditBook(ctx, book1, BookEdit{Kind: &cover}); err != nil {
+		t.Fatalf("EditBook kind: %v", err)
+	}
+	b1, _ := store.Books().Get(ctx, book1)
+	if b1.Kind != domain.KindCover || b1.MetadataState != domain.MetaLocked {
+		t.Fatalf("after mark-as-cover: kind %q state %q", b1.Kind, b1.MetadataState)
+	}
+
+	// A provider apply fills other fields but must not reset the pinned kind back to issue.
+	if err := svc.ApplyBook(ctx, book1, "", "iss-1", nil); err != nil {
+		t.Fatalf("ApplyBook: %v", err)
+	}
+	b1, _ = store.Books().Get(ctx, book1)
+	if b1.Kind != domain.KindCover {
+		t.Fatalf("match reset pinned kind to %q, want cover", b1.Kind)
+	}
+	if b1.Title != "The Lies Part One" {
+		t.Fatalf("unlocked title not applied: %q", b1.Title)
+	}
+}
+
+// EditBook toggles the ignore flag without disturbing metadata state.
+func TestEditBookIgnoreToggle(t *testing.T) {
+	ctx := context.Background()
+	store := newStore(t)
+	_, book1, _ := seed(t, store)
+	svc := New(store, fakeProvider{})
+
+	on := true
+	if err := svc.EditBook(ctx, book1, BookEdit{Ignored: &on}); err != nil {
+		t.Fatalf("EditBook ignore: %v", err)
+	}
+	b1, _ := store.Books().Get(ctx, book1)
+	if !b1.Ignored {
+		t.Fatalf("book not ignored")
+	}
+	if b1.MetadataState == domain.MetaLocked {
+		t.Fatalf("ignore toggle should not lock metadata (state=%q)", b1.MetadataState)
+	}
+
+	off := false
+	if err := svc.EditBook(ctx, book1, BookEdit{Ignored: &off}); err != nil {
+		t.Fatalf("EditBook un-ignore: %v", err)
+	}
+	if b1, _ := store.Books().Get(ctx, book1); b1.Ignored {
+		t.Fatalf("book still ignored after restore")
+	}
+}
+
+func TestEditBookRejectsInvalidKind(t *testing.T) {
+	ctx := context.Background()
+	store := newStore(t)
+	_, book1, _ := seed(t, store)
+	svc := New(store, fakeProvider{})
+
+	bogus := domain.BookKind("nonsense")
+	if err := svc.EditBook(ctx, book1, BookEdit{Kind: &bogus}); err == nil {
+		t.Fatal("invalid kind accepted")
+	}
+}
+
 func TestAutoMatchSeriesApplies100Percent(t *testing.T) {
 	ctx := context.Background()
 	store := newStore(t)

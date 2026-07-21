@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/siposbnc/comic-hub/server/internal/domain"
 )
@@ -16,7 +17,7 @@ type bookRepo struct{ db *DB }
 const bookColumns = `id, series_id, library_id, file_path, file_format, file_size,
 	file_mtime, content_hash, page_count, title, number, sort_number, volume,
 	release_date, age_rating, language, summary, cover_page, metadata_state,
-	is_corrupt, added_at, updated_at, kind`
+	is_corrupt, added_at, updated_at, kind, ignored`
 
 func (r *bookRepo) Upsert(ctx context.Context, b domain.Book) (domain.Book, error) {
 	state := b.MetadataState
@@ -27,9 +28,12 @@ func (r *bookRepo) Upsert(ctx context.Context, b domain.Book) (domain.Book, erro
 	if kind == "" {
 		kind = domain.KindIssue
 	}
+	// `ignored` is intentionally absent from the ON CONFLICT UPDATE set: a rescan re-upserts
+	// the scanned facts but must never un-hide a file the user ignored. It's toggled only via
+	// SetIgnored. New rows insert it (default false).
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO book (`+bookColumns+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			series_id      = excluded.series_id,
 			file_path      = excluded.file_path,
@@ -56,7 +60,7 @@ func (r *bookRepo) Upsert(ctx context.Context, b domain.Book) (domain.Book, erro
 		nullString(b.Number), nullFloat(b.SortNumber), nullInt(int64(b.Volume)),
 		nullInt(b.ReleaseDate), nullString(b.AgeRating), nullString(b.Language),
 		nullString(b.Summary), b.CoverPage, string(state), boolToInt(b.IsCorrupt),
-		b.AddedAt, b.UpdatedAt, string(kind),
+		b.AddedAt, b.UpdatedAt, string(kind), boolToInt(b.Ignored),
 	)
 	if err != nil {
 		return domain.Book{}, err
@@ -64,6 +68,21 @@ func (r *bookRepo) Upsert(ctx context.Context, b domain.Book) (domain.Book, erro
 	b.MetadataState = state
 	b.Kind = kind
 	return b, nil
+}
+
+// SetIgnored flips a book's ignored flag, leaving every other column (and metadata_state)
+// untouched. ErrNotFound if the id doesn't exist.
+func (r *bookRepo) SetIgnored(ctx context.Context, id string, ignored bool) error {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE book SET ignored = ?, updated_at = ? WHERE id = ?`,
+		boolToInt(ignored), time.Now().UnixMilli(), id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
 }
 
 func (r *bookRepo) Get(ctx context.Context, id string) (domain.Book, error) {
@@ -261,12 +280,13 @@ func scanBook(row rowScanner) (domain.Book, error) {
 		summary  sql.NullString
 		corrupt  int
 		kind     string
+		ignored  int
 	)
 	if err := row.Scan(
 		&b.ID, &b.SeriesID, &b.LibraryID, &b.FilePath, &b.FileFormat, &b.FileSize,
 		&b.FileMTime, &hash, &b.PageCount, &title, &number, &sortNum, &volume,
 		&release, &ageRate, &language, &summary, &b.CoverPage, &b.MetadataState,
-		&corrupt, &b.AddedAt, &b.UpdatedAt, &kind,
+		&corrupt, &b.AddedAt, &b.UpdatedAt, &kind, &ignored,
 	); err != nil {
 		return domain.Book{}, err
 	}
@@ -281,5 +301,6 @@ func scanBook(row rowScanner) (domain.Book, error) {
 	b.Summary = str(summary)
 	b.IsCorrupt = corrupt != 0
 	b.Kind = domain.BookKind(kind)
+	b.Ignored = ignored != 0
 	return b, nil
 }

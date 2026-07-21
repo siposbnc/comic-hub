@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Dialog, Button, Icon } from '@comichub/ui';
 import type { BookCard } from '@comichub/api-client';
 import { useClient } from '../lib/client.js';
 import { useUiStore } from '../store/ui.js';
-import { qk } from '../lib/queries.js';
+import { qk, useEditBook } from '../lib/queries.js';
 import { issueLabel } from '../lib/format.js';
 
 /** A group of books whose parsed issue numbers collide. */
@@ -31,6 +31,32 @@ export function ResolveDuplicatesDialog({
   const client = useClient();
   const qc = useQueryClient();
   const addToast = useUiStore((s) => s.addToast);
+  const quick = useEditBook();
+
+  // A quick action (mark-as-cover / ignore) that resolves a collision by taking one file out
+  // of the numbered run entirely, rather than renumbering it. Refetching series detail is what
+  // shrinks the duplicate groups; when none remain the effect below closes the dialog.
+  const quickResolve = (
+    bookId: string,
+    patch: { kind?: 'cover'; ignored?: boolean },
+    label: string,
+  ) =>
+    quick.mutate(
+      { bookId, patch },
+      {
+        onSuccess: () => addToast({ tone: 'success', title: label }),
+        onError: (e) =>
+          addToast({
+            tone: 'danger',
+            title: 'Could not update',
+            message: e instanceof Error ? e.message : 'Unexpected error.',
+          }),
+      },
+    );
+
+  useEffect(() => {
+    if (groups.length === 0) onClose();
+  }, [groups.length, onClose]);
 
   const [values, setValues] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
@@ -153,6 +179,9 @@ export function ResolveDuplicatesDialog({
                     Boolean(values[b.id]?.trim()) && values[b.id]!.trim() !== (b.number ?? '')
                   }
                   onChange={(v) => setValues((s) => ({ ...s, [b.id]: v }))}
+                  busy={quick.isPending}
+                  onMarkCover={() => quickResolve(b.id, { kind: 'cover' }, 'Marked as cover art')}
+                  onIgnore={() => quickResolve(b.id, { ignored: true }, 'File hidden')}
                 />
               ))}
             </div>
@@ -168,11 +197,17 @@ function BookRow({
   value,
   changed,
   onChange,
+  busy,
+  onMarkCover,
+  onIgnore,
 }: {
   book: BookCard;
   value: string;
   changed: boolean;
   onChange: (v: string) => void;
+  busy: boolean;
+  onMarkCover: () => void;
+  onIgnore: () => void;
 }) {
   const client = useClient();
   return (
@@ -214,11 +249,13 @@ function BookRow({
         >
           {book.fileName ?? issueLabel(book.number) ?? book.id}
         </div>
-        <div
-          className="ch-mono"
-          style={{ fontSize: '0.64rem', color: 'var(--text-tertiary)', marginTop: 3 }}
-        >
-          {book.pageCount} pages
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
+          <span className="ch-mono" style={{ fontSize: '0.64rem', color: 'var(--text-tertiary)' }}>
+            {book.pageCount} pages
+          </span>
+          {/* Instead of renumbering, take this file out of the run: it's cover art, or junk. */}
+          <RowAction label="Mark as cover" busy={busy} onClick={onMarkCover} />
+          <RowAction label="Ignore" busy={busy} onClick={onIgnore} />
         </div>
       </div>
       <input
@@ -240,6 +277,38 @@ function BookRow({
         }}
       />
     </div>
+  );
+}
+
+/** A compact inline text button for the per-row quick actions. */
+function RowAction({
+  label,
+  busy,
+  onClick,
+}: {
+  label: string;
+  busy: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={onClick}
+      style={{
+        border: 'none',
+        background: 'none',
+        padding: 0,
+        cursor: busy ? 'default' : 'pointer',
+        fontFamily: 'var(--font-body)',
+        fontSize: '0.7rem',
+        fontWeight: 600,
+        color: 'var(--accent)',
+        opacity: busy ? 0.5 : 1,
+      }}
+    >
+      {label}
+    </button>
   );
 }
 

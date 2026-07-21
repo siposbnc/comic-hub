@@ -105,6 +105,8 @@ type BookDetail struct {
 	SeriesName  string        `json:"seriesName"`
 	Number      string        `json:"number,omitempty"`
 	Title       string        `json:"title,omitempty"`
+	Kind        string        `json:"kind,omitempty"`
+	Ignored     bool          `json:"ignored,omitempty"`
 	Volume      int           `json:"volume,omitempty"`
 	PageCount   int           `json:"pageCount"`
 	Format      string        `json:"format"`
@@ -186,7 +188,10 @@ func (s *Service) ListSeries(ctx context.Context, libraryID, userID string) ([]S
 			MetadataState: string(su.MetadataState),
 		}
 		if ceiling != "" {
-			visible := s.visible(ctx, s.booksOf(ctx, su.ID))
+			// Rebuild the card from the books this user may actually see. The counts must
+			// match the series-detail run: exclude ignored files and extras too, not just
+			// content above the ceiling.
+			visible := excludeIgnored(excludeExtras(s.visible(ctx, s.booksOf(ctx, su.ID))))
 			if len(visible) == 0 {
 				continue // hide series with no viewable issues
 			}
@@ -240,8 +245,9 @@ func (s *Service) SeriesDetail(ctx context.Context, seriesID, userID string) (Se
 	if err != nil {
 		return SeriesDetail{}, err
 	}
-	books = s.visible(ctx, books) // hide issues above the acting user's content ceiling
-	books = excludeExtras(books)  // variant/cover art isn't an issue
+	books = s.visible(ctx, books)  // hide issues above the acting user's content ceiling
+	books = excludeIgnored(books)  // user-hidden files don't exist as far as the catalog cares
+	books = excludeExtras(books)   // variant/cover art isn't an issue
 
 	detail := SeriesDetail{
 		ID:              ser.ID,
@@ -368,7 +374,7 @@ func (s *Service) groupingDetail(ctx context.Context, seriesID, userID, kind, id
 			d.ReadingDir = string(ser.ReadingDir)
 		}
 	}
-	for _, b := range books {
+	for _, b := range excludeIgnored(books) {
 		card := s.bookCard(ctx, b, userID)
 		if card.Progress != nil && card.Progress.Status == string(domain.StatusRead) {
 			d.ReadCount++
@@ -424,6 +430,19 @@ func excludeExtras(books []domain.Book) []domain.Book {
 	return out
 }
 
+// excludeIgnored drops user-ignored files — they vanish from every catalog view (only
+// Library Health lists them, to restore).
+func excludeIgnored(books []domain.Book) []domain.Book {
+	out := make([]domain.Book, 0, len(books))
+	for _, b := range books {
+		if b.Ignored {
+			continue
+		}
+		out = append(out, b)
+	}
+	return out
+}
+
 // yearOf extracts the year from an epoch-ms timestamp (0 when unset).
 func yearOf(ms int64) int {
 	if ms <= 0 {
@@ -472,6 +491,8 @@ func (s *Service) BookDetail(ctx context.Context, bookID, userID string) (BookDe
 		SeriesName:     seriesName,
 		Number:         b.Number,
 		Title:          b.Title,
+		Kind:           string(b.Kind),
+		Ignored:        b.Ignored,
 		Volume:         b.Volume,
 		PageCount:      b.PageCount,
 		Format:         b.FileFormat,
@@ -502,7 +523,7 @@ func (s *Service) RecentBooks(ctx context.Context, libraryID, userID string, lim
 		return nil, err
 	}
 	cards := make([]BookCard, 0, len(books))
-	for _, b := range excludeExtras(s.visible(ctx, books)) {
+	for _, b := range excludeIgnored(excludeExtras(s.visible(ctx, books))) {
 		cards = append(cards, s.bookCard(ctx, b, userID))
 	}
 	return cards, nil

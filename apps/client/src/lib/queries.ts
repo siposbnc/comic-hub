@@ -5,7 +5,7 @@ import {
   useMutation,
   useQueryClient,
 } from '@tanstack/react-query';
-import type { ReadStatus, SmartRules, TrackerTrack } from '@comichub/api-client';
+import type { BookKind, ReadStatus, SmartRules, TrackerTrack } from '@comichub/api-client';
 import { useClient } from './client.js';
 
 /**
@@ -99,6 +99,30 @@ export function useVolume(seriesId: string, volume: string) {
 export function useBookDetail(id: string) {
   const client = useClient();
   return useQuery({ queryKey: qk.book(id), queryFn: () => client.bookDetail(id) });
+}
+
+/** Manual per-book correction (number/title/kind/ignore). Invalidates the book plus every
+ *  catalog surface a kind/ignore change ripples into. */
+export function useEditBook() {
+  const client = useClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      bookId,
+      patch,
+    }: {
+      bookId: string;
+      patch: { number?: string; title?: string; kind?: BookKind; ignored?: boolean };
+    }) => client.editBook(bookId, patch),
+    onSuccess: (_data, { bookId }) => {
+      qc.invalidateQueries({ queryKey: qk.book(bookId) });
+      qc.invalidateQueries({ queryKey: ['seriesDetail'] });
+      qc.invalidateQueries({ queryKey: ['series'] });
+      qc.invalidateQueries({ queryKey: ['libraryHealth'] });
+      qc.invalidateQueries({ queryKey: qk.tracker });
+      qc.invalidateQueries({ queryKey: ['discover'] });
+    },
+  });
 }
 
 export function useDiscover(libraryId?: string) {

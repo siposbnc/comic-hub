@@ -342,13 +342,19 @@ func (s *Scanner) buildBook(
 		book.ID = ulid.New()
 		book.AddedAt = now
 	}
-	// Classify from the resolved number + filename + sidecar Format, so a rescan always
-	// reflects the current facts (independent of metadata state).
+	// Classify from the resolved number + filename + sidecar Format, so a rescan reflects
+	// the current facts — unless the book is matched/locked, whose kind was set deliberately
+	// (a provider match, or a manual "mark as cover"/number correction) and must survive a
+	// rescan that would otherwise re-derive it from the filename.
 	ciFormat := ""
 	if haveCI {
 		ciFormat = ci.Format
 	}
 	book.Kind = ClassifyKind(book.Number, path, ciFormat)
+	if haveExisting &&
+		(existing.MetadataState == domain.MetaMatched || existing.MetadataState == domain.MetaLocked) {
+		book.Kind = existing.Kind
+	}
 	return book
 }
 

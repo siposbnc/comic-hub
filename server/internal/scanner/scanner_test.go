@@ -292,6 +292,57 @@ func TestFullRescanRepairsStaleAndPreservesMatched(t *testing.T) {
 	}
 }
 
+// A locked manual kind override ("mark as cover") and the ignore flag both survive a full
+// rescan that re-parses the file from disk.
+func TestScanPreservesLockedKindAndIgnore(t *testing.T) {
+	ctx := context.Background()
+	store := newStore(t)
+	root := t.TempDir()
+	writeCBZ(t, filepath.Join(root, "Batman", "Batman 001.cbz"), map[string]string{"p1.jpg": "a"})
+	writeCBZ(t, filepath.Join(root, "Batman", "Batman 002.cbz"), map[string]string{"p1.jpg": "b"})
+
+	lib := domain.Library{ID: ulid.New(), Name: "L", Kind: "comic", Roots: []string{root}, CreatedAt: 1, UpdatedAt: 1}
+	_, _ = store.Libraries().Create(ctx, lib)
+	sc := New(store, archive.DefaultRegistry(), slog.New(slog.NewTextHandler(io.Discard, nil)), 0)
+	if err := sc.Scan(ctx, lib.ID, true, nil); err != nil {
+		t.Fatalf("scan 1: %v", err)
+	}
+
+	bm := seriesByName(t, store, lib.ID, "Batman")
+	books, _ := store.Books().ListBySeries(ctx, bm.ID)
+	if len(books) != 2 {
+		t.Fatalf("expected 2 books, got %d", len(books))
+	}
+
+	// Manually mark #001 as cover art (locked) and ignore #002.
+	cover := books[0]
+	cover.Kind = domain.KindCover
+	cover.MetadataState = domain.MetaLocked
+	if _, err := store.Books().Upsert(ctx, cover); err != nil {
+		t.Fatalf("cover upsert: %v", err)
+	}
+	if err := store.Books().SetIgnored(ctx, books[1].ID, true); err != nil {
+		t.Fatalf("set ignored: %v", err)
+	}
+
+	// A full rescan re-parses both files (which classify as plain issues by name).
+	if err := sc.Scan(ctx, lib.ID, true, nil); err != nil {
+		t.Fatalf("scan 2: %v", err)
+	}
+
+	after, _ := store.Books().ListBySeries(ctx, bm.ID)
+	byID := make(map[string]domain.Book, len(after))
+	for _, b := range after {
+		byID[b.ID] = b
+	}
+	if got := byID[cover.ID]; got.Kind != domain.KindCover {
+		t.Fatalf("locked cover kind reverted to %q on rescan", got.Kind)
+	}
+	if got := byID[books[1].ID]; !got.Ignored {
+		t.Fatalf("ignore flag lost on rescan")
+	}
+}
+
 func TestScanIncrementalIdempotent(t *testing.T) {
 	ctx := context.Background()
 	store := newStore(t)

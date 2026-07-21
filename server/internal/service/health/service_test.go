@@ -82,6 +82,43 @@ func TestHealthReport(t *testing.T) {
 	}
 }
 
+// An ignored book is listed only under Ignored — not double-flagged as unmatched/orphaned.
+func TestHealthIgnoredNotDoubleFlagged(t *testing.T) {
+	ctx := context.Background()
+	store := newStore(t)
+	lib := domain.Library{ID: ulid.New(), Name: "DC", Kind: "comic", Roots: []string{`C:\DC`}, CreatedAt: 1, UpdatedAt: 1}
+	if _, err := store.Libraries().Create(ctx, lib); err != nil {
+		t.Fatal(err)
+	}
+	series := domain.Series{ID: ulid.New(), LibraryID: lib.ID, Name: "Batman", SortName: "Batman", CreatedAt: 1, UpdatedAt: 1}
+	if _, err := store.Series().Upsert(ctx, series); err != nil {
+		t.Fatal(err)
+	}
+	// An unmatched, orphaned file that the user then ignores.
+	id := ulid.New()
+	if _, err := store.Books().Upsert(ctx, domain.Book{
+		ID: id, SeriesID: series.ID, LibraryID: lib.ID, FilePath: `C:\DC\junk.cbz`, FileFormat: "cbz",
+		FileSize: 1, FileMTime: 1, MetadataState: domain.MetaNone, AddedAt: 1, UpdatedAt: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Books().SetIgnored(ctx, id, true); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := New(store, WithExistsFunc(func(string) bool { return false })) // file "missing"
+	rep, err := svc.Report(ctx, lib.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Counts.Ignored != 1 || len(rep.Ignored) != 1 || rep.Ignored[0].ID != id {
+		t.Fatalf("ignored = %d/%+v, want 1", rep.Counts.Ignored, rep.Ignored)
+	}
+	if rep.Counts.Unmatched != 0 || rep.Counts.Orphans != 0 {
+		t.Fatalf("ignored book double-flagged: unmatched=%d orphans=%d", rep.Counts.Unmatched, rep.Counts.Orphans)
+	}
+}
+
 func TestHealthMissingLibrary(t *testing.T) {
 	store := newStore(t)
 	svc := New(store)

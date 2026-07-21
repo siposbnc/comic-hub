@@ -83,6 +83,9 @@ func (s *Service) Tracker(ctx context.Context, userID string) ([]TrackerTrack, e
 				if !access.Allowed(ceiling, b.AgeRating) {
 					continue
 				}
+				if b.Ignored {
+					continue // user-hidden files stay out of the matrix
+				}
 				if b.Kind.IsExtra() {
 					continue // variants/covers aren't issues — keep them out of the matrix
 				}

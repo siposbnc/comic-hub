@@ -343,6 +343,9 @@ export interface BookDetail {
   seriesName: string;
   number?: string;
   title?: string;
+  kind?: BookKind;
+  /** User-hidden from the catalog (restorable from Library Health). */
+  ignored?: boolean;
   volume?: number;
   pageCount: number;
   format: string;
@@ -427,6 +430,7 @@ export interface HealthCounts {
   orphans: number;
   unmatched: number;
   duplicateGroups: number;
+  ignored: number;
 }
 
 /** A library's maintenance snapshot. */
@@ -437,6 +441,8 @@ export interface LibraryHealth {
   orphans: HealthItem[];
   unmatched: HealthItem[];
   duplicates: DuplicateGroup[];
+  /** User-hidden files — the only place they surface, so they can be restored. */
+  ignored: HealthItem[];
 }
 
 /** The Home feed. */

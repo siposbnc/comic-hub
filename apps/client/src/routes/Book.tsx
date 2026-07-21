@@ -15,8 +15,20 @@ import { useReadLaunch } from '../lib/launch.js';
 import { useUiStore } from '../store/ui.js';
 import { LoadingState, ErrorState } from '../components/Page.js';
 import { AddToListDialog } from '../components/lists.js';
+import { EditBookDialog } from '../components/EditBookDialog.js';
 import { TagChips, TagEditor } from '../components/tags.js';
 import { issueLabel, resumePage } from '../lib/format.js';
+
+/** Human label for a non-issue book kind, shown as a badge on the detail hero. */
+const KIND_BADGE: Partial<Record<NonNullable<BookDetail['kind']>, string>> = {
+  annual: 'Annual',
+  special: 'Special',
+  'one-shot': 'One-shot',
+  tpb: 'Collected',
+  gn: 'Graphic novel',
+  variant: 'Variant',
+  cover: 'Cover art',
+};
 
 const route = getRouteApi('/book/$id');
 
@@ -50,6 +62,7 @@ function BookView({ detail }: { detail: BookDetail }) {
   const navigate = useNavigate();
   const launch = useReadLaunch();
   const mark = useMarkBook();
+  const [editing, setEditing] = useState(false);
 
   const isRead = detail.progress?.status === 'read';
   const inProgress = detail.progress?.status === 'in_progress';
@@ -135,6 +148,9 @@ function BookView({ detail }: { detail: BookDetail }) {
             <Badge mono>{detail.readingDir === 'rtl' ? 'RTL' : 'LTR'}</Badge>
             {detail.language && <Badge mono>{detail.language.toUpperCase()}</Badge>}
             {detail.ageRating && <Badge>{detail.ageRating}</Badge>}
+            {detail.kind && KIND_BADGE[detail.kind] && (
+              <Badge mono>{KIND_BADGE[detail.kind]}</Badge>
+            )}
             {isRead && (
               <Badge tone="accent" mono dot>
                 read
@@ -143,6 +159,11 @@ function BookView({ detail }: { detail: BookDetail }) {
             {detail.isCorrupt && (
               <Badge tone="danger" mono>
                 corrupt
+              </Badge>
+            )}
+            {detail.ignored && (
+              <Badge tone="warning" mono>
+                hidden
               </Badge>
             )}
           </div>
@@ -204,6 +225,9 @@ function BookView({ detail }: { detail: BookDetail }) {
               inCollections={detail.collectionIds ?? []}
               inReadingLists={detail.readingListIds ?? []}
             />
+            <Button variant="ghost" icon="edit" onClick={() => setEditing(true)}>
+              Edit
+            </Button>
           </div>
 
           <BookTags detail={detail} />
@@ -223,6 +247,8 @@ function BookView({ detail }: { detail: BookDetail }) {
         Pages
       </h2>
       <PageStrip detail={detail} onOpen={(idx) => launch(detail.id, idx)} />
+
+      {editing && <EditBookDialog detail={detail} onClose={() => setEditing(false)} />}
     </div>
   );
 }

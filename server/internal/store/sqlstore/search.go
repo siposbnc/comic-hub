@@ -99,7 +99,7 @@ func (r *searchRepo) SearchBooks(ctx context.Context, libraryID, match string, l
 		FROM book b
 		JOIN series s ON s.id = b.series_id
 		JOIN library l ON l.id = b.library_id
-		WHERE to_tsvector('simple', coalesce(b.title, '')) @@ to_tsquery('simple', ?)`
+		WHERE to_tsvector('simple', coalesce(b.title, '')) @@ to_tsquery('simple', ?) AND b.ignored = 0`
 		args = []any{pgQuery(match)}
 		if libraryID != "" {
 			q += " AND b.library_id = ?"
@@ -114,7 +114,7 @@ func (r *searchRepo) SearchBooks(ctx context.Context, libraryID, match string, l
 		JOIN book b ON b.id = f.book_id
 		JOIN series s ON s.id = b.series_id
 		JOIN library l ON l.id = b.library_id
-		WHERE f.title MATCH ?`
+		WHERE f.title MATCH ? AND b.ignored = 0`
 		args = []any{match}
 		if libraryID != "" {
 			q += " AND b.library_id = ?"

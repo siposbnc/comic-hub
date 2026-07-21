@@ -2,7 +2,8 @@ import { useEffect } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { Button, Icon } from '@comichub/ui';
 import type { HealthItem } from '@comichub/api-client';
-import { useLibraryHealth } from '../lib/queries.js';
+import { useLibraryHealth, useEditBook } from '../lib/queries.js';
+import { useUiStore } from '../store/ui.js';
 import { LoadingState, ErrorState } from './Page.js';
 import { issueLabel } from '../lib/format.js';
 
@@ -10,6 +11,22 @@ import { issueLabel } from '../lib/format.js';
 export function HealthDialog({ libraryId, onClose }: { libraryId: string; onClose: () => void }) {
   const navigate = useNavigate();
   const health = useLibraryHealth(libraryId);
+  const edit = useEditBook();
+  const addToast = useUiStore((s) => s.addToast);
+
+  const restore = (bookId: string) =>
+    edit.mutate(
+      { bookId, patch: { ignored: false } },
+      {
+        onSuccess: () => addToast({ tone: 'success', title: 'File restored' }),
+        onError: (e) =>
+          addToast({
+            tone: 'danger',
+            title: 'Could not restore',
+            message: e instanceof Error ? e.message : 'Unexpected error.',
+          }),
+      },
+    );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -89,6 +106,7 @@ export function HealthDialog({ libraryId, onClose }: { libraryId: string; onClos
               <Stat label="Orphaned" value={data.counts.orphans} tone="danger" />
               <Stat label="Unmatched" value={data.counts.unmatched} />
               <Stat label="Duplicate sets" value={data.counts.duplicateGroups} />
+              <Stat label="Hidden" value={data.counts.ignored} />
             </div>
 
             {data.counts.corrupt +
@@ -119,6 +137,33 @@ export function HealthDialog({ libraryId, onClose }: { libraryId: string; onClos
                   </div>
                 )}
               </>
+            )}
+
+            {/* Hidden files are a deliberate choice, not a problem — listed on their own so
+                they can be found and restored. */}
+            {data.ignored.length > 0 && (
+              <div>
+                <SectionHeading>Hidden files</SectionHeading>
+                {data.ignored.map((it) => (
+                  <div
+                    key={it.id}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, paddingRight: 4 }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <ItemRow item={it} onOpen={open} />
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      icon="refresh"
+                      disabled={edit.isPending}
+                      onClick={() => restore(it.id)}
+                    >
+                      Restore
+                    </Button>
+                  </div>
+                ))}
+              </div>
             )}
           </>
         )}

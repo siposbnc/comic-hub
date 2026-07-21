@@ -37,6 +37,7 @@ type Counts struct {
 	Orphans         int `json:"orphans"`
 	Unmatched       int `json:"unmatched"`
 	DuplicateGroups int `json:"duplicateGroups"`
+	Ignored         int `json:"ignored"`
 }
 
 // Report is a library's health snapshot.
@@ -47,6 +48,9 @@ type Report struct {
 	Orphans    []Item           `json:"orphans"`
 	Unmatched  []Item           `json:"unmatched"`
 	Duplicates []DuplicateGroup `json:"duplicates"`
+	// Ignored lists user-hidden files so they can be found and restored — the only place
+	// in the app they still surface.
+	Ignored []Item `json:"ignored"`
 }
 
 // Service computes health reports over the catalog.
@@ -92,12 +96,20 @@ func (s *Service) Report(ctx context.Context, libraryID string) (Report, error) 
 		Orphans:    []Item{},
 		Unmatched:  []Item{},
 		Duplicates: []DuplicateGroup{},
+		Ignored:    []Item{},
 	}
 	rep.Counts.Books = len(books)
 	byHash := map[string][]Item{}
 
 	for _, b := range books {
 		it := Item{ID: b.ID, SeriesID: b.SeriesID, Number: b.Number, Title: b.Title, Path: b.FilePath}
+		// An ignored file is a deliberate exclusion, not a problem: list it on its own so it
+		// can be restored, and don't also nag about it being unmatched/orphaned/duplicated.
+		if b.Ignored {
+			rep.Counts.Ignored++
+			appendCapped(&rep.Ignored, it)
+			continue
+		}
 		if b.IsCorrupt {
 			rep.Counts.Corrupt++
 			appendCapped(&rep.Corrupt, it)

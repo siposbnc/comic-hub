@@ -97,14 +97,17 @@ func handleBookApply(svc *metadata.Service) http.HandlerFunc {
 	}
 }
 
-// patchBookRequest is the body of PATCH /books/{id} — manual per-book corrections.
-// Currently only the issue number is editable (the duplicate-number resolve flow); the
-// server locks the field so rescans and matches keep it.
+// patchBookRequest is the body of PATCH /books/{id} — manual per-book corrections. Each
+// field is optional (pointer); a present field is applied. number/title/kind lock the field
+// so rescans and provider matches keep the fix; ignored hides/restores the file.
 type patchBookRequest struct {
-	Number *string `json:"number"`
+	Number  *string `json:"number"`
+	Title   *string `json:"title"`
+	Kind    *string `json:"kind"`
+	Ignored *bool   `json:"ignored"`
 }
 
-// handlePatchBook applies a manual correction to a book.
+// handlePatchBook applies a manual correction to a book (number/title/kind/ignore).
 func handlePatchBook(svc *metadata.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body patchBookRequest
@@ -112,11 +115,16 @@ func handlePatchBook(svc *metadata.Service) http.HandlerFunc {
 			writeError(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
 			return
 		}
-		if body.Number == nil || strings.TrimSpace(*body.Number) == "" {
-			writeError(w, http.StatusBadRequest, "bad_request", "number is required")
+		if body.Number == nil && body.Title == nil && body.Kind == nil && body.Ignored == nil {
+			writeError(w, http.StatusBadRequest, "bad_request", "no fields to update")
 			return
 		}
-		if err := svc.SetBookNumber(r.Context(), chi.URLParam(r, "id"), *body.Number); err != nil {
+		edit := metadata.BookEdit{Number: body.Number, Title: body.Title, Ignored: body.Ignored}
+		if body.Kind != nil {
+			k := domain.BookKind(*body.Kind)
+			edit.Kind = &k
+		}
+		if err := svc.EditBook(r.Context(), chi.URLParam(r, "id"), edit); err != nil {
 			if errors.Is(err, domain.ErrNotFound) {
 				writeError(w, http.StatusNotFound, "not_found", "not found")
 				return

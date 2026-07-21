@@ -26,6 +26,9 @@ const (
 	FieldCredits     = "credits"
 	FieldGenres      = "genres"
 	FieldCharacters  = "characters"
+	// FieldKind is not provider-applied, but a manual kind override ("mark as cover") locks
+	// it so a later match doesn't re-derive kind from the issue number.
+	FieldKind = "kind"
 )
 
 // Service applies provider metadata to the catalog. Its provider set can be reconfigured
@@ -345,51 +348,108 @@ func (s *Service) MatchSeries(ctx context.Context, seriesID, providerName, volum
 	return s.repo.Series().SetMetadataState(ctx, seriesID, domain.MetaMatched)
 }
 
-// SetBookNumber hand-corrects a book's issue number (the duplicate-number resolve flow).
-// The field is locked so rescans and later matches keep the correction, and the sort key
-// and kind are re-derived — a labeled number ("Futures End 1") thereby becomes a special
-// and leaves the numbered run.
-func (s *Service) SetBookNumber(ctx context.Context, bookID, number string) error {
-	number = strings.TrimSpace(number)
-	if number == "" {
-		return fmt.Errorf("metadata: number is required")
-	}
+// BookEdit is a manual per-book correction. Each non-nil field is applied and locked so a
+// rescan or later provider match can't clobber the user's fix. Ignored is orthogonal to
+// metadata and toggles independently (it never locks or changes metadata state).
+type BookEdit struct {
+	Number  *string
+	Title   *string
+	Kind    *domain.BookKind
+	Ignored *bool
+}
+
+// validEditKinds is the set a user may assign by hand. Provider/scanner-only distinctions
+// aren't offered; the meaningful manual choices are a normal issue, the special editions,
+// and the two "extra art" kinds (variant/cover) that drop out of the numbered run.
+var validEditKinds = map[domain.BookKind]bool{
+	domain.KindIssue: true, domain.KindAnnual: true, domain.KindSpecial: true,
+	domain.KindOneShot: true, domain.KindTPB: true, domain.KindGN: true,
+	domain.KindVariant: true, domain.KindCover: true,
+}
+
+// EditBook applies a manual correction to a book. Metadata fields (number/title/kind) are
+// written together, locked, and the sort key re-derived; the ignore flag is toggled
+// separately. A no-op edit (all fields nil) is allowed and does nothing.
+func (s *Service) EditBook(ctx context.Context, bookID string, e BookEdit) error {
 	book, err := s.repo.Books().Get(ctx, bookID)
 	if err != nil {
 		return err
 	}
-	locked, err := s.repo.Metadata().LockedBookFields(ctx, bookID)
-	if err != nil {
-		return err
+
+	if e.Number != nil || e.Title != nil || e.Kind != nil {
+		locked, err := s.repo.Metadata().LockedBookFields(ctx, bookID)
+		if err != nil {
+			return err
+		}
+		providerIDs, err := s.repo.Metadata().BookProviderIDs(ctx, bookID)
+		if err != nil {
+			return err
+		}
+		lockedSet := toSet(locked)
+		lock := func(field string) {
+			if !lockedSet[field] {
+				locked = append(locked, field)
+				lockedSet[field] = true
+			}
+		}
+
+		number, title, kind := book.Number, book.Title, book.Kind
+		if e.Number != nil {
+			n := strings.TrimSpace(*e.Number)
+			if n == "" {
+				return fmt.Errorf("metadata: number is required")
+			}
+			number = n
+			lock(FieldNumber)
+			// Re-derive kind from the new number unless the caller also set kind explicitly.
+			kind = scanner.ClassifyKind(number, book.FilePath, "")
+		}
+		if e.Title != nil {
+			title = strings.TrimSpace(*e.Title)
+			lock(FieldTitle)
+		}
+		if e.Kind != nil {
+			if !validEditKinds[*e.Kind] {
+				return fmt.Errorf("metadata: invalid kind %q", *e.Kind)
+			}
+			kind = *e.Kind
+			lock(FieldKind)
+		}
+
+		meta := domain.BookMeta{
+			Title:        title,
+			Number:       number,
+			SortNumber:   scanner.SortNumber(number),
+			Kind:         kind,
+			Volume:       book.Volume,
+			ReleaseDate:  book.ReleaseDate,
+			AgeRating:    book.AgeRating,
+			Language:     book.Language,
+			Summary:      book.Summary,
+			State:        domain.MetaLocked,
+			ProviderIDs:  providerIDs,
+			LockedFields: locked,
+		}
+		if err := s.repo.Metadata().WriteBookMeta(ctx, bookID, meta); err != nil {
+			return err
+		}
+		if s.afterApply != nil {
+			s.afterApply(ctx, bookID)
+		}
 	}
-	providerIDs, err := s.repo.Metadata().BookProviderIDs(ctx, bookID)
-	if err != nil {
-		return err
-	}
-	if !toSet(locked)[FieldNumber] {
-		locked = append(locked, FieldNumber)
-	}
-	meta := domain.BookMeta{
-		Title:        book.Title,
-		Number:       number,
-		SortNumber:   scanner.SortNumber(number),
-		Kind:         scanner.ClassifyKind(number, book.FilePath, ""),
-		Volume:       book.Volume,
-		ReleaseDate:  book.ReleaseDate,
-		AgeRating:    book.AgeRating,
-		Language:     book.Language,
-		Summary:      book.Summary,
-		State:        domain.MetaLocked,
-		ProviderIDs:  providerIDs,
-		LockedFields: locked,
-	}
-	if err := s.repo.Metadata().WriteBookMeta(ctx, bookID, meta); err != nil {
-		return err
-	}
-	if s.afterApply != nil {
-		s.afterApply(ctx, bookID)
+
+	if e.Ignored != nil {
+		if err := s.repo.Books().SetIgnored(ctx, bookID, *e.Ignored); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+// SetBookNumber hand-corrects a book's issue number (the duplicate-number resolve flow) —
+// a thin wrapper over EditBook.
+func (s *Service) SetBookNumber(ctx context.Context, bookID, number string) error {
+	return s.EditBook(ctx, bookID, BookEdit{Number: &number})
 }
 
 // HasProviders reports whether any metadata provider is configured (online matching is
@@ -509,9 +569,14 @@ func (s *Service) applyIssueMeta(ctx context.Context, bookID, providerName, issu
 		meta.Summary = im.Summary
 	}
 	meta.ProviderIDs[providerName] = issueProviderID
-	// The number may have changed: keep the sort key and kind in step with it.
+	// The number may have changed: keep the sort key and kind in step with it — unless the
+	// user pinned the kind by hand ("mark as cover"), in which case keep their choice.
 	meta.SortNumber = scanner.SortNumber(meta.Number)
-	meta.Kind = scanner.ClassifyKind(meta.Number, book.FilePath, "")
+	if lockedSet[FieldKind] {
+		meta.Kind = book.Kind
+	} else {
+		meta.Kind = scanner.ClassifyKind(meta.Number, book.FilePath, "")
+	}
 
 	if err := s.repo.Metadata().WriteBookMeta(ctx, bookID, meta); err != nil {
 		return err
