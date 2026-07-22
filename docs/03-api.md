@@ -154,6 +154,7 @@ server-side and always apply.
 | `DELETE`           | `/collections/{id}/items/{bookId}`           | Remove.                                             |
 | `GET/POST`         | `/me/reading-lists`                          | Personal lists.                                     |
 | `…`                | `/me/reading-lists/{id}/items…`              | Same item ops, per-user (see below).                |
+| `POST`             | `/me/reading-lists/{id}/collections`         | Reference whole collections `{collectionIds[]}`.    |
 | `PATCH`            | `/me/reading-lists/{id}/items/{itemId}/link` | `{bookId}` → point a (stale) entry at a real issue. |
 | `GET/POST`         | `/smart-lists`                               | List / create rule-based lists.                     |
 | `GET`              | `/smart-lists/{id}/results`                  | Evaluate + return matching books (paginated).       |
@@ -165,9 +166,18 @@ reader queue and Next-Up skip it. A rescan that re-creates the same file (conten
 match) re-attaches the placeholder automatically. `POST …/items` also accepts
 `manual: [{seriesName, number, title}]` to add placeholders for issues not in the
 library. `GET /me/reading-lists/{id}` returns ordered `items`
-(`{id, stale, seriesName?, number?, title?, addedAt, book?}`); the legacy `books` array
-(linked entries only) remains for older clients. Item delete/reorder accept an entry id
-or, for linked entries, the book id.
+(`{id, kind, stale, seriesName?, number?, title?, addedAt, book?, collection?}`); the legacy
+`books` array (linked cards, including group members) remains for older clients. Item
+delete/reorder accept an entry id or, for linked entries, the book id.
+
+**Collections in reading lists.** `POST …/collections {collectionIds[]}` references whole
+collections into a list — each occupies a single ordered slot (`kind: "collection"`) that
+expands **live** into the collection's current books, rendered as a named group. The entry
+carries `collection: {id, name, books[]}` (books in collection order, ceiling-filtered).
+Reordering/removing the entry moves/removes the whole group; the reader queue and Next-Up
+walk the expanded books in order. Editing the collection updates every list that references
+it; deleting the collection drops the group. A list's `bookCount` counts the expanded
+reading order (individual issues + group members), not raw entries.
 
 ## 8. Search & discovery
 

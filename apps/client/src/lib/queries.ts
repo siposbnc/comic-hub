@@ -303,6 +303,20 @@ export function useAddToReadingList() {
   });
 }
 
+export function useAddCollectionToReadingList() {
+  const client = useClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, collectionIds }: { id: string; collectionIds: string[] }) =>
+      client.addCollectionsToReadingList(id, collectionIds),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: qk.readingList(id) });
+      qc.invalidateQueries({ queryKey: qk.readingLists });
+      qc.invalidateQueries({ queryKey: ['discover'] });
+    },
+  });
+}
+
 export function useRemoveFromReadingList() {
   const client = useClient();
   const qc = useQueryClient();

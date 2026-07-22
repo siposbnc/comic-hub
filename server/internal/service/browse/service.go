@@ -566,15 +566,14 @@ func (s *Service) nextUpFromActiveList(ctx context.Context, userID string) (*Nex
 	if err != nil {
 		return nil, err
 	}
-	items, err := s.repo.ReadingLists().Items(ctx, list.ID)
+	// Flattened reading order: individual entries plus each collection reference expanded
+	// into its books. Stale placeholders are already omitted.
+	ids, err := s.repo.ReadingLists().ExpandedBookIDs(ctx, list.ID)
 	if err != nil {
 		return nil, err
 	}
-	for _, it := range items {
-		if it.Stale() {
-			continue // placeholder with no backing book — nothing to read
-		}
-		b, err := s.repo.Books().Get(ctx, it.BookID)
+	for _, id := range ids {
+		b, err := s.repo.Books().Get(ctx, id)
 		if err != nil {
 			continue
 		}
@@ -598,11 +597,11 @@ func (s *Service) NextAfter(ctx context.Context, userID, bookID, context string)
 		if err != nil {
 			return nil, err
 		}
-		items, err := s.repo.ReadingLists().Items(ctx, list.ID)
+		ids, err := s.repo.ReadingLists().ExpandedBookIDs(ctx, list.ID)
 		if err != nil {
 			return nil, err
 		}
-		return s.cardAfter(ctx, userID, bookID, itemBookIDs(items))
+		return s.cardAfter(ctx, userID, bookID, ids)
 	}
 
 	cur, err := s.repo.Books().Get(ctx, bookID)
@@ -639,17 +638,6 @@ func (s *Service) cardAfter(ctx context.Context, userID, bookID string, ordered 
 	return nil, nil
 }
 
-func itemBookIDs(items []domain.ReadingListItem) []string {
-	out := make([]string, 0, len(items))
-	for _, it := range items {
-		// Stale placeholders hold a queue slot but can't be read; the reading chain
-		// skips over them to the next real issue.
-		if !it.Stale() {
-			out = append(out, it.BookID)
-		}
-	}
-	return out
-}
 
 // ContinueReading returns the user's in-progress books, most-recent first.
 func (s *Service) ContinueReading(ctx context.Context, userID string) ([]BookCard, error) {

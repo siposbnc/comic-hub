@@ -616,6 +616,16 @@ export class ComicHubClient {
     );
   }
 
+  /** References whole collections into a list, each as a single ordered group (expanded
+   * live into its books). Adding a collection already in the list is a no-op. */
+  async addCollectionsToReadingList(id: string, collectionIds: string[]): Promise<void> {
+    await this.request<unknown>(
+      'POST',
+      `/api/v1/me/reading-lists/${encodeURIComponent(id)}/collections`,
+      { body: { collectionIds } },
+    );
+  }
+
   /** Appends stale placeholder entries for issues not (yet) in the library. */
   async addManualToReadingList(id: string, manual: ManualListEntry[]): Promise<void> {
     await this.request<unknown>(

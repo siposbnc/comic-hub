@@ -208,6 +208,12 @@ CREATE TABLE reading_list_item (
   added_at  INTEGER NOT NULL,
   PRIMARY KEY (list_id, book_id)
 );
+-- Later migrations reshape reading_list_item: 0014 gives it its own `id`, makes `book_id`
+-- nullable (stale placeholders keep a slot after a book is deleted) and adds a display
+-- snapshot (series_name, number, title, content_hash). 0019 adds nullable `collection_id`
+-- (REFERENCES collection ON DELETE CASCADE): a row with `collection_id` set is a *collection
+-- reference* — one ordered slot that expands live into that collection's books as a named
+-- group. See docs/03-api.md §7.
 
 CREATE TABLE smart_list (
   id          TEXT PRIMARY KEY,

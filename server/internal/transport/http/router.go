@@ -204,6 +204,7 @@ func NewRouter(d Deps) http.Handler {
 				r.Delete("/{id}", handleDeleteReadingList(d.Organize))
 				r.Post("/{id}/active", handleSetActiveReadingList(d.Organize))
 				r.Post("/{id}/items", handleAddReadingListItems(d.Organize))
+				r.Post("/{id}/collections", handleAddReadingListCollections(d.Organize))
 				r.Patch("/{id}/items/reorder", handleReorderReadingListItem(d.Organize))
 				r.Patch("/{id}/items/{itemId}/link", handleRelinkReadingListItem(d.Organize))
 				// {ref} is an item id or a linked book id (older clients pass book ids).

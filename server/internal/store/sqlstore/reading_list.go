@@ -30,7 +30,8 @@ func (r *readingListRepo) Create(ctx context.Context, l domain.ReadingList) (dom
 func (r *readingListRepo) Get(ctx context.Context, userID, id string) (domain.ReadingList, error) {
 	row := r.db.QueryRowContext(ctx, `
 		SELECT l.id, l.user_id, l.name, l.is_active, l.created_at, l.updated_at,
-			(SELECT COUNT(*) FROM reading_list_item li WHERE li.list_id = l.id)
+			((SELECT COUNT(*) FROM reading_list_item li WHERE li.list_id = l.id AND li.book_id IS NOT NULL)
+				+ (SELECT COUNT(*) FROM reading_list_item li JOIN collection_item ci ON ci.collection_id = li.collection_id WHERE li.list_id = l.id))
 		FROM reading_list l WHERE l.id = ? AND l.user_id = ?`, id, userID)
 	l, err := scanReadingList(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -42,7 +43,8 @@ func (r *readingListRepo) Get(ctx context.Context, userID, id string) (domain.Re
 func (r *readingListRepo) List(ctx context.Context, userID string) ([]domain.ReadingList, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT l.id, l.user_id, l.name, l.is_active, l.created_at, l.updated_at,
-			(SELECT COUNT(*) FROM reading_list_item li WHERE li.list_id = l.id)
+			((SELECT COUNT(*) FROM reading_list_item li WHERE li.list_id = l.id AND li.book_id IS NOT NULL)
+				+ (SELECT COUNT(*) FROM reading_list_item li JOIN collection_item ci ON ci.collection_id = li.collection_id WHERE li.list_id = l.id))
 		FROM reading_list l WHERE l.user_id = ? ORDER BY l.name`, userID)
 	if err != nil {
 		return nil, err
@@ -85,7 +87,8 @@ func (r *readingListRepo) SetActive(ctx context.Context, userID, id string) erro
 func (r *readingListRepo) GetActive(ctx context.Context, userID string) (domain.ReadingList, error) {
 	row := r.db.QueryRowContext(ctx, `
 		SELECT l.id, l.user_id, l.name, l.is_active, l.created_at, l.updated_at,
-			(SELECT COUNT(*) FROM reading_list_item li WHERE li.list_id = l.id)
+			((SELECT COUNT(*) FROM reading_list_item li WHERE li.list_id = l.id AND li.book_id IS NOT NULL)
+				+ (SELECT COUNT(*) FROM reading_list_item li JOIN collection_item ci ON ci.collection_id = li.collection_id WHERE li.list_id = l.id))
 		FROM reading_list l WHERE l.user_id = ? AND l.is_active = 1 LIMIT 1`, userID)
 	l, err := scanReadingList(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -117,7 +120,7 @@ func (r *readingListRepo) Delete(ctx context.Context, userID, id string) error {
 
 func (r *readingListRepo) Items(ctx context.Context, listID string) ([]domain.ReadingListItem, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, book_id, position, added_at, series_name, number, title, content_hash
+		SELECT id, book_id, collection_id, position, added_at, series_name, number, title, content_hash
 		FROM reading_list_item WHERE list_id = ? ORDER BY position`, listID)
 	if err != nil {
 		return nil, err
@@ -127,15 +130,51 @@ func (r *readingListRepo) Items(ctx context.Context, listID string) ([]domain.Re
 	var out []domain.ReadingListItem
 	for rows.Next() {
 		var (
-			it     domain.ReadingListItem
-			bookID sql.NullString
+			it           domain.ReadingListItem
+			bookID       sql.NullString
+			collectionID sql.NullString
 		)
-		if err := rows.Scan(&it.ID, &bookID, &it.Position, &it.AddedAt,
+		if err := rows.Scan(&it.ID, &bookID, &collectionID, &it.Position, &it.AddedAt,
 			&it.SeriesName, &it.Number, &it.Title, &it.ContentHash); err != nil {
 			return nil, err
 		}
 		it.BookID = str(bookID)
+		it.CollectionID = str(collectionID)
 		out = append(out, it)
+	}
+	return out, rows.Err()
+}
+
+// ExpandedBookIDs returns readable book ids in reading order: individual linked entries at
+// their slot, and each collection reference expanded into the collection's books (ordered
+// by the collection's own position) at the reference's slot. Stale placeholders are
+// omitted. The two-key sort (list position, then collection position) interleaves the
+// expansions without materializing anything.
+func (r *readingListRepo) ExpandedBookIDs(ctx context.Context, listID string) ([]string, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT book_id FROM (
+			SELECT li.position AS p1, 0.0 AS p2, li.book_id AS book_id
+			FROM reading_list_item li
+			WHERE li.list_id = ? AND li.book_id IS NOT NULL
+			UNION ALL
+			SELECT li.position AS p1, ci.position AS p2, ci.book_id AS book_id
+			FROM reading_list_item li
+			JOIN collection_item ci ON ci.collection_id = li.collection_id
+			WHERE li.list_id = ? AND li.collection_id IS NOT NULL
+		) AS expanded
+		ORDER BY p1, p2`, listID, listID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
 	}
 	return out, rows.Err()
 }
@@ -176,6 +215,35 @@ func (r *readingListRepo) AddItems(ctx context.Context, listID string, bookIDs [
 		); err != nil {
 			return err
 		}
+	}
+	return tx.Commit()
+}
+
+func (r *readingListRepo) AddCollectionRef(ctx context.Context, listID, collectionID string) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var maxPos sql.NullFloat64
+	if err := tx.QueryRowContext(ctx,
+		`SELECT MAX(position) FROM reading_list_item WHERE list_id = ?`, listID,
+	).Scan(&maxPos); err != nil {
+		return err
+	}
+
+	// A reference row: no backing book, snapshot fields left empty (the group's label and
+	// contents are resolved live from the collection). The partial unique index on
+	// (list_id, collection_id) makes a repeat add a no-op.
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO reading_list_item
+			(id, list_id, book_id, collection_id, position, added_at, series_name, number, title, content_hash)
+		VALUES (?, ?, NULL, ?, ?, ?, '', '', '', '')
+		ON CONFLICT DO NOTHING`,
+		ulid.New(), listID, collectionID, maxPos.Float64+positionGap, time.Now().UnixMilli(),
+	); err != nil {
+		return err
 	}
 	return tx.Commit()
 }

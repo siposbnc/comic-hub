@@ -39,17 +39,29 @@ type renameReadingListRequest struct {
 	Name string `json:"name"`
 }
 
-// readingListEntryDTO is one ordered entry of a reading list. Stale entries (deleted
-// books, or placeholders added manually for issues not in the library) have no `book`
-// and render from the snapshot fields; they hold their slot but can't be opened.
+// readingListEntryDTO is one ordered entry of a reading list. `kind` is "book" for a
+// normal entry and "collection" for a collection reference. Stale entries (deleted books,
+// or placeholders added manually for issues not in the library) have no `book` and render
+// from the snapshot fields; they hold their slot but can't be opened. A collection entry
+// carries `collection` — the group's name and its books in order, resolved live.
 type readingListEntryDTO struct {
-	ID         string           `json:"id"`
-	Stale      bool             `json:"stale"`
-	SeriesName string           `json:"seriesName,omitempty"`
-	Number     string           `json:"number,omitempty"`
-	Title      string           `json:"title,omitempty"`
-	AddedAt    int64            `json:"addedAt"`
-	Book       *browse.BookCard `json:"book,omitempty"`
+	ID         string                    `json:"id"`
+	Kind       string                    `json:"kind"`
+	Stale      bool                      `json:"stale"`
+	SeriesName string                    `json:"seriesName,omitempty"`
+	Number     string                    `json:"number,omitempty"`
+	Title      string                    `json:"title,omitempty"`
+	AddedAt    int64                     `json:"addedAt"`
+	Book       *browse.BookCard          `json:"book,omitempty"`
+	Collection *readingListCollectionDTO `json:"collection,omitempty"`
+}
+
+// readingListCollectionDTO is a collection reference expanded for display: the group label
+// plus its books in collection order (books the viewer can't see are omitted).
+type readingListCollectionDTO struct {
+	ID    string            `json:"id"`
+	Name  string            `json:"name"`
+	Books []browse.BookCard `json:"books"`
 }
 
 // manualEntryRequest describes a placeholder to add for an issue not in the library.
@@ -63,6 +75,11 @@ type manualEntryRequest struct {
 type addReadingListItemsRequest struct {
 	BookIDs []string             `json:"bookIds"`
 	Manual  []manualEntryRequest `json:"manual"`
+}
+
+// addReadingListCollectionsRequest references one or more whole collections into a list.
+type addReadingListCollectionsRequest struct {
+	CollectionIDs []string `json:"collectionIds"`
 }
 
 type relinkItemRequest struct {
@@ -117,9 +134,31 @@ func handleGetReadingList(svc *organize.Service, b *browse.Service) http.Handler
 			return
 		}
 
+		// Gather every book id we need cards for in one pass: individual linked entries,
+		// plus the members of each referenced collection (resolved live, in order). Also
+		// remember each collection's name and ordered member ids for the group DTO.
 		ids := make([]string, 0, len(entries))
+		type colRef struct {
+			name    string
+			bookIDs []string
+		}
+		colByEntry := make(map[string]colRef)
 		for _, it := range entries {
-			if !it.Stale() {
+			switch {
+			case it.IsCollection():
+				c, err := svc.GetCollection(r.Context(), it.CollectionID)
+				if err != nil {
+					// A collection deleted out from under a cached list: skip its group.
+					continue
+				}
+				memberIDs, err := svc.CollectionItems(r.Context(), it.CollectionID)
+				if err != nil {
+					writeDomainError(w, err)
+					return
+				}
+				ids = append(ids, memberIDs...)
+				colByEntry[it.ID] = colRef{name: c.Name, bookIDs: memberIDs}
+			case !it.Stale():
 				ids = append(ids, it.BookID)
 			}
 		}
@@ -137,11 +176,30 @@ func handleGetReadingList(svc *organize.Service, b *browse.Service) http.Handler
 		for _, it := range entries {
 			dto := readingListEntryDTO{
 				ID:         it.ID,
+				Kind:       "book",
 				Stale:      it.Stale(),
 				SeriesName: it.SeriesName,
 				Number:     it.Number,
 				Title:      it.Title,
 				AddedAt:    it.AddedAt,
+			}
+			if it.IsCollection() {
+				ref, ok := colByEntry[it.ID]
+				if !ok {
+					// Collection vanished; drop the entry from the response.
+					continue
+				}
+				group := &readingListCollectionDTO{ID: it.CollectionID, Name: ref.name, Books: []browse.BookCard{}}
+				for _, bid := range ref.bookIDs {
+					if card, ok := cardByID[bid]; ok {
+						group.Books = append(group.Books, *card)
+					}
+				}
+				dto.Kind = "collection"
+				dto.Stale = false
+				dto.Collection = group
+				items = append(items, dto)
+				continue
 			}
 			if card, ok := cardByID[it.BookID]; ok {
 				dto.Book = card
@@ -224,6 +282,29 @@ func handleAddReadingListItems(svc *organize.Service) http.HandlerFunc {
 		if len(req.BookIDs) == 0 && len(req.Manual) == 0 {
 			writeError(w, http.StatusBadRequest, "validation", "bookIds or manual entries required")
 			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// handleAddReadingListCollections references one or more whole collections into a list,
+// each as a single ordered group. Adding a collection already in the list is a no-op.
+func handleAddReadingListCollections(svc *organize.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req addReadingListCollectionsRequest
+		if !decodeJSON(w, r, &req) {
+			return
+		}
+		if len(req.CollectionIDs) == 0 {
+			writeError(w, http.StatusBadRequest, "validation", "collectionIds is required")
+			return
+		}
+		uid, id := currentUserID(r), chi.URLParam(r, "id")
+		for _, cid := range req.CollectionIDs {
+			if err := svc.AddReadingListCollection(r.Context(), uid, id, cid); err != nil {
+				writeDomainError(w, err)
+				return
+			}
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}

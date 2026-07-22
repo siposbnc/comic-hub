@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
 import { Button, Badge, Icon, IconButton, EmptyState } from '@comichub/ui';
 import type {
   BookCard,
+  ReadingListCollectionGroup,
   ReadingListDetail as ReadingListDetailData,
   ReadingListEntry,
 } from '@comichub/api-client';
@@ -13,6 +14,7 @@ import {
   useRemoveFromReadingList,
   useAddToReadingList,
   useAddManualToReadingList,
+  useAddCollectionToReadingList,
   useRelinkReadingListItem,
   useReorderReadingList,
   useSetActiveReadingList,
@@ -22,6 +24,7 @@ import { useReadLaunch } from '../lib/launch.js';
 import { useUiStore } from '../store/ui.js';
 import { LoadingState, ErrorState } from '../components/Page.js';
 import { AddIssuesDialog, MissingPill } from '../components/AddIssuesDialog.js';
+import { AddCollectionDialog } from '../components/AddCollectionDialog.js';
 import { LinkIssueDialog } from '../components/LinkIssueDialog.js';
 import { issueLabel, relativeTime, resumePage } from '../lib/format.js';
 
@@ -105,9 +108,21 @@ function QueueView({ data, listId }: { data: ReadingListDetailData; listId: stri
   const setActive = useSetActiveReadingList();
   const add = useAddToReadingList();
   const addManual = useAddManualToReadingList();
+  const addCollection = useAddCollectionToReadingList();
   const relink = useRelinkReadingListItem();
   const [adding, setAdding] = useState(false);
+  const [addingCollection, setAddingCollection] = useState(false);
   const [linking, setLinking] = useState<ReadingListEntry | null>(null);
+  // Groups collapse to just their header; the set of collapsed collection entry ids is
+  // local, per-visit UI state.
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const toggleCollapsed = (entryId: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(entryId)) next.delete(entryId);
+      else next.add(entryId);
+      return next;
+    });
   // Long queues bury the current spot under everything already finished, so read issues are
   // hidden by default; the toolbar toggle brings them back. The choice persists across lists
   // and sessions (localStorage-backed UI store).
@@ -115,10 +130,30 @@ function QueueView({ data, listId }: { data: ReadingListDetailData; listId: stri
   const setShowRead = useUiStore((s) => s.setShowReadInLists);
 
   const { readingList, items } = data;
-  // Linked entries carry a BookCard; stale placeholders hold their slot but can't be read.
-  const books = items.flatMap((it) => (it.book ? [it.book] : []));
-  const staleCount = items.length - books.length;
-  const isReadEntry = (it: ReadingListEntry) => it.book != null && stateOf(it.book) === 'read';
+  // A book entry contributes its card; a collection entry contributes its group's books
+  // (expanded live). Stale placeholders contribute none. `books` is the flattened reading
+  // order — all progress math and the header CTAs run over it.
+  const entryBooks = (it: ReadingListEntry): BookCard[] =>
+    it.collection ? it.collection.books : it.book ? [it.book] : [];
+  const books = items.flatMap(entryBooks);
+  const staleCount = items.filter((it) => it.kind === 'book' && it.stale).length;
+
+  // Stable running order numbers (01, 02, …) across the flattened order — a group's members
+  // number inline with individual issues. Computed over the full list so numbers never shift
+  // when read issues are hidden. Keyed by entry id (book/stale) or `entryId:bookId` (member).
+  const orderByKey = useMemo(() => {
+    const map = new Map<string, number>();
+    let n = 0;
+    for (const it of items) {
+      if (it.collection) {
+        for (const b of it.collection.books) map.set(`${it.id}:${b.id}`, ++n);
+      } else {
+        map.set(it.id, ++n);
+      }
+    }
+    return map;
+  }, [items]);
+  const orderLabel = (key: string) => String(orderByKey.get(key) ?? 0).padStart(2, '0');
 
   // Smart resume target + next unread for the header CTAs.
   const nextItem =
@@ -139,8 +174,9 @@ function QueueView({ data, listId }: { data: ReadingListDetailData; listId: stri
   const mins = Math.round((totalPages - pagesRead) * 0.4);
   const timeLeft =
     mins >= 60 ? `${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, '0')}m` : `${mins}m`;
-  // How many rows are on screen with read hidden — drives the toggle + the all-caught-up state.
-  const visibleCount = showRead ? items.length : items.length - readCount;
+  // How many readable/stale rows are on screen with read hidden — drives the toggle + the
+  // all-caught-up state (collection headers aside).
+  const visibleCount = showRead ? books.length + staleCount : books.length - readCount + staleCount;
 
   const openReader = (b: BookCard) =>
     launch(b.id, stateOf(b) === 'reading' ? resumePage(b.progress) : 0);
@@ -194,6 +230,14 @@ function QueueView({ data, listId }: { data: ReadingListDetailData; listId: stri
           onAdd={(bookIds) => add.mutateAsync({ id: listId, bookIds })}
           onAddManual={(manual) => addManual.mutateAsync({ id: listId, manual })}
           onClose={() => setAdding(false)}
+        />
+      )}
+      {addingCollection && (
+        <AddCollectionDialog
+          subtitle={readingList.name}
+          existingIds={new Set(items.flatMap((it) => (it.collection ? [it.collection.id] : [])))}
+          onAdd={(collectionIds) => addCollection.mutateAsync({ id: listId, collectionIds })}
+          onClose={() => setAddingCollection(false)}
         />
       )}
       {linking && (
@@ -280,6 +324,9 @@ function QueueView({ data, listId }: { data: ReadingListDetailData; listId: stri
           <Button variant="ghost" icon="plus" onClick={() => setAdding(true)}>
             Add issues
           </Button>
+          <Button variant="ghost" icon="collection" onClick={() => setAddingCollection(true)}>
+            Add collection
+          </Button>
           <Button variant="ghost" icon="trash" onClick={onDelete}>
             Delete
           </Button>
@@ -306,7 +353,7 @@ function QueueView({ data, listId }: { data: ReadingListDetailData; listId: stri
           }}
         >
           <span className="ch-mono" style={{ fontSize: '0.74rem', color: 'var(--text-primary)' }}>
-            {items.length} issues
+            {books.length} issues
           </span>
           {staleCount > 0 && (
             <span
@@ -419,7 +466,11 @@ function QueueView({ data, listId }: { data: ReadingListDetailData; listId: stri
       ) : (
         <div onDragOver={(e) => e.preventDefault()}>
           {items.map((it, idx) => {
-            if (!showRead && isReadEntry(it)) return null;
+            // A read individual issue collapses with the toggle; groups always show (their
+            // read members hide inside), stale placeholders never hide.
+            const isReadBookEntry =
+              it.kind === 'book' && it.book != null && stateOf(it.book) === 'read';
+            if (!showRead && isReadBookEntry) return null;
             const dragHandlers = {
               onGripDragStart: (e: React.DragEvent) => {
                 e.dataTransfer.effectAllowed = 'move';
@@ -441,10 +492,25 @@ function QueueView({ data, listId }: { data: ReadingListDetailData; listId: stri
             return (
               <div key={it.id}>
                 <DropLine active={drag != null && over === idx} />
-                {it.book ? (
+                {it.collection ? (
+                  <CollectionGroup
+                    group={it.collection}
+                    orderLabel={(bookId) => orderLabel(`${it.id}:${bookId}`)}
+                    coverUrl={(bookId) => client.coverUrl(bookId, 80)}
+                    seriesNames={seriesNames}
+                    showRead={showRead}
+                    collapsed={collapsed.has(it.id)}
+                    onToggleCollapsed={() => toggleCollapsed(it.id)}
+                    dragging={drag === idx}
+                    onOpenIssue={openIssue}
+                    onOpenReader={openReader}
+                    onRemove={() => removeItem.mutate({ id: listId, bookId: it.id })}
+                    {...dragHandlers}
+                  />
+                ) : it.book ? (
                   <ReadingRow
                     book={it.book}
-                    order={String(idx + 1).padStart(2, '0')}
+                    order={orderLabel(it.id)}
                     cover={client.coverUrl(it.book.id, 80)}
                     seriesName={seriesNames.get(it.book.seriesId)}
                     dragging={drag === idx}
@@ -456,7 +522,7 @@ function QueueView({ data, listId }: { data: ReadingListDetailData; listId: stri
                 ) : (
                   <StaleRow
                     entry={it}
-                    order={String(idx + 1).padStart(2, '0')}
+                    order={orderLabel(it.id)}
                     dragging={drag === idx}
                     onLink={() => setLinking(it)}
                     onRemove={() => removeItem.mutate({ id: listId, bookId: it.id })}
@@ -666,7 +732,8 @@ function ReadingRow({
   order,
   cover,
   seriesName,
-  dragging,
+  dragging = false,
+  inGroup = false,
   onOpenIssue,
   onOpenReader,
   onRemove,
@@ -679,14 +746,17 @@ function ReadingRow({
   order: string;
   cover: string;
   seriesName?: string;
-  dragging: boolean;
+  dragging?: boolean;
+  /** A member of a collection group: no drag handle, no per-row remove — it belongs to the
+   *  collection, not the list. Rendered indented under the group header. */
+  inGroup?: boolean;
   onOpenIssue: () => void;
   onOpenReader: () => void;
-  onRemove: () => void;
-  onGripDragStart: (e: React.DragEvent) => void;
-  onGripDragEnd: () => void;
-  onRowDragOver: (e: React.DragEvent<HTMLDivElement>) => void;
-  onRowDrop: (e: React.DragEvent<HTMLDivElement>) => void;
+  onRemove?: () => void;
+  onGripDragStart?: (e: React.DragEvent) => void;
+  onGripDragEnd?: () => void;
+  onRowDragOver?: (e: React.DragEvent<HTMLDivElement>) => void;
+  onRowDrop?: (e: React.DragEvent<HTMLDivElement>) => void;
 }) {
   const [hover, setHover] = useState(false);
   const st = stateOf(book);
@@ -700,30 +770,36 @@ function ReadingRow({
     <div
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      onDragOver={onRowDragOver}
-      onDrop={onRowDrop}
+      onDragOver={inGroup ? undefined : onRowDragOver}
+      onDrop={inGroup ? undefined : onRowDrop}
       style={{
         display: 'flex',
         alignItems: 'center',
         gap: 14,
-        padding: '10px 12px 10px 8px',
+        padding: inGroup ? '9px 12px 9px 8px' : '10px 12px 10px 8px',
+        marginLeft: inGroup ? 26 : 0,
+        borderLeft: inGroup ? '2px solid var(--border-hairline)' : undefined,
         borderRadius: 6,
         background: hover ? 'var(--ink-700)' : 'transparent',
         opacity: dragging ? 0.35 : 1,
-        border: '1px solid',
-        borderColor: hover ? 'var(--border-hairline)' : 'transparent',
+        border: inGroup ? undefined : '1px solid',
+        borderColor: hover && !inGroup ? 'var(--border-hairline)' : 'transparent',
         transition: 'background 110ms',
       }}
     >
-      <span
-        draggable
-        onDragStart={onGripDragStart}
-        onDragEnd={onGripDragEnd}
-        title="Drag to reorder"
-        style={{ flex: 'none', padding: '6px 2px' }}
-      >
-        <Grip active={hover} />
-      </span>
+      {inGroup ? (
+        <span aria-hidden style={{ flex: 'none', width: 14 }} />
+      ) : (
+        <span
+          draggable
+          onDragStart={onGripDragStart}
+          onDragEnd={onGripDragEnd}
+          title="Drag to reorder"
+          style={{ flex: 'none', padding: '6px 2px' }}
+        >
+          <Grip active={hover} />
+        </span>
+      )}
 
       <span
         className="ch-mono"
@@ -876,8 +952,192 @@ function ReadingRow({
           size="sm"
           onClick={onOpenIssue}
         />
-        <IconButton icon="x" label="Remove" variant="ghost" size="sm" onClick={onRemove} />
+        {!inGroup && (
+          <IconButton icon="x" label="Remove" variant="ghost" size="sm" onClick={onRemove} />
+        )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * A collection referenced into the list, rendered as a named group: a draggable header
+ * (collapsible) with the collection's name + progress, then its books indented under it.
+ * The whole group is one ordered slot — drag or remove it as a unit; its member issues can
+ * be opened and read but not individually removed/reordered (they belong to the collection).
+ */
+function CollectionGroup({
+  group,
+  orderLabel,
+  coverUrl,
+  seriesNames,
+  showRead,
+  collapsed,
+  onToggleCollapsed,
+  dragging,
+  onOpenIssue,
+  onOpenReader,
+  onRemove,
+  onGripDragStart,
+  onGripDragEnd,
+  onRowDragOver,
+  onRowDrop,
+}: {
+  group: ReadingListCollectionGroup;
+  orderLabel: (bookId: string) => string;
+  coverUrl: (bookId: string) => string;
+  seriesNames: Map<string, string>;
+  showRead: boolean;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+  dragging: boolean;
+  onOpenIssue: (b: BookCard) => void;
+  onOpenReader: (b: BookCard) => void;
+  onRemove: () => void;
+  onGripDragStart: (e: React.DragEvent) => void;
+  onGripDragEnd: () => void;
+  onRowDragOver: (e: React.DragEvent<HTMLDivElement>) => void;
+  onRowDrop: (e: React.DragEvent<HTMLDivElement>) => void;
+}) {
+  const [hover, setHover] = useState(false);
+  const total = group.books.length;
+  const readCount = group.books.filter((b) => stateOf(b) === 'read').length;
+  const visible = showRead ? group.books : group.books.filter((b) => stateOf(b) !== 'read');
+
+  return (
+    <div
+      onDragOver={onRowDragOver}
+      onDrop={onRowDrop}
+      style={{ opacity: dragging ? 0.35 : 1, transition: 'opacity 110ms' }}
+    >
+      {/* Group header */}
+      <div
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          padding: '9px 12px 9px 8px',
+          borderRadius: 6,
+          background: hover ? 'var(--ink-700)' : 'var(--surface-raised)',
+          border: '1px solid var(--border-hairline)',
+          transition: 'background 110ms',
+        }}
+      >
+        <span
+          draggable
+          onDragStart={onGripDragStart}
+          onDragEnd={onGripDragEnd}
+          title="Drag to reorder"
+          style={{ flex: 'none', padding: '6px 2px' }}
+        >
+          <Grip active={hover} />
+        </span>
+
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? 'Expand collection' : 'Collapse collection'}
+          style={{
+            flex: 'none',
+            display: 'flex',
+            background: 'none',
+            border: 'none',
+            padding: 4,
+            cursor: 'pointer',
+            color: 'var(--paper-400)',
+          }}
+        >
+          <Icon
+            name={collapsed ? 'chevron-right' : 'chevron-down'}
+            size={16}
+            color="currentColor"
+          />
+        </button>
+
+        <span style={{ flex: 'none', display: 'flex' }}>
+          <Icon name="collection" size={17} color="var(--accent)" />
+        </span>
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            className="ch-mono"
+            style={{
+              fontSize: '0.58rem',
+              fontWeight: 600,
+              letterSpacing: '0.16em',
+              textTransform: 'uppercase',
+              color: 'var(--accent)',
+            }}
+          >
+            Collection
+          </div>
+          <div
+            style={{
+              fontFamily: 'var(--font-body)',
+              fontWeight: 700,
+              fontSize: '0.98rem',
+              color: 'var(--paper-100)',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              marginTop: 1,
+            }}
+          >
+            {group.name}
+          </div>
+        </div>
+
+        <span
+          className="ch-mono"
+          style={{ flex: 'none', fontSize: '0.68rem', color: 'var(--paper-400)' }}
+        >
+          {readCount}/{total} read
+        </span>
+        <Badge tone="neutral" mono>
+          {total} issue{total === 1 ? '' : 's'}
+        </Badge>
+
+        <IconButton
+          icon="x"
+          label="Remove collection from list"
+          variant="ghost"
+          size="sm"
+          onClick={onRemove}
+        />
+      </div>
+
+      {/* Members */}
+      {!collapsed &&
+        (visible.length === 0 ? (
+          <div
+            className="ch-mono"
+            style={{
+              marginLeft: 26,
+              padding: '8px 12px',
+              fontSize: '0.66rem',
+              color: 'var(--paper-600)',
+              borderLeft: '2px solid var(--border-hairline)',
+            }}
+          >
+            All {total} issue{total === 1 ? '' : 's'} read.
+          </div>
+        ) : (
+          visible.map((b) => (
+            <ReadingRow
+              key={b.id}
+              inGroup
+              book={b}
+              order={orderLabel(b.id)}
+              cover={coverUrl(b.id)}
+              seriesName={seriesNames.get(b.seriesId)}
+              onOpenIssue={() => onOpenIssue(b)}
+              onOpenReader={() => onOpenReader(b)}
+            />
+          ))
+        ))}
     </div>
   );
 }

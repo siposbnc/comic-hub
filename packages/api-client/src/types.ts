@@ -521,17 +521,29 @@ export interface ReadingList {
   updatedAt: number;
 }
 
-/** One ordered entry of a reading list. Stale entries (their book was deleted, or they
- * were added manually for an issue not in the library) have no `book`: they render from
- * the snapshot fields and hold their slot in the order, but can't be opened. */
+/** A collection referenced into a reading list, expanded live for display: the group's
+ * label and its books in collection order. */
+export interface ReadingListCollectionGroup {
+  id: string;
+  name: string;
+  books: BookCard[];
+}
+
+/** One ordered entry of a reading list. `kind` is `'book'` for a normal entry and
+ * `'collection'` for a whole-collection reference (a named group carrying `collection`).
+ * Stale entries (their book was deleted, or they were added manually for an issue not in
+ * the library) have no `book`: they render from the snapshot fields and hold their slot in
+ * the order, but can't be opened. */
 export interface ReadingListEntry {
   id: string;
+  kind: 'book' | 'collection';
   stale: boolean;
   seriesName?: string;
   number?: string;
   title?: string;
   addedAt: number;
   book?: BookCard;
+  collection?: ReadingListCollectionGroup;
 }
 
 /** A placeholder entry for an issue that isn't in the library (yet). */

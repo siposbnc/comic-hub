@@ -313,6 +313,24 @@ func (s *Service) AddReadingListManualItems(ctx context.Context, userID, id stri
 	return s.repo.ReadingLists().AddManualItems(ctx, id, clean)
 }
 
+// AddReadingListCollection appends a collection-reference entry to a user's list: one
+// ordered slot standing in for the whole collection, expanded live into its books when the
+// list is read. Validates that the list is owned by the user and the collection exists;
+// re-adding a collection already in the list is a no-op.
+func (s *Service) AddReadingListCollection(ctx context.Context, userID, listID, collectionID string) error {
+	if _, err := s.repo.ReadingLists().Get(ctx, userID, listID); err != nil {
+		return err
+	}
+	collectionID = strings.TrimSpace(collectionID)
+	if collectionID == "" {
+		return fmt.Errorf("%w: collectionId is required", domain.ErrValidation)
+	}
+	if _, err := s.repo.Collections().Get(ctx, collectionID); err != nil {
+		return err
+	}
+	return s.repo.ReadingLists().AddCollectionRef(ctx, listID, collectionID)
+}
+
 // RelinkReadingListItem points an entry (usually a stale placeholder) at a real book.
 func (s *Service) RelinkReadingListItem(ctx context.Context, userID, listID, itemID, bookID string) error {
 	if _, err := s.repo.ReadingLists().Get(ctx, userID, listID); err != nil {

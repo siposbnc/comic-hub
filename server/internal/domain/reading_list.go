@@ -14,24 +14,33 @@ type ReadingList struct {
 	UpdatedAt int64
 }
 
-// ReadingListItem is an entry in a reading list. It always carries a display snapshot
+// ReadingListItem is an entry in a reading list. A linked entry carries a display snapshot
 // (series name, number, title, content hash) captured when the item was added, so the
 // entry survives — and stays renderable — even after the underlying book is deleted.
 // BookID is empty for such stale entries, and for placeholders added manually for issues
 // not (yet) in the library. Stale entries keep the list's order intact but can't be read.
+//
+// An entry can instead be a collection reference: CollectionID is set (BookID empty) and
+// the row stands in — as a single ordered slot — for the whole collection, expanded live
+// into its current books when the list is read (rendered as a named group).
 type ReadingListItem struct {
-	ID          string
-	BookID      string // empty = stale placeholder
-	Position    float64
-	AddedAt     int64
-	SeriesName  string
-	Number      string
-	Title       string
-	ContentHash string // hash of the book the entry pointed at; drives auto-relink on rescan
+	ID           string
+	BookID       string // empty = stale placeholder or collection reference
+	CollectionID string // non-empty = a collection-reference entry
+	Position     float64
+	AddedAt      int64
+	SeriesName   string
+	Number       string
+	Title        string
+	ContentHash  string // hash of the book the entry pointed at; drives auto-relink on rescan
 }
 
-// Stale reports whether the entry has no backing book (deleted, or added manually).
-func (it ReadingListItem) Stale() bool { return it.BookID == "" }
+// IsCollection reports whether the entry references a whole collection (a live group).
+func (it ReadingListItem) IsCollection() bool { return it.CollectionID != "" }
+
+// Stale reports whether the entry has no backing book and is not a collection reference
+// (i.e. a deleted book, or a manual placeholder).
+func (it ReadingListItem) Stale() bool { return it.BookID == "" && it.CollectionID == "" }
 
 // ManualListItem describes a placeholder entry for an issue that isn't in the library.
 type ManualListItem struct {
@@ -57,7 +66,14 @@ type ReadingListRepository interface {
 	GetActive(ctx context.Context, userID string) (ReadingList, error)
 
 	Items(ctx context.Context, listID string) ([]ReadingListItem, error)
+	// ExpandedBookIDs returns the list's readable book ids in display order, with each
+	// collection reference expanded inline into the collection's books (in collection
+	// order). Stale placeholders are omitted. This is the flattened reading order.
+	ExpandedBookIDs(ctx context.Context, listID string) ([]string, error)
 	AddItems(ctx context.Context, listID string, bookIDs []string) error
+	// AddCollectionRef appends a collection-reference entry (one ordered slot standing in
+	// for the whole collection). No-op if the collection is already referenced by the list.
+	AddCollectionRef(ctx context.Context, listID, collectionID string) error
 	// AddManualItems appends stale placeholder entries (no backing book).
 	AddManualItems(ctx context.Context, listID string, entries []ManualListItem) error
 	RemoveItem(ctx context.Context, listID, ref string) error

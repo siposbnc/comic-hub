@@ -50,7 +50,9 @@ export function ReadingLists() {
     const d = details[i]?.data;
     const books = d?.books ?? [];
     const { readPct, covers } = cardCoversAndPct(books, (id) => client.coverUrl(id, 200));
-    const missing = d ? d.items.length - books.length : 0;
+    // Stale placeholders (a deleted book, or a manual want-list entry) — collection groups
+    // and linked issues aren't missing.
+    const missing = d ? d.items.filter((it) => it.kind === 'book' && it.stale).length : 0;
     return {
       id: l.id,
       name: l.name,
