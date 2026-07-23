@@ -52,7 +52,7 @@ export function Tracker() {
 
 // ── Cell state model ───────────────────────────────────────────────────────────────────
 
-type CellState = 'read' | 'reading' | 'owned' | 'gap' | 'manual-read';
+type CellState = 'read' | 'reading' | 'partial' | 'owned' | 'gap' | 'manual-read';
 type Density = 's' | 'm' | 'l';
 
 const DENSITY: Record<
@@ -72,6 +72,15 @@ const CELL_STYLES: Record<CellState, CSSProperties> = {
     color: 'var(--accent)',
     boxShadow: 'inset 0 -3px 0 var(--accent)',
     fontWeight: 700,
+  },
+  // Half-read: a complex issue (with sub-issues) where some but not all are read.
+  // Diagonal fill — top-left accent triangle over the owned surface — with a dark
+  // halo on the number so it stays legible across the bright-cyan / dark-ink seam.
+  partial: {
+    background: 'linear-gradient(135deg, var(--accent) 50%, var(--surface-card) 50%)',
+    color: 'var(--paper-100)',
+    border: '1px solid var(--border-hairline)',
+    textShadow: '0 0 3px var(--bg-app)',
   },
   owned: {
     background: 'var(--surface-card)',
@@ -93,8 +102,11 @@ function cellState(issue: TrackerIssue): CellState {
 }
 
 function aggState(stack: TrackerIssue[]): CellState {
-  if (stack.every((i) => i.state === 'read'))
+  const readCount = stack.filter((i) => i.state === 'read').length;
+  if (readCount === stack.length)
     return stack.some((i) => i.bookId) ? 'read' : 'manual-read';
+  // Some (but not all) of the stack is read — the half-read complex issue.
+  if (readCount > 0) return 'partial';
   if (stack.some((i) => i.state === 'reading')) return 'reading';
   if (stack.some((i) => i.bookId)) return 'owned';
   return 'gap';
@@ -469,6 +481,13 @@ function Toolbar({
       },
     },
     {
+      label: 'Half read',
+      sw: {
+        background: 'linear-gradient(135deg, var(--accent) 50%, var(--surface-card) 50%)',
+        border: '1px solid var(--border-hairline)',
+      },
+    },
+    {
       label: 'Unread',
       sw: { background: 'var(--surface-card)', border: '1px solid var(--border-hairline)' },
     },
@@ -652,6 +671,39 @@ function TrackerGrid({
     return [...set].sort((a, b) => a - b);
   }, [tracks]);
 
+  // Group each series' main row with its specials (Annuals, one-shots, …) so they
+  // render as one block: the main row, then its specials as indented sub-rows.
+  // Standalone tracks (no seriesId) each form their own single-row group.
+  const rows = useMemo(() => {
+    const groups: { key: string; main: TrackerTrack | null; specials: TrackerTrack[] }[] = [];
+    const idx = new Map<string, number>();
+    for (const t of tracks) {
+      const key = t.seriesId ?? `manual:${t.id}`;
+      let gi = idx.get(key);
+      if (gi === undefined) {
+        gi = groups.length;
+        idx.set(key, gi);
+        groups.push({ key, main: null, specials: [] });
+      }
+      if (t.special) groups[gi]!.specials.push(t);
+      else groups[gi]!.main = t;
+    }
+    // Flatten to a render list, tagging each row's role within its group.
+    const out: { track: TrackerTrack; isSub: boolean; isLastInGroup: boolean }[] = [];
+    for (const g of groups) {
+      // A group with only specials (no main row) shows its first special as the head.
+      const members = g.main ? [g.main, ...g.specials] : g.specials;
+      members.forEach((track, i) =>
+        out.push({
+          track,
+          isSub: g.main ? track !== g.main : i > 0,
+          isLastInGroup: i === members.length - 1,
+        }),
+      );
+    }
+    return out;
+  }, [tracks]);
+
   const scheduleHide = () => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
     hideTimer.current = setTimeout(() => setHover(null), 160);
@@ -786,18 +838,20 @@ function TrackerGrid({
           </div>
 
           {/* rows */}
-          {tracks.map((t) => (
+          {rows.map(({ track, isSub, isLastInGroup }) => (
             <TrackRow
-              key={t.id}
-              t={t}
+              key={track.id}
+              t={track}
               ruler={ruler}
               d={d}
               density={density}
               gap={GAP}
               onToggle={onToggle}
               onHover={onHover}
-              addOpen={addFor === t.id}
+              addOpen={addFor === track.id}
               setAddFor={setAddFor}
+              isSub={isSub}
+              isLastInGroup={isLastInGroup}
             />
           ))}
         </div>
@@ -837,6 +891,8 @@ function TrackRow({
   onHover,
   addOpen,
   setAddFor,
+  isSub,
+  isLastInGroup,
 }: {
   t: TrackerTrack;
   ruler: number[];
@@ -847,6 +903,8 @@ function TrackRow({
   onHover: (h: HoverState | null) => void;
   addOpen: boolean;
   setAddFor: (id: string | null) => void;
+  isSub: boolean;
+  isLastInGroup: boolean;
 }) {
   const navigate = useNavigate();
   const [rowHover, setRowHover] = useState(false);
@@ -876,7 +934,8 @@ function TrackRow({
       style={{
         display: 'flex',
         alignItems: 'stretch',
-        borderBottom: '1px solid var(--border-hairline)',
+        // The seam only closes a group — a series and its specials share one block.
+        borderBottom: isLastInGroup ? '1px solid var(--border-hairline)' : 'none',
         height: d.row,
         position: 'relative',
       }}
@@ -899,6 +958,22 @@ function TrackRow({
           borderRight: '1px solid var(--border-strong)',
         }}
       >
+        {isSub && (
+          <span
+            aria-hidden
+            className="ch-mono"
+            style={{
+              flex: 'none',
+              width: 14,
+              textAlign: 'center',
+              color: 'var(--paper-600)',
+              fontSize: '0.8rem',
+              lineHeight: 1,
+            }}
+          >
+            └
+          </span>
+        )}
         <button
           type="button"
           onClick={openHeader}
@@ -926,17 +1001,17 @@ function TrackRow({
                 flex: 1,
                 minWidth: 0,
                 fontFamily: 'var(--font-body)',
-                fontWeight: 600,
+                fontWeight: isSub ? 500 : 600,
                 fontSize: density === 's' ? '0.7rem' : '0.78rem',
-                color: 'var(--paper-100)',
+                color: isSub ? 'var(--paper-400)' : 'var(--paper-100)',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
               }}
             >
-              {t.name}
+              {isSub ? (t.special ?? t.name) : t.name}
             </span>
-            {t.special && (
+            {t.special && !isSub && (
               <span
                 className="ch-mono"
                 style={{
@@ -1083,7 +1158,9 @@ function IssueCell({
   const [hover, setHover] = useState(false);
   const main = stack.find((i) => Number.isInteger(i.sort));
   const points = stack.filter((i) => !Number.isInteger(i.sort));
-  const st = main ? cellState(main) : aggState(stack);
+  // A complex issue (base + sub-issues) reflects the whole stack, so a read base
+  // with unread points reads as half-read; a plain cell uses its own state.
+  const st = points.length > 0 || !main ? aggState(stack) : cellState(main);
 
   return (
     <button
