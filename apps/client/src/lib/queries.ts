@@ -80,6 +80,17 @@ export function useSeriesDetail(id: string) {
   return useQuery({ queryKey: qk.seriesDetail(id), queryFn: () => client.seriesDetail(id) });
 }
 
+/** Every scanned file of a series (including hidden/extras/specials) for the Manage files
+ *  correction screen. Kept fresh by useEditBook's invalidation. */
+export function useSeriesFiles(id: string, enabled = true) {
+  const client = useClient();
+  return useQuery({
+    queryKey: ['seriesFiles', id] as const,
+    queryFn: () => client.seriesFiles(id),
+    enabled,
+  });
+}
+
 export function useStoryArc(seriesId: string, arcId: string) {
   const client = useClient();
   return useQuery({
@@ -117,6 +128,7 @@ export function useEditBook() {
     onSuccess: (_data, { bookId }) => {
       qc.invalidateQueries({ queryKey: qk.book(bookId) });
       qc.invalidateQueries({ queryKey: ['seriesDetail'] });
+      qc.invalidateQueries({ queryKey: ['seriesFiles'] });
       qc.invalidateQueries({ queryKey: ['series'] });
       qc.invalidateQueries({ queryKey: ['libraryHealth'] });
       qc.invalidateQueries({ queryKey: qk.tracker });

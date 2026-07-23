@@ -103,8 +103,7 @@ function cellState(issue: TrackerIssue): CellState {
 
 function aggState(stack: TrackerIssue[]): CellState {
   const readCount = stack.filter((i) => i.state === 'read').length;
-  if (readCount === stack.length)
-    return stack.some((i) => i.bookId) ? 'read' : 'manual-read';
+  if (readCount === stack.length) return stack.some((i) => i.bookId) ? 'read' : 'manual-read';
   // Some (but not all) of the stack is read — the half-read complex issue.
   if (readCount > 0) return 'partial';
   if (stack.some((i) => i.state === 'reading')) return 'reading';

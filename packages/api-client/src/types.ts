@@ -313,6 +313,30 @@ export interface SeriesDetail {
   books: BookCard[];
 }
 
+/** One scanned file on the series "Manage files" screen — the raw catalog row (parsed
+ *  number, kind, and hidden flag included) so a mis-scanned file that dropped out of every
+ *  normal view can be found and corrected. */
+export interface FileRow {
+  id: string;
+  number?: string;
+  title?: string;
+  kind: BookKind;
+  fileName: string;
+  filePath?: string;
+  pageCount: number;
+  format: string;
+  volume?: number;
+  isCorrupt?: boolean;
+  ignored?: boolean;
+}
+
+/** Every scanned file of a series, unfiltered (ignored/extras/specials all included). */
+export interface SeriesFilesView {
+  seriesId: string;
+  seriesName: string;
+  files: FileRow[];
+}
+
 /** A browsable grouping summary on the series page (a story arc or a volume). */
 export interface GroupingCard {
   id: string;

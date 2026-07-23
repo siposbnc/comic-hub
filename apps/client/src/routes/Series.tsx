@@ -23,6 +23,7 @@ import {
   ResolveDuplicatesDialog,
   type DuplicateGroup,
 } from '../components/ResolveDuplicatesDialog.js';
+import { ManageFilesDialog } from '../components/ManageFilesDialog.js';
 import { issueLabel, resumePage, toCoverStatus, progressFraction } from '../lib/format.js';
 
 const route = getRouteApi('/series/$id');
@@ -74,6 +75,7 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmingRescan, setConfirmingRescan] = useState(false);
   const [resolving, setResolving] = useState(false);
+  const [managingFiles, setManagingFiles] = useState(false);
 
   // An interrupted match (e.g. a provider rate limit) leaves the series incomplete but
   // still linked to its provider volume; re-running the same match resumes it server-side,
@@ -305,33 +307,22 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
                         boxShadow: 'var(--shadow-popover)',
                       }}
                     >
-                      <button
-                        type="button"
-                        role="menuitem"
+                      <MenuItem
+                        icon="list"
+                        label="Manage files"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setManagingFiles(true);
+                        }}
+                      />
+                      <MenuItem
+                        icon="refresh"
+                        label="Rescan series"
                         onClick={() => {
                           setMenuOpen(false);
                           setConfirmingRescan(true);
                         }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--ink-700)')}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
-                        style={{
-                          width: '100%',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 10,
-                          padding: '9px 10px',
-                          background: 'none',
-                          border: 'none',
-                          borderRadius: 5,
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                          color: 'var(--text-primary)',
-                          fontFamily: 'var(--font-body)',
-                          fontSize: '0.86rem',
-                        }}
-                      >
-                        <Icon name="refresh" size={16} color="var(--paper-400)" /> Rescan series
-                      </button>
+                      />
                     </div>
                   </>
                 )}
@@ -537,7 +528,52 @@ function SeriesView({ detail }: { detail: SeriesDetail }) {
           onClose={() => setResolving(false)}
         />
       )}
+      {managingFiles && (
+        <ManageFilesDialog
+          seriesId={detail.id}
+          seriesName={detail.name}
+          onClose={() => setManagingFiles(false)}
+        />
+      )}
     </div>
+  );
+}
+
+/** A row in the series overflow menu (icon + label), matching the popover's hover styling. */
+function MenuItem({
+  icon,
+  label,
+  onClick,
+}: {
+  icon: 'list' | 'refresh';
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--ink-700)')}
+      onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+      style={{
+        width: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '9px 10px',
+        background: 'none',
+        border: 'none',
+        borderRadius: 5,
+        cursor: 'pointer',
+        textAlign: 'left',
+        color: 'var(--text-primary)',
+        fontFamily: 'var(--font-body)',
+        fontSize: '0.86rem',
+      }}
+    >
+      <Icon name={icon} size={16} color="var(--paper-400)" /> {label}
+    </button>
   );
 }
 

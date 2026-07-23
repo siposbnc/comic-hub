@@ -1,8 +1,18 @@
 import { useState } from 'react';
 import { Dialog, Button, Input, Select, Switch, Icon } from '@comichub/ui';
-import type { BookDetail, BookKind } from '@comichub/api-client';
+import type { BookKind } from '@comichub/api-client';
 import { useEditBook } from '../lib/queries.js';
 import { useUiStore } from '../store/ui.js';
+
+/** The minimal book shape the edit dialog needs — satisfied by both a full BookDetail (book
+ *  detail page) and a FileRow (series Manage files screen). */
+export interface EditBookTarget {
+  id: string;
+  number?: string;
+  title?: string;
+  kind?: BookKind;
+  ignored?: boolean;
+}
 
 /** The kinds a user may assign by hand, with human labels. Mirrors the server's
  *  validEditKinds; "extra art" (variant/cover) drops the file out of the numbered run. */
@@ -23,7 +33,13 @@ const KIND_OPTIONS: { value: BookKind; label: string }[] = [
  * or hide the file from the library entirely. Corrections are locked server-side so a rescan
  * or a later provider match keeps them.
  */
-export function EditBookDialog({ detail, onClose }: { detail: BookDetail; onClose: () => void }) {
+export function EditBookDialog({
+  detail,
+  onClose,
+}: {
+  detail: EditBookTarget;
+  onClose: () => void;
+}) {
   const edit = useEditBook();
   const addToast = useUiStore((s) => s.addToast);
 

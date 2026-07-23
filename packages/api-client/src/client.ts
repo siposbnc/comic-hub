@@ -34,6 +34,7 @@ import type {
   SearchType,
   SeriesCard,
   SeriesDetail,
+  SeriesFilesView,
   SeriesMatchCandidate,
   ServerInfo,
   ServerStats,
@@ -264,6 +265,12 @@ export class ComicHubClient {
 
   seriesDetail(id: string): Promise<SeriesDetail> {
     return this.request<SeriesDetail>('GET', `/api/v1/series/${encodeURIComponent(id)}`);
+  }
+
+  /** Every scanned file of a series, unfiltered — including hidden files, variant/cover
+   *  extras, and specials. Backs the "Manage files" correction screen. */
+  seriesFiles(id: string): Promise<SeriesFilesView> {
+    return this.request<SeriesFilesView>('GET', `/api/v1/series/${encodeURIComponent(id)}/files`);
   }
 
   /** A story arc's header + its issues in reading order. */

@@ -47,6 +47,19 @@ func handleSeriesDetail(b *browse.Service) http.HandlerFunc {
 	}
 }
 
+// handleSeriesFiles returns every scanned file of a series (including hidden files, extras,
+// and specials) for the Manage files correction screen.
+func handleSeriesFiles(b *browse.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		view, err := b.SeriesFiles(r.Context(), chi.URLParam(r, "id"), currentUserID(r))
+		if err != nil {
+			writeDomainError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, view)
+	}
+}
+
 // handleStoryArcDetail returns a story arc's header + its issues in reading order.
 func handleStoryArcDetail(b *browse.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

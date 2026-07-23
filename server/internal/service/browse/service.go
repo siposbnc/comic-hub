@@ -131,6 +131,33 @@ type BookDetail struct {
 	ReadingListIDs []string `json:"readingListIds,omitempty"`
 }
 
+// FileRow is one scanned file on the series "Manage files" screen — the raw catalog row,
+// including its parsed number, kind, and whether it's hidden, so a mis-scanned file that
+// dropped out of every normal view can be found and corrected.
+type FileRow struct {
+	ID        string `json:"id"`
+	Number    string `json:"number,omitempty"`
+	Title     string `json:"title,omitempty"`
+	Kind      string `json:"kind"`
+	FileName  string `json:"fileName"`
+	FilePath  string `json:"filePath,omitempty"`
+	PageCount int    `json:"pageCount"`
+	Format    string `json:"format"`
+	Volume    int    `json:"volume,omitempty"`
+	IsCorrupt bool   `json:"isCorrupt,omitempty"`
+	Ignored   bool   `json:"ignored,omitempty"`
+}
+
+// SeriesFilesView is the payload for the series "Manage files" screen: EVERY scanned file of
+// a series, unfiltered — ignored files, variant/cover extras, and specials all included.
+// This is the one surface that shows files the catalog otherwise hides, so a mis-parsed
+// issue (wrong number, wrong kind, or ignored) can be located and edited.
+type SeriesFilesView struct {
+	SeriesID   string    `json:"seriesId"`
+	SeriesName string    `json:"seriesName"`
+	Files      []FileRow `json:"files"`
+}
+
 // TagView is a tag on the book detail screen.
 type TagView struct {
 	ID    string `json:"id"`
@@ -282,6 +309,44 @@ func (s *Service) SeriesDetail(ctx context.Context, seriesID, userID string) (Se
 		}
 	}
 	return detail, nil
+}
+
+// SeriesFiles returns every scanned file of a series for the "Manage files" correction
+// screen — unlike SeriesDetail it does NOT hide extras or ignored files, that's the point:
+// it's how the user finds a file that vanished from the catalog because it parsed to the
+// wrong number/kind or got ignored. The content ceiling is still honored so a restricted
+// user never sees files above their rating.
+func (s *Service) SeriesFiles(ctx context.Context, seriesID, userID string) (SeriesFilesView, error) {
+	ser, err := s.repo.Series().Get(ctx, seriesID)
+	if err != nil {
+		return SeriesFilesView{}, err
+	}
+	books, err := s.repo.Books().ListBySeries(ctx, seriesID)
+	if err != nil {
+		return SeriesFilesView{}, err
+	}
+	books = s.visible(ctx, books)
+	view := SeriesFilesView{
+		SeriesID:   ser.ID,
+		SeriesName: ser.Name,
+		Files:      make([]FileRow, 0, len(books)),
+	}
+	for _, b := range books {
+		view.Files = append(view.Files, FileRow{
+			ID:        b.ID,
+			Number:    b.Number,
+			Title:     b.Title,
+			Kind:      string(b.Kind),
+			FileName:  filepath.Base(b.FilePath),
+			FilePath:  b.FilePath,
+			PageCount: b.PageCount,
+			Format:    b.FileFormat,
+			Volume:    b.Volume,
+			IsCorrupt: b.IsCorrupt,
+			Ignored:   b.Ignored,
+		})
+	}
+	return view, nil
 }
 
 // volumeCards derives browsable volumes from each book's volume number (0 = ungrouped).
